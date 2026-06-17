@@ -8,6 +8,7 @@ import ModalSearch from '@/components/Modal/ModalSearch'
 import ModalQuickview from '@/components/Modal/ModalQuickview'
 import ModalCompare from '@/components/Modal/ModalCompare'
 import CountdownTimeType from '@/type/CountdownType'
+import { Toaster } from 'react-hot-toast'
 import { countdownTime } from '@/store/countdownTime'
 
 const serverTimeLeft: CountdownTimeType = countdownTime();
@@ -29,6 +30,7 @@ export default function RootLayout({
       <html lang="en">
         <body className={instrument.className}>
           {children}
+<Toaster position="top-center" />
           <ModalCart serverTimeLeft={serverTimeLeft} />
           <ModalWishlist />
           <ModalSearch />

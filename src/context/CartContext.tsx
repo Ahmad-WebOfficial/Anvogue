@@ -1,8 +1,8 @@
 "use client";
-
+import api from "@/lib/api";
 import React, { createContext, useContext, useReducer } from "react";
 import { ProductType } from "@/type/ProductType";
-
+import toast from "react-hot-toast"; // Import toast
 interface CartItem extends ProductType {
   quantity: number;
   selectedSize: string;
@@ -96,55 +96,42 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const addToCart = async (item: ProductType) => {
     try {
       const sessionId = getSessionId();
-      const fullUrl = `${API_URL}/api/v1/Cart/AddToCartGuest/session/${sessionId}/add?ProductId=${item.id}&ProductDetailId=0&Quantity=1`;
+      const url = `/api/v1/Cart/AddToCartGuest/session/${sessionId}/add`;
 
-      const formData = new FormData();
-      formData.append("files", "");
-
-      const response = await fetch(fullUrl, {
-        method: "POST",
-        headers: { "api-security-key": API_KEY },
-        body: formData,
+      const response = await api.post(url, null, {
+        params: {
+          ProductId: item.id,
+          ProductDetailId: 0,
+          Quantity: 1,
+        },
       });
 
-      if (response.ok) {
-        dispatch({ type: "ADD_TO_CART", payload: item });
-        alert("Success: Product added to cart!");
-      } else {
-        const errorText = await response.text();
-        console.error("Server Error:", errorText);
-        alert("Server Error: " + errorText);
-      }
-    } catch (error) {
-      console.error("Connection Error:", error);
-      alert("Connection Error: Check console.");
+      dispatch({ type: "ADD_TO_CART", payload: item });
+      toast.success("Product added to cart!");
+    } catch (error: any) {
+      console.error("Full Error Object:", error.response || error);
+      alert(
+        "Server Error: " + (error.response?.data?.message || "Check console"),
+      );
     }
   };
   const removeFromCart = async (cartId: string) => {
     try {
-      const url = `${API_URL}/api/v1/Cart/DeleteItemFromCart/remove/${cartId}`;
+      const response = await api.delete(
+        `/api/v1/Cart/DeleteItemFromCart/remove/${cartId}`,
+      );
 
-      const response = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          "api-security-key": API_KEY,
-        },
-      });
-
-      if (response.ok) {
+      if (response.status === 200) {
         dispatch({ type: "REMOVE_FROM_CART", payload: cartId });
-        alert("Success: Item removed Successful!");
-      } else {
-        const errorText = await response.text();
-        console.error("Server Error:", errorText);
-        alert("Error: " + errorText);
+        toast.success("Item removed successfully!");
       }
-    } catch (error) {
-      console.error("Delete Error:", error);
-      alert("Delete Error: Check console.");
+    } catch (error: any) {
+      console.error("Delete Error:", error.response || error);
+      alert(
+        "Delete Error: " + (error.response?.data?.message || "Check console"),
+      );
     }
   };
-
   const updateCart = (
     itemId: string,
     quantity: number,

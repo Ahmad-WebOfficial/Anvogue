@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import Cookies from "js-cookie";
 import PhoneInput, { CountryData } from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
@@ -12,7 +11,7 @@ import MenuOne from "@/components/Header/Menu/MenuOne";
 import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import api from "@/lib/api";
+import api, { getApiErrorMessage } from "@/lib/api";
 
 type SignUpData = {
   clientRole: number;
@@ -123,38 +122,56 @@ const Register = () => {
     console.log("SENDING THIS PAYLOAD:", JSON.stringify(payload, null, 2));
     setLoading(true);
     try {
-      const response = await api.post("/api/v1/Account/Register", payload);
-      console.log(response);
+      await api.post("/api/v1/Account/Register", payload);
+
       Cookies.set(
         "userRegData",
         JSON.stringify({
           username: payload.UserName,
+          email: payload.Email,
           phoneNumber: payload.PhoneNumber,
-          phoneCode: parseInt(payload.PhoneCode),
+          phoneCode: payload.PhoneCode,
         }),
         { expires: 1, secure: true, sameSite: "Strict" },
       );
-      await api.post("/api/v1/Account/SendOTP", {
-        PhoneNumber: payload.PhoneNumber,
-        PhoneCode: parseInt(payload.PhoneCode),
-      });
-      toast.success("Registration successful! OTP sent on Email.");
+
       if (typeof window !== "undefined") {
         Cookies.set("registerEmail", payload.Email, { expires: 1 });
       }
 
+      try {
+        await api.post("/api/v1/Account/SendOTP", {
+          UserName: payload.UserName,
+          Email: payload.Email,
+          PhoneNumber: payload.PhoneNumber,
+          PhoneCode: payload.PhoneCode,
+        });
+      } catch (otpErr) {
+        const otpErrorMessage = getApiErrorMessage(
+          otpErr,
+          "Account created but OTP could not be sent. Please resend OTP on the next page.",
+        );
+        toast.error(otpErrorMessage);
+        setError(otpErrorMessage);
+        setTimeout(() => {
+          router.push(
+            `/register/verify-otp?email=${encodeURIComponent(payload.Email)}`,
+          );
+        }, 1500);
+        return;
+      }
+
+      toast.success("Registration successful! OTP sent on Email.");
       setTimeout(() => {
         router.push(
           `/register/verify-otp?email=${encodeURIComponent(payload.Email)}`,
         );
       }, 1000);
     } catch (err) {
-      let errorMessage = "Registration failed. Please try again.";
-      if (axios.isAxiosError(err)) {
-        const data = err.response?.data;
-        errorMessage =
-          (typeof data === "string" && data) || data?.message || errorMessage;
-      }
+      const errorMessage = getApiErrorMessage(
+        err,
+        "Registration failed. Please check your details and try again.",
+      );
       toast.error(errorMessage);
       setError(errorMessage);
     } finally {

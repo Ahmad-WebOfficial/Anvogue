@@ -2,14 +2,17 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { motion } from 'framer-motion'
+import { logout } from '@/lib/auth'
 
 const MyAccount = () => {
+    const router = useRouter()
     const [activeTab, setActiveTab] = useState<string | undefined>('dashboard')
     const [activeAddress, setActiveAddress] = useState<string | null>('billing')
     const [activeOrders, setActiveOrders] = useState<string | undefined>('all')
@@ -65,10 +68,17 @@ const MyAccount = () => {
                                         <Icon.GearSix size={20} />
                                         <strong className="heading6">Setting</strong>
                                     </Link>
-                                    <Link href={'/login'} className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5">
+                                    <button
+                                        type="button"
+                                        className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5"
+                                        onClick={() => {
+                                            logout()
+                                            router.push('/login')
+                                        }}
+                                    >
                                         <Icon.SignOut size={20} />
                                         <strong className="heading6">Logout</strong>
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
                         </div>

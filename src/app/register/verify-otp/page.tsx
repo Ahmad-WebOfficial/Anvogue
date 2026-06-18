@@ -9,7 +9,14 @@ import MenuOne from "@/components/Header/Menu/MenuOne";
 import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import toast from "react-hot-toast";
-import api from "@/lib/api";
+import api, { getApiErrorMessage } from "@/lib/api";
+
+type StoredRegData = {
+  username: string;
+  email?: string;
+  phoneNumber: string;
+  phoneCode: string | number;
+};
 
 const VerifyOTP = () => {
   const router = useRouter();
@@ -23,29 +30,37 @@ const VerifyOTP = () => {
 
   useEffect(() => {
     const queryEmail = searchParams?.get("email") || "";
+    const cookieEmail = Cookies.get("registerEmail") || "";
+
     if (queryEmail) {
       setEmail(queryEmail);
       Cookies.set("registerEmail", queryEmail, { expires: 1 });
       return;
     }
 
-    const storedEmail =
-      typeof window !== "undefined"
-        ? localStorage.getItem("registerEmail")
-        : "";
-    if (storedEmail) {
-      setEmail(storedEmail);
+    if (cookieEmail) {
+      setEmail(cookieEmail);
     }
   }, [searchParams]);
+
+  const getStoredRegData = (): StoredRegData | null => {
+    const savedData = Cookies.get("userRegData");
+    if (!savedData) return null;
+
+    try {
+      return JSON.parse(savedData) as StoredRegData;
+    } catch {
+      return null;
+    }
+  };
 
   const handleVerify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    const savedData = Cookies.get("userRegData");
-    const storedData = savedData ? JSON.parse(savedData) : null;
-    if (!storedData || !storedData.username || !storedData.phoneNumber) {
+    const storedData = getStoredRegData();
+    if (!storedData?.username || !storedData.phoneNumber) {
       setError("Registration details missing. Please register again.");
       return;
     }
@@ -61,56 +76,65 @@ const VerifyOTP = () => {
       OTP: otp.trim(),
       PhoneCode: storedData.phoneCode,
       PhoneNumber: storedData.phoneNumber,
-      Username: storedData.username,
+      UserName: storedData.username,
       UpdateAuthToken: true,
     };
-
-    console.log(
-      "PAYLOAD SENT TO VERIFYOTP:",
-      JSON.stringify(payloadForVerify, null, 2),
-    );
-    // ----------------------------------
 
     try {
       await api.post("/api/v1/Account/VerifyOTP", payloadForVerify);
 
-      toast.success("OTP verified successfully!");
+      toast.success("Email verified successfully! Please login to continue.");
       Cookies.remove("userRegData");
       Cookies.remove("registerEmail");
+      setSuccess("Email verified! Redirecting to login...");
 
       window.setTimeout(() => {
-        router.push("/");
+        router.push("/login?verified=1");
       }, 1200);
     } catch (err) {
-      const message = "OTP verification failed. Please try again.";
+      const message = getApiErrorMessage(
+        err,
+        "OTP verification failed. Please check the code and try again.",
+      );
       toast.error(message);
       setError(message);
     } finally {
       setLoading(false);
     }
   };
+
   const handleResend = async () => {
     setError("");
     setSuccess("");
 
-    const savedData = Cookies.get("userRegData");
-    const storedData = savedData ? JSON.parse(savedData) : null;
-    if (!storedData || !storedData.username) {
+    const storedData = getStoredRegData();
+    if (!storedData?.username) {
       setError("Registration details missing. Please register again.");
+      return;
+    }
+
+    const resendEmail = email || storedData.email || Cookies.get("registerEmail");
+    if (!resendEmail) {
+      setError("Email address missing. Please register again.");
       return;
     }
 
     setResendLoading(true);
     try {
-      const response = await api.post("/api/v1/Account/ResendOTP", {
+      await api.post("/api/v1/Account/ResendOTP", {
         UserName: storedData.username,
+        Email: resendEmail,
       });
-      toast.success("OTP resent successfully!");
-      console.log("FULL RESPONSE DATA:", response.data);
 
-      setSuccess("OTP resent successfully. Check your email.");
+      toast.success("OTP resent successfully!");
+      setSuccess("A new OTP has been sent to your email. Please check your inbox.");
     } catch (err) {
-      toast.error("Failed to resend OTP.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to resend OTP. Please try again in a moment.",
+      );
+      toast.error(message);
+      setError(message);
     } finally {
       setResendLoading(false);
     }

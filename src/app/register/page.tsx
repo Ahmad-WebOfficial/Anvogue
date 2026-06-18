@@ -226,6 +226,8 @@ const Register = () => {
                   />
                 </div>
 
+                {/* History */}
+
                 <div className="grid grid-cols-2 gap-4">
                   <input
                     className="border-line px-4 pt-3 pb-3 w-full rounded-lg"

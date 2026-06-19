@@ -61,12 +61,16 @@ const VerifyOTP = () => {
 
     const storedData = getStoredRegData();
     if (!storedData?.username || !storedData.phoneNumber) {
-      setError("Registration details missing. Please register again.");
+      const msg = "registration details missing. Please register again.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (!otp.trim() || otp.trim().length !== 6) {
-      setError("Please enter the 6-digit OTP code.");
+      const msg = "Please enter a valid 6-digit OTP code.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -83,13 +87,13 @@ const VerifyOTP = () => {
     try {
       await api.post("/api/v1/Account/VerifyOTP", payloadForVerify);
 
-      toast.success("Email verified successfully! Please login to continue.");
+      toast.success("Email verified successfully!");
       Cookies.remove("userRegData");
       Cookies.remove("registerEmail");
-      setSuccess("Email verified! Redirecting to login...");
+      setSuccess("Email verified! Redirecting...");
 
       window.setTimeout(() => {
-        router.push("/login?verified=1");
+        router.push("/");
       }, 1200);
     } catch (err) {
       const message = getApiErrorMessage(
@@ -113,7 +117,8 @@ const VerifyOTP = () => {
       return;
     }
 
-    const resendEmail = email || storedData.email || Cookies.get("registerEmail");
+    const resendEmail =
+      email || storedData.email || Cookies.get("registerEmail");
     if (!resendEmail) {
       setError("Email address missing. Please register again.");
       return;
@@ -127,7 +132,9 @@ const VerifyOTP = () => {
       });
 
       toast.success("OTP resent successfully!");
-      setSuccess("A new OTP has been sent to your email. Please check your inbox.");
+      setSuccess(
+        "A new OTP has been sent to your email. Please check your inbox.",
+      );
     } catch (err) {
       const message = getApiErrorMessage(
         err,
@@ -220,9 +227,14 @@ const VerifyOTP = () => {
                   still have trouble, contact support.
                 </div>
                 <div className="block-button md:mt-7 mt-4">
-                  <Link href="/login" className="button-main">
-                    Back to Login
-                  </Link>
+                  <button
+                    type="button"
+                    title="Go back to Login Page"
+                    onClick={() => router.push("/login")}
+                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
+                  >
+                    Login
+                  </button>
                 </div>
               </div>
             </div>

@@ -47,10 +47,8 @@ const MenuEleven = () => {
             setLastScrollPosition(scrollPosition);
         };
 
-        // Gắn sự kiện cuộn khi component được mount
         window.addEventListener('scroll', handleScroll);
 
-        // Hủy sự kiện khi component bị unmount
         return () => {
             window.removeEventListener('scroll', handleScroll);
         };

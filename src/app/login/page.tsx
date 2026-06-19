@@ -8,9 +8,8 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import toast from "react-hot-toast";
-import { getApiErrorMessage } from "@/lib/api";
-import { loginWithCredentials } from "@/lib/auth";
-
+import Cookies from "js-cookie";
+import api, { getApiErrorMessage } from "@/lib/api";
 const Login = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,8 +22,8 @@ const Login = () => {
 
   useEffect(() => {
     if (searchParams?.get("verified") === "1") {
-      setSuccess("Email verified successfully! You can now login.");
-      toast.success("Email verified! Please login.");
+      setSuccess("Email verified successfully! ");
+      toast.success("Email verified!");
     }
   }, [searchParams]);
 
@@ -33,25 +32,27 @@ const Login = () => {
     setError("");
     setSuccess("");
 
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter your username/email and password.");
-      return;
-    }
-
     setLoading(true);
     try {
-      await loginWithCredentials(username.trim(), password);
+      const response = await api.post("/api/v1/oauth/token", {
+        UserName: username.trim(),
+        Password: password.trim(),
+      });
 
-      toast.success("Login successful!");
-      const redirectTo = searchParams?.get("redirect") || "/my-account";
-      router.push(redirectTo);
-    } catch (err) {
-      const message = getApiErrorMessage(
-        err,
-        "Login failed. Please check your credentials and try again.",
-      );
-      toast.error(message);
-      setError(message);
+      const token =
+        response.data.AccessToken || response.data.Data?.AccessToken;
+
+      if (token) {
+        Cookies.set("authToken", token, { expires: 1 });
+        toast.success("Login successful!");
+        router.push("/");
+      } else {
+        throw new Error("Token nahi mila!");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError("Login failed. Check console/network tab.");
+      toast.error("Login failed.");
     } finally {
       setLoading(false);
     }
@@ -105,37 +106,23 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                <div className="flex items-center justify-between mt-5">
-                  <div className="flex items-center">
-                    <div className="block-input">
-                      <input
-                        type="checkbox"
-                        name="remember"
-                        id="remember"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                      />
-                      <Icon.CheckSquare
-                        size={20}
-                        weight="fill"
-                        className="icon-checkbox"
-                      />
-                    </div>
-                    <label htmlFor="remember" className="pl-2 cursor-pointer">
-                      Remember me
-                    </label>
-                  </div>
-                  <Link
-                    href={"/forgot-password"}
-                    className="font-semibold hover:underline"
+                <div className="flex items-center justify-end mt-5">
+                  <button
+                    title="Forgot Your Password?"
+                    type="button"
+                    onClick={() => {
+                      router.push("/forgot-password");
+                    }}
+                    className="font-semibold hover:underline bg-transparent border-none cursor-pointer p-0"
                   >
                     Forgot Your Password?
-                  </Link>
+                  </button>
                 </div>
                 <div className="block-button md:mt-7 mt-4">
                   <button
+                    title="Login Your Account"
                     type="submit"
-                    className="button-main"
+                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
                     disabled={loading}
                   >
                     {loading ? "Logging in..." : "Login"}
@@ -152,9 +139,14 @@ const Login = () => {
                   personalized experiences.
                 </div>
                 <div className="block-button md:mt-7 mt-4">
-                  <Link href={"/register"} className="button-main">
+                  <button
+                    title="Go to Registration Page"
+                    type="button"
+                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
+                    onClick={() => router.push("/register")}
+                  >
                     Register
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>

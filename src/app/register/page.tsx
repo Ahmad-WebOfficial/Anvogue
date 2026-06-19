@@ -66,42 +66,55 @@ const Register = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (signUpData.password !== signUpData.confirmPassword) {
-      setError("Passwords do not match.");
+      const msg = "Passwords do not match.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (!agreedToTerms) {
-      setError("Please agree to the Terms of User.");
+      const msg = "Please agree to the Terms of Service.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
-    if (signUpData.userName.trim().length < 3) {
-      setError("Username must be at least 3 characters.");
+    if (signUpData.userName.trim().length < 5) {
+      const msg = "Username must be at least 5 characters.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (!signUpData.firstName.trim() || !signUpData.lastName.trim()) {
-      setError("Please enter your first and last name.");
+      const msg = "Please enter your first and last name.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (!validateEmail(signUpData.email)) {
-      setError("Please enter a valid email address.");
+      const msg = "Please enter a valid email address.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     const submittedPhone = signUpData.phoneNumber.trim();
     const normalizedPhone = submittedPhone.replace(/[^\d+]/g, "");
 
-    if (!normalizedPhone || normalizedPhone.replace(/^\+/, "").length < 6) {
-      setError("Please enter a valid phone number.");
+    if (normalizedPhone.length < 10 || normalizedPhone.length > 15) {
+      const msg = "Please enter a valid phone number (10-15 digits).";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (signUpData.password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      const msg = "Password must be at least 6 characters.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -388,9 +401,14 @@ const Register = () => {
                   Welcome back. Sign in to access your personalized experience.
                 </div>
                 <div className="block-button cursor-pointer md:mt-7 mt-4">
-                  <Link href={"/login"} className="button-main">
+                  <button
+                    type="button"
+                    title="Go to Login Page"
+                    onClick={() => router.push("/login")}
+                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
+                  >
                     Login
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>

@@ -31,6 +31,11 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters long!");
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -50,9 +55,21 @@ const Login = () => {
         throw new Error("Token nahi mila!");
       }
     } catch (err: any) {
-      console.error(err);
-      setError("Login failed. Check console/network tab.");
-      toast.error("Login failed.");
+      const errorData = err.response?.data;
+      const exceptionType = errorData?.ExceptionType;
+
+      setUsername("");
+      setPassword("");
+
+      if (exceptionType === "UserNotFoundException") {
+        toast.error("User does not exist!");
+      } else if (exceptionType === "IncorrectPasswordException") {
+        toast.error("Incorrect password!");
+      } else {
+        toast.error(errorData?.Message || "Login failed.");
+      }
+
+      setError(errorData?.Message || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +106,7 @@ const Login = () => {
                     className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
                     id="username"
                     type="text"
-                    placeholder="Username or email address *"
+                    placeholder="Username *"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}

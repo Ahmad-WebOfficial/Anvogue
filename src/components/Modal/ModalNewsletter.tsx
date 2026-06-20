@@ -13,7 +13,6 @@ const ModalNewsletter = () => {
   const { openQuickview } = useModalQuickviewContext();
 
   const handleDetailProduct = (productId: string) => {
-    // redirect to shop with category selected
     router.push(`/product/default?id=${productId}`);
   };
 
@@ -62,88 +61,46 @@ const ModalNewsletter = () => {
               </div>
               <div className="heading5 pb-5">You May Also Like</div>
 
-
-              {/* <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
+              <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
                 {productData.slice(11, 16).map((item, index) => (
-                  <>
+                  <div
+                    className="product-item item pb-5 flex items-center justify-between gap-3 border-b border-line"
+                    key={item.id || index}
+                  >
                     <div
-                      className="product-item item pb-5 flex items-center justify-between gap-3 border-b border-line"
-                      key={index}
+                      className="infor flex items-center gap-5 cursor-pointer"
+                      onClick={() => handleDetailProduct(item.id)}
                     >
-                      <div
-                        className="infor flex items-center gap-5 cursor-pointer"
-                        onClick={() => handleDetailProduct(item.id)}
-                      >
-                        <div className="bg-img flex-shrink-0">
-                          <Image
-                            width={5000}
-                            height={5000}
-                            src={item.thumbImage[0]}
-                            alt={item.name}
-                            className="w-[100px] aspect-square flex-shrink-0 rounded-lg"
-                          />
-                        </div>
-                        <div className="">
-                          <div className="name text-button">{item.name}</div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="product-price text-title">
-                              ${item.price}.00
-                            </div>
-                            <div className="product-origin-price text-title text-secondary2">
-                              <del>${item.originPrice}.00</del>
-                            </div>
+                      <div className="bg-img flex-shrink-0">
+                        <Image
+                          width={5000}
+                          height={5000}
+                          src={item.thumbImage[0]}
+                          alt={item.name}
+                          className="w-[100px] aspect-square flex-shrink-0 rounded-lg"
+                        />
+                      </div>
+                      <div className="">
+                        <div className="name text-button">{item.name}</div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="product-price text-title">
+                            ${item.price}.00
+                          </div>
+                          <div className="product-origin-price text-title text-secondary2">
+                            <del>${item.originPrice}.00</del>
                           </div>
                         </div>
                       </div>
-                      <button
-                        className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
-                        onClick={() => openQuickview(item)}
-                      >
-                        QUICK VIEW
-                      </button>
                     </div>
-                  </>
+                    <button
+                      className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
+                      onClick={() => openQuickview(item)}
+                    >
+                      QUICK VIEW
+                    </button>
+                  </div>
                 ))}
-              </div> */}
-             <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
-    {productData.slice(11, 16).map((item, index) => (
-        // Fragment <> ki jagah direct div par key laga di hai
-        <div
-            className='product-item item pb-5 flex items-center justify-between gap-3 border-b border-line'
-            key={item.id || index} 
-        >
-            <div
-                className="infor flex items-center gap-5 cursor-pointer"
-                onClick={() => handleDetailProduct(item.id)}
-            >
-                <div className="bg-img flex-shrink-0">
-                    <Image 
-                        width={5000} 
-                        height={5000} 
-                        src={item.thumbImage[0]} 
-                        alt={item.name}
-                        className='w-[100px] aspect-square flex-shrink-0 rounded-lg' 
-                    />
-                </div>
-                <div className=''>
-                    <div className="name text-button">{item.name}</div>
-                    <div className="flex items-center gap-2 mt-2">
-                        <div className="product-price text-title">${item.price}.00</div>
-                        <div className="product-origin-price text-title text-secondary2">
-                            <del>${item.originPrice}.00</del>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <button
-                className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
-                onClick={() => openQuickview(item)}
-            >
-                QUICK VIEW
-            </button>
-        </div>
-    ))}
-</div> 
+              </div>
             </div>
           </div>
         </div>

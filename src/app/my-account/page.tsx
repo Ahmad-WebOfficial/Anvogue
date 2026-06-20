@@ -10,7 +10,7 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { motion } from "framer-motion";
 import { logout } from "@/lib/auth";
-
+import Cookies from "js-cookie";
 const MyAccount = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string | undefined>("dashboard");
@@ -96,16 +96,19 @@ const MyAccount = () => {
                     <strong className="heading6">Setting</strong>
                   </Link>
                   {/* <button
-                                        type="button"
-                                        className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5"
-                                        onClick={() => {
-                                            logout()
-                                            router.push('/login')
-                                        }}
-                                    >
-                                        <Icon.SignOut size={20} />
-                                        <strong className="heading6">Logout</strong>
-                                    </button> */}
+    type="button"
+    className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5"
+    onClick={async () => {
+        Cookies.remove('authToken', { path: '/' });
+        Cookies.remove('userRegData', { path: '/' });
+        
+        router.push('/login');
+        router.refresh(); 
+    }}
+>
+    <Icon.SignOut size={20} />
+    <strong className="heading6">Logout</strong>
+</button> */}
                   <button
                     type="button"
                     className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-red-50 mt-1.5 text-red-600"

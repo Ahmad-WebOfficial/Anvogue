@@ -42,10 +42,8 @@ const MenuYoga = () => {
             setLastScrollPosition(scrollPosition);
         };
 
-        // Gắn sự kiện cuộn khi component được mount
         window.addEventListener('scroll', handleScroll);
 
-        // Hủy sự kiện khi component bị unmount
         return () => {
             window.removeEventListener('scroll', handleScroll);
         };
@@ -928,7 +926,7 @@ const MenuYoga = () => {
                                         </div>
                                         <Link href={'/my-account'} className="button-main bg-white text-black border border-black w-full text-center">Dashboard</Link>
                                         <div className="bottom mt-4 pt-4 border-t border-line"></div>
-                                        <Link href={'#!'} className='body1 hover:underline'>Support</Link>
+                                        <Link href={'#!'} className='body1 hover:underline'>Suppor</Link>
                                     </div>
                                 </div>
                                 <div className="max-md:hidden wishlist-icon flex items-center cursor-pointer" onClick={openModalWishlist}>

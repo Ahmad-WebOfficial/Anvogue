@@ -6,7 +6,7 @@ const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_KEY,
   headers: {
     "Content-Type": "application/json",
-    'api-security-key': process.env.NEXT_PUBLIC_SECURITY_KEY,
+    "api-security-key": process.env.NEXT_PUBLIC_SECURITY_KEY,
   },
 });
 
@@ -33,7 +33,9 @@ type AxiosLikeError = {
   message?: string;
 };
 
-function isAxiosError(error: unknown): error is AxiosLikeError & { isAxiosError: true } {
+function isAxiosError(
+  error: unknown,
+): error is AxiosLikeError & { isAxiosError: true } {
   return (
     typeof error === "object" &&
     error !== null &&
@@ -58,7 +60,8 @@ function collectValidationMessages(errors: unknown): string[] {
   return Object.values(errors as Record<string, unknown>).flatMap((value) => {
     if (Array.isArray(value)) {
       return value.filter(
-        (item): item is string => typeof item === "string" && item.trim().length > 0,
+        (item): item is string =>
+          typeof item === "string" && item.trim().length > 0,
       );
     }
     if (typeof value === "string" && value.trim()) return [value.trim()];

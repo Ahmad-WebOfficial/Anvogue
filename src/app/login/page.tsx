@@ -9,6 +9,7 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import toast from "react-hot-toast";
 import Cookies from "js-cookie";
+import { AUTH_TOKEN_KEY } from "@/lib/auth-keys";
 import api, { getApiErrorMessage } from "@/lib/api";
 const Login = () => {
   const router = useRouter();
@@ -48,9 +49,9 @@ const Login = () => {
         response.data.AccessToken || response.data.Data?.AccessToken;
 
       if (token) {
-        Cookies.set("authToken", token, { expires: 1 });
+        Cookies.set(AUTH_TOKEN_KEY, token, { expires: 1, path: "/" }); // "authToken" ki jagah AUTH_TOKEN_KEY
         toast.success("Login successful!");
-        router.push("/");
+        window.location.href = "/"; // Refresh zaroori hai
       } else {
         throw new Error("Token nahi mila!");
       }

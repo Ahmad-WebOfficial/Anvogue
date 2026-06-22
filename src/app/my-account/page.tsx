@@ -95,27 +95,27 @@ const MyAccount = () => {
                     <Icon.GearSix size={20} />
                     <strong className="heading6">Setting</strong>
                   </Link>
-                  {/* <button
-    type="button"
-    className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5"
-    onClick={async () => {
-        Cookies.remove('authToken', { path: '/' });
-        Cookies.remove('userRegData', { path: '/' });
-        
-        router.push('/login');
-        router.refresh(); 
-    }}
->
-    <Icon.SignOut size={20} />
-    <strong className="heading6">Logout</strong>
-</button> */}
                   <button
+                    type="button"
+                    className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5"
+                    onClick={async () => {
+                      Cookies.remove("authToken", { path: "/" });
+                      Cookies.remove("userRegData", { path: "/" });
+
+                      router.push("/login");
+                      router.refresh();
+                    }}
+                  >
+                    <Icon.SignOut size={20} />
+                    <strong className="heading6">Logout</strong>
+                  </button>
+                  {/* <button
                     type="button"
                     className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-red-50 mt-1.5 text-red-600"
                   >
                     <Icon.Trash size={20} />
                     <strong className="heading6 ">Delete Account</strong>
-                  </button>
+                  </button> */}
                 </div>
               </div>
             </div>
@@ -402,9 +402,6 @@ const MyAccount = () => {
                         className={`item relative px-3 py-2.5 text-secondary text-center duration-300 hover:text-black border-b-2 ${activeOrders === item ? "active border-black" : "border-transparent"}`}
                         onClick={() => handleActiveOrders(item)}
                       >
-                        {/* {activeOrders === item && (
-                                                <motion.span layoutId='active-pill' className='absolute inset-0 border-black border-b-2'></motion.span>
-                                                )} */}
                         <span className="relative text-button z-[1]">
                           {item}
                         </span>

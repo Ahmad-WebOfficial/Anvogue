@@ -1,5 +1,5 @@
 "use client";
-
+import { AUTH_TOKEN_KEY } from "@/lib/auth-keys";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -39,20 +39,14 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   const [fixedHeader, setFixedHeader] = useState(false);
   const [lastScrollPosition, setLastScrollPosition] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  useEffect(() => {
-    setIsLoggedIn(!!Cookies.get("authToken"));
-  }, []);
-
+ useEffect(() => {
+  setIsLoggedIn(!!Cookies.get(AUTH_TOKEN_KEY)); 
+}, []);
   const handleLogout = async () => {
-    toast.success("Logout Successful!");
-    Cookies.remove("authToken", { path: "/" });
-    Cookies.remove("userRegData", { path: "/" });
-    setIsLoggedIn(false);
-    setShowLogoutModal(false);
-    setTimeout(() => {
-      window.location.href = "/login";
-    }, 1000);
-  };
+  Cookies.remove(AUTH_TOKEN_KEY, { path: "/" }); // Key match ho gayi
+  setIsLoggedIn(false);
+  window.location.href = "/login";
+};
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
@@ -1319,7 +1313,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                 onClick={openModalSearch}
                 title="Search"
               >
-                <Icon.MagnifyingGlass size={24} color="black" />
+                <Icon.MagnifyingGlass size={26} color="black" />
               </div>
 
               <div
@@ -1327,7 +1321,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                 title="Account"
               >
                 <Icon.User
-                  size={24}
+                  size={26}
                   color="black"
                   onClick={() =>
                     setOpenSubNavMobile((prev) => (prev === 99 ? null : 99))
@@ -1401,7 +1395,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                 onClick={openModalCart}
                 title="Cart"
               >
-                <Icon.Handbag size={24} color="black" />
+                <Icon.Handbag size={26} color="black" />
                 <span className="quantity cart-quantity absolute -right-1.5 -top-1.5 text-xs text-white bg-black w-4 h-4 flex items-center justify-center rounded-full">
                   {cartState.cartArray.length}
                 </span>

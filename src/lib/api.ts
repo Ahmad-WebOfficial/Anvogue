@@ -1,6 +1,10 @@
 import axios from "axios";
 import Cookies from "js-cookie";
-import { AUTH_EXPIRES_KEY, ACCESS_TOKEN_KEY, AUTH_COOKIE_KEYS } from "@/lib/auth-keys";
+import {
+  AUTH_EXPIRES_KEY,
+  ACCESS_TOKEN_KEY,
+  AUTH_COOKIE_KEYS,
+} from "@/lib/auth-keys";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_KEY,

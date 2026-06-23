@@ -150,6 +150,7 @@ const Register = () => {
 
       if (typeof window !== "undefined") {
         Cookies.set("registerEmail", payload.Email, { expires: 1 });
+        sessionStorage.setItem("regPassword", signUpData.password);
       }
 
       try {

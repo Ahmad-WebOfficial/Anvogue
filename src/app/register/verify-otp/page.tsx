@@ -10,6 +10,7 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import toast from "react-hot-toast";
 import api, { getApiErrorMessage } from "@/lib/api";
+import { completeLoginAfterVerification } from "@/lib/auth";
 
 type StoredRegData = {
   username: string;
@@ -85,12 +86,22 @@ const VerifyOTP = () => {
     };
 
     try {
-      await api.post("/api/v1/Account/VerifyOTP", payloadForVerify);
+      const response = await api.post("/api/v1/Account/VerifyOTP", payloadForVerify);
 
-      toast.success("Email verified successfully!");
+      const loggedIn = await completeLoginAfterVerification(
+        response.data,
+        storedData.username,
+      );
+
+      if (!loggedIn) {
+        throw new Error("Verification succeeded but automatic login failed.");
+      }
+
+      toast.success("Account verified and logged in successfully!");
       Cookies.remove("userRegData");
       Cookies.remove("registerEmail");
-      setSuccess("Email verified! Redirecting...");
+      sessionStorage.removeItem("regPassword");
+      setSuccess("Logged in! Redirecting to home...");
 
       window.setTimeout(() => {
         router.push("/");

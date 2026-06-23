@@ -1,4 +1,5 @@
 import React from 'react'
+import AuthSessionWatcher from '@/components/Auth/AuthSessionWatcher'
 import { CartProvider } from '@/context/CartContext'
 import { ModalCartProvider } from '@/context/ModalCartContext'
 import { WishlistProvider } from '@/context/WishlistContext'
@@ -18,6 +19,7 @@ const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =
                             <ModalCompareProvider>
                                 <ModalSearchProvider>
                                     <ModalQuickviewProvider>
+                                        <AuthSessionWatcher />
                                         {children}
                                     </ModalQuickviewProvider>
                                 </ModalSearchProvider>

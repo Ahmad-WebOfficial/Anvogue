@@ -74,6 +74,7 @@ const WhatNewOne = () => {
                   style="style-1"
                   data={{
                     id: prd.ProductId,
+                    productDetailId: prd.ProductDetailId,
                     name: prd.ProductName,
 
                     price: prd.MinPrice ?? 0,

@@ -7,6 +7,7 @@ interface Variation {
 
 export interface ProductType {
     id: string,
+    productDetailId?: number | string,
     category: string,
     type: string,
     name: string,

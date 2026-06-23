@@ -8,23 +8,22 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import toast from "react-hot-toast";
-import Cookies from "js-cookie";
-import { AUTH_TOKEN_KEY } from "@/lib/auth-keys";
-import api, { getApiErrorMessage } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api";
+import { loginWithCredentials } from "@/lib/auth";
+
 const Login = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    if (searchParams?.get("verified") === "1") {
-      setSuccess("Email verified successfully! ");
-      toast.success("Email verified!");
+    if (searchParams?.get("expired") === "1") {
+      setError("Your session has expired. Please login again.");
+      toast.error("Session expired. Please login again.");
     }
   }, [searchParams]);
 
@@ -32,6 +31,12 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    if (!username.trim() || !password.trim()) {
+      setError("Please enter your username and password.");
+      return;
+    }
+
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters long!");
       setError("Password must be at least 6 characters long.");
@@ -40,23 +45,16 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const response = await api.post("/api/v1/oauth/token", {
-        UserName: username.trim(),
-        Password: password.trim(),
-      });
+      await loginWithCredentials(username.trim(), password.trim());
 
-      const token =
-        response.data.AccessToken || response.data.Data?.AccessToken;
-
-      if (token) {
-        Cookies.set(AUTH_TOKEN_KEY, token, { expires: 1, path: "/" }); // "authToken" ki jagah AUTH_TOKEN_KEY
-        toast.success("Login successful!");
-        window.location.href = "/"; // Refresh zaroori hai
-      } else {
-        throw new Error("Token nahi mila!");
-      }
-    } catch (err: any) {
-      const errorData = err.response?.data;
+      toast.success("Login successful!");
+      const redirectTo = searchParams?.get("redirect") || "/";
+      router.push(redirectTo);
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: { data?: { ExceptionType?: string; Message?: string } };
+      };
+      const errorData = errObj.response?.data;
       const exceptionType = errorData?.ExceptionType;
 
       setUsername("");
@@ -64,13 +62,18 @@ const Login = () => {
 
       if (exceptionType === "UserNotFoundException") {
         toast.error("User does not exist!");
+        setError("User does not exist!");
       } else if (exceptionType === "IncorrectPasswordException") {
         toast.error("Incorrect password!");
+        setError("Incorrect password!");
       } else {
-        toast.error(errorData?.Message || "Login failed.");
+        const message = getApiErrorMessage(
+          err,
+          errorData?.Message || "Login failed.",
+        );
+        toast.error(message);
+        setError(message);
       }
-
-      setError(errorData?.Message || "Login failed.");
     } finally {
       setLoading(false);
     }

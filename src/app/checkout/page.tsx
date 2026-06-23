@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react"; // Added useEffect
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import TopNavOne from "@/components/Header/TopNav/TopNavOne";
@@ -12,7 +12,7 @@ import Product from "@/components/Product/Product";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import { useSearchParams } from "next/navigation";
-
+import api from "@/lib/api";
 const Checkout = () => {
   const searchParams = useSearchParams();
   const discount = Number(searchParams.get("discount")) || 0;
@@ -21,146 +21,108 @@ const Checkout = () => {
   const { cartState } = useCart();
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]); // New
-  const [selectedAreaId, setSelectedAreaId] = useState<string>(''); 
-const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [selectedCountryId, setSelectedCountryId] = useState<string>(""); // New
-  const [selectedStateId, setSelectedStateId] = useState<string>(""); // Ye zaruri hai
+  const [selectedAreaId, setSelectedAreaId] = useState<string>("");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [selectedCountryId, setSelectedCountryId] = useState<string>("");
+  const [selectedStateId, setSelectedStateId] = useState<string>("");
   const [cities, setCities] = useState<any[]>([]);
-  const [areas, setAreas] = useState<any[]>([]); // New
-  const [selectedCityId, setSelectedCityId] = useState<string>(""); // New
-  const [branches, setBranches] = useState<any[]>([]); // New state
-  const [loading, setLoading] = useState(true); // Loading state
+  const [areas, setAreas] = useState<any[]>([]);
+  const [selectedCityId, setSelectedCityId] = useState<string>("");
+  const [branches, setBranches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activePayment, setActivePayment] = useState<string>("credit-card");
 
-  // Clean total calculation
   const totalCart = cartState.cartArray.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
   );
 
   useEffect(() => {
-    const fetchCountries = async () => {
+    const getCountries = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/Common/countries`,
-          {
-            headers: {
-              "api-security-key": process.env.NEXT_PUBLIC_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-          },
-        );
+        const res = await api.get("/api/v1/Common/countries");
 
-        const result = await res.json();
-
-        // The API returns { Data: [...] }, so we access result.Data
-        if (result && Array.isArray(result.Data)) {
-          setCountries(result.Data);
+        if (res.data?.Data) {
+          setCountries(res.data.Data);
+        } else {
+          console.warn("No country data found in response");
+          setCountries([]);
         }
       } catch (error) {
-        console.error("Error fetching countries:", error);
-      } finally {
-        setLoading(false);
+        console.error("Failed to fetch countries:", error);
       }
     };
-    fetchCountries();
+    getCountries();
   }, []);
-  // 1. States Fetch (Country select hone par)
   const fetchStates = async (countryId: string) => {
-    console.log("Country ID received in fetchStates:", countryId);
     if (!countryId || countryId === "default") return;
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/Common/states?CountryId=${countryId}`,
-        {
-          headers: {
-            "api-security-key": process.env.NEXT_PUBLIC_API_KEY || "",
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      const result = await res.json();
-      console.log("States API response:", result); // Yahan check karein kya data aa raha hai
-
-      if (result && Array.isArray(result.Data)) {
-        setStates(result.Data);
-      } else {
-        console.log("No states found or invalid format");
-      }
+      const res = await api.get(`/api/v1/Common/states`, {
+        params: { CountryId: countryId },
+      });
+      setStates(res.data?.Data || []);
     } catch (error) {
-      console.error("Error fetching states:", error);
+      console.error("Failed to fetch states:", error);
     }
   };
-
-  // 2. Cities Fetch (State select hone par)
   const fetchCities = async (stateId: string) => {
-    console.log("State ID received in fetchCities:", stateId); // Ye print hona chahiye
+    console.log("State ID received in fetchCities:", stateId);
     if (!stateId || stateId === "default") return;
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/Common/cities?StateId=${stateId}`,
-        {
-          headers: {
-            "api-security-key": process.env.NEXT_PUBLIC_API_KEY || "",
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      const result = await res.json();
-      console.log("Cities API response:", result); // Yahan dekhein ki kya cities list mein hain
+      const res = await api.get(`/api/v1/Common/cities`, {
+        params: { StateId: stateId },
+      });
 
-      if (result && Array.isArray(result.Data)) {
-        setCities(result.Data);
+      if (res.data && Array.isArray(res.data.Data)) {
+        setCities(res.data.Data);
+      } else {
+        console.warn("No cities found in response");
+        setCities([]);
       }
     } catch (error) {
       console.error("Fetch Error:", error);
     }
   };
   const fetchAreas = async (cityId: string) => {
+    if (!cityId || cityId === "default") return;
+
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/Common/areas?CityId=${cityId}`,
-        {
-          headers: {
-            "api-security-key": process.env.NEXT_PUBLIC_API_KEY || "",
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      const result = await res.json();
+      const res = await api.get(`/api/v1/Common/areas`, {
+        params: { CityId: cityId },
+      });
 
-      console.log("Areas API Response:", result);
-
-      if (result && Array.isArray(result.Data)) {
-        setAreas(result.Data);
+      if (res.data && Array.isArray(res.data.Data)) {
+        setAreas(res.data.Data);
       } else {
         setAreas([]);
       }
     } catch (error) {
       console.error("Error fetching areas:", error);
+      setAreas([]);
     }
   };
 
   const fetchBranches = async (cityId: string) => {
+    if (!cityId || cityId === "default") return;
+
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/Common/branches?CityId=${cityId}`, {
-            headers: { 'api-security-key': process.env.NEXT_PUBLIC_API_KEY || '', 'Content-Type': 'application/json' },
-        });
-        const result = await res.json();
-        
-        console.log("Branches API Response:", result);
-        
-        if (result && Array.isArray(result.Data)) {
-            setBranches(result.Data);
-        } else {
-            setBranches([]);
-        }
+      const res = await api.get(`/api/v1/Common/branches`, {
+        params: { CityId: cityId },
+      });
+
+      console.log("Branches API Response:", res.data);
+
+      if (res.data && Array.isArray(res.data.Data)) {
+        setBranches(res.data.Data);
+      } else {
+        setBranches([]);
+      }
     } catch (error) {
-        console.error("Error fetching branches:", error);
+      console.error("Error fetching branches:", error);
+      setBranches([]);
     }
-};
+  };
 
   const handlePayment = (item: string) => {
     setActivePayment(item);
@@ -268,39 +230,43 @@ const [selectedBranchId, setSelectedBranchId] = useState<string>('');
                         <select
                           className="border border-line px-4 py-3 w-full rounded-lg"
                           id="region"
+                          value={selectedCountryId}
                           onChange={(e) => {
                             const countryId = e.target.value;
                             setSelectedCountryId(countryId);
-                            setStates([]); // Purane States saaf
-                            setCities([]); // Purani Cities saaf
-                            setSelectedStateId(""); // State reset
+
+                            setStates([]);
+                            setCities([]);
+                            setAreas([]);
+                            setSelectedStateId("");
+                            setSelectedCityId("");
+
                             fetchStates(countryId);
                           }}
                         >
-                          <option value="default" disabled>
+                          <option value="" disabled>
                             Choose Country/Region
                           </option>
-                          {countries.map((country: any) => (
-                            <option key={country.Value} value={country.Value}>
-                              {country.Text}
-                            </option>
-                          ))}
+                          {Array.isArray(countries) &&
+                            countries.map((country: any) => (
+                              <option key={country.Value} value={country.Value}>
+                                {country.Text}
+                              </option>
+                            ))}
                         </select>
                         <Icon.CaretDown className="arrow-down" />
                       </div>
                       <div className="select-block">
-                        {/* State Dropdown */}
-                        {/* State Dropdown */}
                         <select
                           className="border border-line px-4 py-3 w-full rounded-lg"
                           id="state"
                           name="state"
-                          value={selectedStateId} // Ye line add karein
+                          value={selectedStateId}
                           onChange={(e) => {
                             const stateId = e.target.value;
-                            setSelectedStateId(stateId); // State update
-                            setCities([]); // Purani cities saaf
-                            fetchCities(stateId); // Cities fetch
+                            setSelectedStateId(stateId);
+                            setCities([]);
+                            fetchCities(stateId);
                           }}
                         >
                           <option value="" disabled>
@@ -314,17 +280,20 @@ const [selectedBranchId, setSelectedBranchId] = useState<string>('');
                         </select>
                         <Icon.CaretDown className="arrow-down" />
                       </div>
-                      {/* City Dropdown */}
                       <div className="select-block">
-                        {/* <select
+                        <select
                           className="border border-line px-4 py-3 w-full rounded-lg"
                           id="city"
                           value={selectedCityId}
                           onChange={(e) => {
                             const cityId = e.target.value;
                             setSelectedCityId(cityId);
-                            setAreas([]); // Purane areas saaf karein
-                            fetchAreas(cityId); // Naye areas fetch karein
+
+                            setAreas([]);
+                            setBranches([]);
+
+                            fetchAreas(cityId);
+                            fetchBranches(cityId);
                           }}
                         >
                           <option value="" disabled>
@@ -335,66 +304,53 @@ const [selectedBranchId, setSelectedBranchId] = useState<string>('');
                               {city.Text}
                             </option>
                           ))}
-                        </select> */}
-                        <select 
-    className="border border-line px-4 py-3 w-full rounded-lg" 
-    id="city" 
-    value={selectedCityId}
-    onChange={(e) => {
-        const cityId = e.target.value;
-        setSelectedCityId(cityId);
-        
-        setAreas([]); // Purane areas saaf
-        setBranches([]); // Purani branches saaf
-        
-        fetchAreas(cityId);    // Areas fetch karein
-        fetchBranches(cityId); // Branches fetch karein
-    }}
->
-    <option value="" disabled>Choose City</option>
-    {cities.map((city: any) => (
-        <option key={city.Value} value={city.Value}>{city.Text}</option>
-    ))}
-</select>
+                        </select>
                         <Icon.CaretDown className="arrow-down" />
                       </div>
 
                       <div className="select-block">
-                      <select
-    className="border border-line px-4 py-3 w-full rounded-lg"
-    id="area"
-    name="area"
-    value={selectedAreaId} // Ye state add karna zaroori hai
-    onChange={(e) => setSelectedAreaId(e.target.value)} // State update
->
-    <option value="" disabled>
-        Choose Area
-    </option>
-    {areas.length > 0 ? (
-        areas.map((area: any) => (
-            <option key={area.Value} value={area.Value}>
-                {area.Text}
-            </option>
-        ))
-    ) : (
-        <option value="" disabled>
-            No areas available
-        </option>
-    )}
-</select>
+                        <select
+                          className="border border-line px-4 py-3 w-full rounded-lg"
+                          id="area"
+                          name="area"
+                          value={selectedAreaId}
+                          onChange={(e) => setSelectedAreaId(e.target.value)}
+                        >
+                          <option value="" disabled>
+                            Choose Area
+                          </option>
+                          {areas.length > 0 ? (
+                            areas.map((area: any) => (
+                              <option key={area.Value} value={area.Value}>
+                                {area.Text}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>
+                              No areas available
+                            </option>
+                          )}
+                        </select>
                         <Icon.CaretDown className="arrow-down" />
                       </div>
-<div className="select-block mt-4">
-   <select className="border border-line px-4 py-3 w-full rounded-lg" id="branch">
-    <option value="">Select Branch</option>
-    {branches.length > 0 ? (
-        branches.map((b) => <option key={b.Value} value={b.Value}>{b.Text}</option>)
-    ) : (
-        <option disabled>No branches in this city</option>
-    )}
-</select>
-    <Icon.CaretDown className='arrow-down' />
-</div>
+                      <div className="select-block ">
+                        <select
+                          className="border border-line px-4 py-3 w-full rounded-lg"
+                          id="branch"
+                        >
+                          <option value="">Select Branch</option>
+                          {branches.length > 0 ? (
+                            branches.map((b) => (
+                              <option key={b.Value} value={b.Value}>
+                                {b.Text}
+                              </option>
+                            ))
+                          ) : (
+                            <option disabled>No branches in this city</option>
+                          )}
+                        </select>
+                        <Icon.CaretDown className="arrow-down" />
+                      </div>
                       <div className="">
                         <input
                           className="border-line px-4 py-3 w-full rounded-lg"
@@ -590,7 +546,6 @@ const [selectedBranchId, setSelectedBranchId] = useState<string>('');
                             </div>
                             <div className="row">
                               <div className="col-12 mt-3">
-                                {/* <div className="bg-img"><Image src="assets/images/component/payment.png" alt="" /></div> */}
                                 <label htmlFor="cardNumberApple">
                                   Card Numbers
                                 </label>
@@ -744,7 +699,8 @@ const [selectedBranchId, setSelectedBranchId] = useState<string>('');
                                 <span>/</span>
                                 <span className="color capitalize">
                                   {product.selectedColor ||
-                                    product.variation[0].color}
+                                    product.variation?.[0]?.color ||
+                                    "Default Color"}
                                 </span>
                               </div>
                             </div>

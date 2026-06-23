@@ -1,6 +1,6 @@
 import axios from "axios";
 import Cookies from "js-cookie";
-import { AUTH_EXPIRES_KEY, AUTH_TOKEN_KEY } from "@/lib/auth-keys";
+import { AUTH_EXPIRES_KEY, ACCESS_TOKEN_KEY, AUTH_COOKIE_KEYS } from "@/lib/auth-keys";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_KEY,
@@ -12,7 +12,7 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = Cookies.get(AUTH_TOKEN_KEY);
+    const token = Cookies.get(ACCESS_TOKEN_KEY);
     const expiresAt = Cookies.get(AUTH_EXPIRES_KEY);
 
     if (token && expiresAt && Date.now() <= Number(expiresAt)) {

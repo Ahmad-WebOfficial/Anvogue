@@ -328,14 +328,20 @@ const ModalCart = ({
 
   const [activeTab, setActiveTab] = useState<string | undefined>("");
   const { isModalOpen, closeModalCart } = useModalCartContext();
-  const { cartState, addToCart, removeFromCart, updateCart } = useCart();
+  const { cartState, cartLoading, addToCart, removeFromCart, updateCart, fetchCart } =
+    useCart();
 
-  const handleAddToCart = (productItem: ProductType) => {
-    if (!cartState.cartArray.find((item) => item.id === productItem.id)) {
-      addToCart({ ...productItem });
-      updateCart(productItem.id, productItem.quantityPurchase, "", "");
-    } else {
-      updateCart(productItem.id, productItem.quantityPurchase, "", "");
+  useEffect(() => {
+    if (isModalOpen) {
+      void fetchCart();
+    }
+  }, [isModalOpen, fetchCart]);
+
+  const handleAddToCart = async (productItem: ProductType) => {
+    try {
+      await addToCart({ ...productItem, quantityPurchase: 1 });
+    } catch {
+      // Error toast is handled in CartContext
     }
   };
 
@@ -343,15 +349,8 @@ const ModalCart = ({
     setActiveTab(tab);
   };
 
-  let moneyForFreeship = 150;
-  // Purane code ko isse replace karein
-  const totalCart = Array.isArray(cartState?.cartArray)
-    ? cartState.cartArray.reduce(
-        (acc, item) => acc + item.price * (item.quantity || 1),
-        0,
-      )
-    : 0;
-  let [discountCart, setDiscountCart] = useState<number>(0);
+  const moneyForFreeship = 150;
+  const totalCart = cartState.subTotal || 0;
 
   return (
     <>
@@ -472,78 +471,73 @@ const ModalCart = ({
               </div>
             </div>
             <div className="list-product px-6">
-              {cartState?.cartArray?.length > 0 ? (
-                cartState.cartArray.map((product: any, index: number) => (
+              {cartLoading ? (
+                <div className="text-center py-8 text-gray-500">
+                  Loading cart...
+                </div>
+              ) : cartState?.cartArray?.length > 0 ? (
+                cartState.cartArray.map((product, index) => (
                   <div
-                    key={product.CartId || product.id || index}
+                    key={product.cartId || product.id || index}
                     className="item py-5 flex items-center justify-between gap-3 border-b border-line"
                   >
                     <div className="infor flex items-center gap-3 w-full">
-                      <div className="w-[100px] h-[100px] flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                      <div className="w-[100px] h-[100px] flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 relative">
                         <Image
                           src={
-                            product.ThumbnailImagePath ||
-                            product.IconImagePath ||
-                            product.images?.[0] ||
-                            "/placeholder-image.png"
+                            product.apiItem
+                              ? product.thumbImage[0]
+                              : product.images?.[0] || "/images/product/1000x1000.png"
                           }
-                          width={100}
-                          height={100}
-                          alt={product.ProductName || product.name || "Product"}
-                          className="w-full h-full object-cover"
+                          fill
+                          alt={product.name || "Product"}
+                          className="object-cover"
                         />
                       </div>
 
                       <div className="w-full">
                         <div className="flex items-center justify-between">
-                          <div className="name text-button">
-                            {product.ProductName || product.name}
-                          </div>
+                          <div className="name text-button">{product.name}</div>
 
                           <div
                             className="remove-cart-btn caption1 font-semibold text-red underline cursor-pointer"
-                            onClick={() =>
-                              removeFromCart(product.CartId || product.id)
-                            }
+                            onClick={() => removeFromCart(product.cartId)}
                           >
                             Remove
                           </div>
                         </div>
-                        // Is block ko replace karein...
+
                         <div className="flex items-center justify-between mt-3">
-                          {/* Yahan se naya code shuru hoga */}
                           <div className="flex items-center gap-3 border border-line rounded-lg px-3 py-1">
                             <button
+                              type="button"
                               className="text-lg font-bold"
                               onClick={() =>
                                 updateCart(
-                                  product.CartId || product.id,
-                                  (product.Quantity || product.quantity || 1) -
-                                    1,
-                                  "",
-                                  "",
+                                  product.cartId,
+                                  product.quantity - 1,
+                                  product.selectedSize,
+                                  product.selectedColor,
                                 )
                               }
-                              disabled={
-                                (product.Quantity || product.quantity || 1) <= 1
-                              }
+                              disabled={product.quantity <= 1}
                             >
                               -
                             </button>
 
                             <span className="text-secondary2 w-8 text-center">
-                              {product.Quantity || product.quantity || 1}
+                              {product.quantity}
                             </span>
 
                             <button
+                              type="button"
                               className="text-lg font-bold"
                               onClick={() =>
                                 updateCart(
-                                  product.CartId || product.id,
-                                  (product.Quantity || product.quantity || 1) +
-                                    1,
-                                  "",
-                                  "",
+                                  product.cartId,
+                                  product.quantity + 1,
+                                  product.selectedSize,
+                                  product.selectedColor,
                                 )
                               }
                             >
@@ -552,13 +546,20 @@ const ModalCart = ({
                           </div>
 
                           <div className="product-price text-title">
-                            $
-                            {product.Price ||
-                              product.price ||
-                              product.UnitPrice ||
-                              0}
+                            Rs. {product.price}
                           </div>
                         </div>
+
+                        {product.apiItem?.VariantName && (
+                          <div className="caption1 text-secondary mt-2">
+                            Variant: {product.apiItem.VariantName}
+                          </div>
+                        )}
+                        {product.apiItem?.SKU && (
+                          <div className="caption1 text-secondary mt-1">
+                            SKU: {product.apiItem.SKU}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -596,7 +597,7 @@ const ModalCart = ({
               </div>
               <div className="flex items-center justify-between pt-6 px-6">
                 <div className="heading5">Subtotal</div>
-                <div className="heading5">${totalCart}.00</div>
+                <div className="heading5">Rs. {totalCart}</div>
               </div>
               <div className="block-button text-center p-6">
                 <div className="flex items-center gap-4">

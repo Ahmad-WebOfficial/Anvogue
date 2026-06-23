@@ -1,5 +1,5 @@
 "use client";
-import { AUTH_TOKEN_KEY } from "@/lib/auth-keys";
+import { getAuthToken, logout } from "@/lib/auth";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,7 +15,6 @@ import { useModalSearchContext } from "@/context/ModalSearchContext";
 import { useCart } from "@/context/CartContext";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import Cookies from "js-cookie";
 interface Props {
   props: string;
 }
@@ -40,10 +39,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   const [lastScrollPosition, setLastScrollPosition] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
  useEffect(() => {
-  setIsLoggedIn(!!Cookies.get(AUTH_TOKEN_KEY)); 
+  setIsLoggedIn(!!getAuthToken());
 }, []);
   const handleLogout = async () => {
-  Cookies.remove(AUTH_TOKEN_KEY, { path: "/" }); // Key match ho gayi
+  logout();
   setIsLoggedIn(false);
   window.location.href = "/login";
 };

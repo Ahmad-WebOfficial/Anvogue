@@ -50,7 +50,9 @@ const ModalNewsletter = () => {
 
   const handleDetailProduct = (productId: number) => {
     setOpen(false);
-    router.push(getProductDetailUrl(productId));
+    router.push(
+      getProductDetailUrl(productId, featuredProduct?.ProductDetailId),
+    );
   };
 
   if (!loading && !products.length) {
@@ -89,7 +91,10 @@ const ModalNewsletter = () => {
                     />
                   </div>
                   <Link
-                    href={getProductDetailUrl(featuredProduct.ProductId)}
+                    href={getProductDetailUrl(
+                      featuredProduct.ProductId,
+                      featuredProduct.ProductDetailId,
+                    )}
                     className="button-main w-fit bg-black text-white hover:bg-white uppercase"
                     onClick={() => setOpen(false)}
                   >

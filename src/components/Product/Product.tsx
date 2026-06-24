@@ -13,6 +13,7 @@ import { useCompare } from "@/context/CompareContext";
 import { useModalCompareContext } from "@/context/ModalCompareContext";
 import { useModalQuickviewContext } from "@/context/ModalQuickviewContext";
 import { useRouter } from "next/navigation";
+import { getProductDetailUrl } from "@/lib/featured-products";
 import Marquee from "react-fast-marquee";
 import Rate from "../Other/Rate";
 
@@ -81,7 +82,9 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
   };
 
   const handleDetailProduct = (productId: string) => {
-    router.push(`/product/default?id=${productId}`);
+    router.push(
+      getProductDetailUrl(productId, data.productDetailId),
+    );
   };
 
   let percentSale = Math.floor(100 - (data.price / data.originPrice) * 100);

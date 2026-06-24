@@ -71,7 +71,10 @@ const SliderOne = () => {
                       Rs. {product.Price}
                     </div>
                     <Link
-                      href={getProductDetailUrl(product.ProductId)}
+                      href={getProductDetailUrl(
+                        product.ProductId,
+                        product.ProductDetailId,
+                      )}
                       className="button-main md:mt-4 mt-2 inline-block"
                     >
                       Shop Now

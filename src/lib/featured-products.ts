@@ -48,8 +48,64 @@ export function getProductImage(product: FeaturedProduct): string {
   );
 }
 
-export function getProductDetailUrl(productId: number | string): string {
-  return `/product/default?id=${productId}`;
+export function getProductDetailUrl(
+  productId: number | string,
+  productDetailId?: number | string,
+): string {
+  const params = new URLSearchParams({ id: String(productId) });
+  if (productDetailId) {
+    params.set("detailId", String(productDetailId));
+  }
+  return `/product/default?${params.toString()}`;
+}
+
+export function mapProductDetailToProductType(
+  detail: import("@/lib/product-details").ProductDetailData,
+  selectedVariant?: import("@/lib/product-details").ProductVariantCombination,
+): ProductType {
+  const image =
+    detail.ProductImages?.[0]?.LargeImagePath ||
+    detail.ProductImages?.[0]?.OriginalImagePath ||
+    selectedVariant?.ImageName ||
+    "/images/product/1000x1000.png";
+
+  const price = selectedVariant
+    ? selectedVariant.DiscountedPrice > 0
+      ? selectedVariant.DiscountedPrice
+      : selectedVariant.Price
+    : detail.MinPrice;
+
+  return {
+    id: String(detail.ProductId),
+    productDetailId:
+      selectedVariant?.ProductDetailId ?? detail.ProductDetailId,
+    category: detail.Category || "",
+    type: detail.Category || "product",
+    name: detail.Name,
+    gender: "",
+    new: detail.IsPromotional,
+    sale: detail.Discount > 0 || detail.IsPromotional,
+    rate: detail.AverageRating || 5,
+    price,
+    originPrice: selectedVariant?.Price ?? detail.MaxPrice ?? price,
+    brand: detail.BrandName || "",
+    sold: 0,
+    quantity: detail.InStock ? 100 : 0,
+    quantityPurchase: 1,
+    sizes:
+      detail.ProductVariantDetail?.productVariantCombinationList?.map(
+        (v) => v.VariantName,
+      ) ?? [],
+    variation: [],
+    thumbImage: [image],
+    images:
+      detail.ProductImages?.map(
+        (img) => img.LargeImagePath || img.OriginalImagePath || img.IconImagePath,
+      ).filter(Boolean) ?? [image],
+    description: detail.Description,
+    action: "add to cart",
+    slug: detail.Seo?.UrlSlug || String(detail.ProductId),
+  };
 }
 
 export function mapFeaturedProductToProductType(

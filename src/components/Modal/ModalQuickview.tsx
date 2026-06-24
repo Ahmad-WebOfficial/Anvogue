@@ -343,7 +343,11 @@ const ModalQuickview = () => {
 
                     <div className="button-block mt-5">
                       <Link
-                        href={getProductDetailUrl(productDetail.ProductId)}
+                        href={getProductDetailUrl(
+                          productDetail.ProductId,
+                          selectedVariant?.ProductDetailId ??
+                            productDetail.ProductDetailId,
+                        )}
                         className="button-main w-full text-center inline-block"
                         onClick={closeQuickview}
                       >

@@ -20,12 +20,29 @@ interface ProductProps {
   data: ProductType;
   type: string;
   style: string;
+  hideOriginPrice?: boolean;
 }
 
-const Product: React.FC<ProductProps> = ({ data, type, style }) => {
+const Product: React.FC<ProductProps> = ({
+  data,
+  type,
+  style,
+  hideOriginPrice = false,
+}) => {
   const [activeColor, setActiveColor] = useState<string>("");
   const [activeSize, setActiveSize] = useState<string>("");
   const [openQuickShop, setOpenQuickShop] = useState<boolean>(false);
+  const imageSrc =
+    data.thumbImage?.[0] || data.images?.[0] || "/images/product/1000x1000.png";
+  const thumbImages =
+    data.thumbImage && data.thumbImage.length > 0
+      ? data.thumbImage
+      : data.images && data.images.length > 0
+        ? data.images
+        : [imageSrc];
+  const displayPrice = data.price > 0 ? data.price : data.originPrice;
+  const showOriginPrice = !hideOriginPrice && data.originPrice > displayPrice;
+  const showSaleBadge = showOriginPrice;
   const { addToCart, updateCart, cartState } = useCart();
   const { openModalCart } = useModalCartContext();
   const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist();
@@ -203,14 +220,14 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
                   </>
                 ) : (
                   <>
-                    {data.thumbImage.map((img, index) => (
+                    {(data.thumbImage || []).map((img, index) => (
                       <Image
                         key={index}
                         src={img}
                         width={500}
                         height={500}
                         priority={true}
-                        alt={data.name}
+                        alt={data.name || "Product image"}
                         className="w-full h-full object-cover duration-700"
                       />
                     ))}
@@ -482,15 +499,15 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
               )}
 
               <div className="product-price-block flex items-center gap-2 flex-wrap mt-1">
-                <div className="product-price text-title">₨{data.price}</div>
+                <div className="product-price text-title">₨{displayPrice}</div>
 
-                {data.originPrice > data.price && (
+                {showOriginPrice && (
                   <div className="product-origin-price caption1 text-secondary2">
                     <del>₨{data.originPrice}</del>
                   </div>
                 )}
 
-                {data.originPrice > data.price && (
+                {showSaleBadge && (
                   <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 rounded-full">
                     -
                     {Math.round(
@@ -550,14 +567,14 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
                       </div>
                     )}
                     <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
-                      {data.thumbImage.map((img, index) => (
+                      {thumbImages.map((img, index) => (
                         <Image
                           key={index}
-                          src={img}
+                          src={img || imageSrc}
                           width={500}
                           height={500}
                           priority={true}
-                          alt={data.name}
+                          alt={data.name || "Product image"}
                           className="w-full h-full object-cover duration-700"
                         />
                       ))}
@@ -602,12 +619,14 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
                       </div>
                       <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
                         <div className="product-price text-title">
-                          ${data.price}.00
+                          ₨{displayPrice}
                         </div>
-                        <div className="product-origin-price caption1 text-secondary2">
-                          <del>${data.originPrice}.00</del>
-                        </div>
-                        {data.originPrice && (
+                        {showOriginPrice && (
+                          <div className="product-origin-price caption1 text-secondary2">
+                            <del>₨{data.originPrice}</del>
+                          </div>
+                        )}
+                        {showSaleBadge && (
                           <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
                             -{percentSale}%
                           </div>
@@ -757,8 +776,8 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
               className="w-full aspect-square"
               width={5000}
               height={5000}
-              src={data.thumbImage[0]}
-              alt="img"
+              src={imageSrc}
+              alt={data.name || "Product image"}
             />
             <div className="list-action flex flex-col gap-1 absolute top-0 right-0">
               <span
@@ -820,7 +839,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style }) => {
               <Rate currentRate={data.rate} size={16} />
             </div>
             <span className="text-title inline-block mt-1">
-              ${data.price}.00
+              ₨{displayPrice}
             </span>
           </div>
         </div>

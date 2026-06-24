@@ -1,74 +1,198 @@
-'use client'
+"use client";
 
-// WishlistContext.tsx
-import React, { createContext, useContext, useState, useReducer, useEffect } from 'react';
-import { ProductType } from '@/type/ProductType';
-
-interface WishlistItem extends ProductType {
-}
-
+import React, { createContext, useContext, useReducer, useEffect } from "react";
+import { ProductType } from "@/type/ProductType";
+import api from "@/lib/api";
+import toast from "react-hot-toast";
 interface WishlistState {
-    wishlistArray: WishlistItem[]
+  wishlistArray: ProductType[];
 }
 
 type WishlistAction =
-    | { type: 'ADD_TO_WISHLIST'; payload: ProductType }
-    | { type: 'REMOVE_FROM_WISHLIST'; payload: string }
-    | { type: 'LOAD_WISHLIST'; payload: WishlistItem[] }
+  | { type: "ADD_TO_WISHLIST"; payload: ProductType }
+  | { type: "REMOVE_FROM_WISHLIST"; payload: string }
+  | { type: "LOAD_WISHLIST"; payload: ProductType[] };
 
-interface WishlistContextProps {
-    wishlistState: WishlistState;
-    addToWishlist: (item: ProductType) => void;
-    removeFromWishlist: (itemId: string) => void;
-}
+const WishlistContext = createContext<any>(undefined);
 
-const WishlistContext = createContext<WishlistContextProps | undefined>(undefined);
-
-const WishlistReducer = (state: WishlistState, action: WishlistAction): WishlistState => {
-    switch (action.type) {
-        case 'ADD_TO_WISHLIST':
-            const newItem: WishlistItem = { ...action.payload };
-            return {
-                ...state,
-                wishlistArray: [...state.wishlistArray, newItem],
-            };
-        case 'REMOVE_FROM_WISHLIST':
-            return {
-                ...state,
-                wishlistArray: state.wishlistArray.filter((item) => item.id !== action.payload),
-            };
-        case 'LOAD_WISHLIST':
-            return {
-                ...state,
-                wishlistArray: action.payload,
-            };
-        default:
-            return state;
-    }
+const WishlistReducer = (
+  state: WishlistState,
+  action: WishlistAction,
+): WishlistState => {
+  switch (action.type) {
+    case "ADD_TO_WISHLIST":
+      console.log("Reducer: Adding to state", action.payload);
+      return {
+        ...state,
+        wishlistArray: [...state.wishlistArray, action.payload],
+      };
+    case "REMOVE_FROM_WISHLIST":
+      console.log("Reducer: Removing from state", action.payload);
+      return {
+        ...state,
+        wishlistArray: state.wishlistArray.filter(
+          (item) => item.id !== action.payload,
+        ),
+      };
+    case "LOAD_WISHLIST":
+      console.log("Reducer: Loading full list", action.payload);
+      return { ...state, wishlistArray: action.payload };
+    default:
+      return state;
+  }
 };
 
-export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [wishlistState, dispatch] = useReducer(WishlistReducer, { wishlistArray: [] });
+export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [wishlistState, dispatch] = useReducer(WishlistReducer, {
+    wishlistArray: [],
+  });
 
-    const addToWishlist = (item: ProductType) => {
-        dispatch({ type: 'ADD_TO_WISHLIST', payload: item });
+  const normalizeWishlistItem = (item: any): ProductType => {
+    const price =
+      item.DiscountedPrice ??
+      item.Price ??
+      item.MinPrice ??
+      item.UnitPrice ??
+      0;
+    const originPrice =
+      item.Price ?? item.OriginPrice ?? item.MaxPrice ?? price;
+    const thumbImage =
+      item.ThumbnailImagePath ||
+      item.IconImagePath ||
+      item.ImageName ||
+      item.ProductImage ||
+      item.ImageUrl ||
+      item.Image?.[0] ||
+      item.Images?.[0] ||
+      item.thumbImage?.[0] ||
+      "/images/product/1000x1000.png";
+
+    return {
+      id: String(
+        item.ProductId ??
+          item.id ??
+          item.ProductDetailId ??
+          item.WishListId ??
+          "",
+      ),
+      productDetailId:
+        item.ProductDetailId ??
+        item.productDetailId ??
+        item.ProductDetailId ??
+        undefined,
+      category: item.Category || item.CategoryName || "",
+      type: item.Type || item.type || "product",
+      name: item.ProductName || item.Name || item.Title || "",
+      gender: item.Gender || "",
+      new: Boolean(item.IsNew ?? item.new ?? false),
+      sale: Boolean(item.Discount > 0 ?? item.sale ?? false),
+      rate: Number(item.Rating ?? item.Rate ?? 0),
+      price: Number(price),
+      originPrice: Number(originPrice),
+      brand: item.BrandName || item.Brand || "",
+      sold: Number(item.Sold ?? 0),
+      quantity: Number(item.Quantity ?? 1),
+      quantityPurchase: Number(item.Quantity ?? item.QuantityPurchase ?? 1),
+      sizes: Array.isArray(item.Sizes)
+        ? item.Sizes
+        : item.VariantName
+          ? [String(item.VariantName)]
+          : [],
+      variation: Array.isArray(item.Variation)
+        ? item.Variation
+        : Array.isArray(
+              item.ProductVariantDetail?.productVariantCombinationList,
+            )
+          ? item.ProductVariantDetail.productVariantCombinationList
+          : [],
+      thumbImage: [String(thumbImage)],
+      images: Array.isArray(item.Images) ? item.Images : [String(thumbImage)],
+      description:
+        item.Description || item.LongDescription || item.VariantName || "",
+      action: item.action || item.Action || "add to cart",
+      slug:
+        item.Slug || item.UrlSlug || String(item.ProductId ?? item.id ?? ""),
     };
+  };
 
-    const removeFromWishlist = (itemId: string) => {
-        dispatch({ type: 'REMOVE_FROM_WISHLIST', payload: itemId });
-    };
+  const fetchWishlist = async () => {
+    console.log("Fetch: Starting request...");
+    try {
+      const res = await api.get("/api/v1/Customer/wishlist", {
+        params: { PageNumber: 1, PageSize: 10 },
+      });
+      console.log("Fetch: Response Data:", res.data);
 
-    return (
-        <WishlistContext.Provider value={{ wishlistState, addToWishlist, removeFromWishlist }}>
-            {children}
-        </WishlistContext.Provider>
-    );
-};
-
-export const useWishlist = () => {
-    const context = useContext(WishlistContext);
-    if (!context) {
-        throw new Error('useWishlist must be used within a WishlistProvider');
+      if (res.data?.Data?.WishItemList) {
+        const normalized = res.data.Data.WishItemList.map(
+          normalizeWishlistItem,
+        ).filter((item) => item.id);
+        console.log("Fetch: Items found:", normalized);
+        dispatch({ type: "LOAD_WISHLIST", payload: normalized });
+      } else {
+        console.warn("Fetch: WishItemList not found in response.");
+      }
+    } catch (error) {
+      console.error("Fetch: Error occurred:", error);
     }
-    return context;
+  };
+
+  useEffect(() => {
+    fetchWishlist();
+  }, []);
+
+  const addToWishlist = async (item: ProductType) => {
+    console.log("Add: Starting for item", item.id);
+    try {
+      const productDetailId = item.productDetailId ?? item.id;
+      const productId = (item.id ?? productDetailId) as any;
+
+      const res = await api.post(
+        `/api/v1/Customer/wishlist/items`,
+        {},
+        {
+          params: { ProductId: productId, ProductDetailId: productDetailId },
+        },
+      );
+
+      console.log("Add: Success response:", res.data);
+      toast.success("Added to wishlist!");
+      await fetchWishlist();
+    } catch (error) {
+      console.error("Add: Error occurred:", error);
+    }
+  };
+
+  const removeFromWishlist = async (product: ProductType) => {
+    const idToDelete = product.productDetailId || product.id;
+
+    console.log("Remove: Attempting to delete for ID:", idToDelete);
+
+    try {
+      const res = await api.delete(
+        `/api/v1/Customer/RemoveFromWishlistByProduct/wishlist/items/product/${idToDelete}`,
+      );
+
+      console.log("Remove: API Response:", res.data);
+
+      if (res.data.HttpStatusCode === 200) {
+        toast.success("Removed from wishlist!");
+        await fetchWishlist();
+      }
+    } catch (error) {
+      console.error("Remove: Error occurred:", error);
+    }
+  };
+
+  return (
+    <WishlistContext.Provider
+      value={{ wishlistState, addToWishlist, removeFromWishlist }}
+    >
+      {children}
+    </WishlistContext.Provider>
+  );
 };
+
+export const useWishlist = () => useContext(WishlistContext);

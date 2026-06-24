@@ -72,24 +72,16 @@ const ModalNewsletter = () => {
             <div className="left lg:w-1/2 sm:w-2/5 max-sm:hidden bg-green flex flex-col items-center justify-center gap-5 py-14 px-6">
               {featuredProduct ? (
                 <>
-                  <div className="text-xs font-semibold uppercase text-center">
-                    Featured Product
+                  <div className="text-2xl font-bold uppercase text-center">
+                    Angue
                   </div>
-                  <div className="lg:text-[42px] text-3xl lg:leading-[48px] leading-[36px] font-bold uppercase text-center line-clamp-2">
-                    {featuredProduct.ProductName}
+                  <div className="lg:text-lg text-sm lg:leading-[40px] leading-[30px] font-semibold  text-center ">
+                    Discover an elevated e-commerce experience enjoy seamless
+                    navigation, exclusive seasonal discounts, and a streamlined
+                    checkout process designed for modern shoppers who value both
+                    style and efficiency.
                   </div>
-                  <div className="text-button-uppercase text-center">
-                    Starting from{" "}
-                    <span className="text-red">Rs. {featuredProduct.Price}</span>
-                  </div>
-                  <div className="w-[180px] h-[180px] relative">
-                    <Image
-                      src={getProductImage(featuredProduct)}
-                      alt={featuredProduct.ProductName}
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
+
                   <Link
                     href={getProductDetailUrl(
                       featuredProduct.ProductId,
@@ -102,7 +94,9 @@ const ModalNewsletter = () => {
                   </Link>
                 </>
               ) : (
-                <p className="text-button-uppercase">Loading featured products...</p>
+                <p className="text-button-uppercase">
+                  Loading featured products...
+                </p>
               )}
             </div>
             <div className="right lg:w-1/2 sm:w-3/5 w-full bg-white sm:pt-10 sm:pl-10 max-sm:p-6 relative">
@@ -149,7 +143,9 @@ const ModalNewsletter = () => {
                       <button
                         className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
                         onClick={() =>
-                          openQuickview(mapFeaturedProductToProductType(product))
+                          openQuickview(
+                            mapFeaturedProductToProductType(product),
+                          )
                         }
                       >
                         QUICK VIEW

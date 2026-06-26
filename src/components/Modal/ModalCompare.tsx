@@ -39,7 +39,6 @@ const ModalCompare = () => {
                     className="item p-3 border border-line rounded-xl relative"
                   >
                     <div className="infor flex items-center gap-4">
-                      // Line 36 ke aas-paas ka hissa aise update karein:
                       <div className="bg-img w-[100px] h-[100px] flex-shrink-0 rounded-lg overflow-hidden">
                         <Image
                           src={product.images?.[0] || "/placeholder-image.png"}

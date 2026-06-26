@@ -139,10 +139,10 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  useEffect(() => {
+ 
+useEffect(() => {
     fetchWishlist();
-  }, []);
-
+  }, [fetchWishlist]);
   const addToWishlist = async (item: ProductType) => {
     console.log("Add: Starting for item", item.id);
     try {

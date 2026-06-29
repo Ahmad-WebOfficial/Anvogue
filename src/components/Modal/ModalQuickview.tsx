@@ -15,13 +15,24 @@ import Rate from "../Other/Rate";
 import ModalSizeguide from "./ModalSizeguide";
 import {
   fetchProductDetails,
-  getProductImages,
+  getDisplayImages,
+  getVariantDisplayImage,
   getVariantPrice,
+  getComparePrice,
+  formatRsPrice,
+  parseVariantGroupOptions,
+  findVariantByGroupSelection,
   ProductDetailData,
   ProductVariantCombination,
+  RelatedProduct,
 } from "@/lib/product-details";
-import { getProductDetailUrl } from "@/lib/featured-products";
+import {
+  getProductDetailUrl,
+  mapProductDetailToProductType,
+  mapRelatedProductToProductType,
+} from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
+import { ProductType } from "@/type/ProductType";
 
 const ModalQuickview = () => {
   const [productQty, setProductQty] = useState(1);
@@ -31,9 +42,14 @@ const ModalQuickview = () => {
   );
   const [selectedVariant, setSelectedVariant] =
     useState<ProductVariantCombination | null>(null);
+  const [groupSelections, setGroupSelections] = useState<
+    Record<string, string>
+  >({});
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { selectedProduct, closeQuickview } = useModalQuickviewContext();
+  const { selectedProduct, openQuickview, closeQuickview } =
+    useModalQuickviewContext();
   const { addToCart } = useCart();
   const { openModalCart } = useModalCartContext();
   const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist();
@@ -43,27 +59,62 @@ const ModalQuickview = () => {
 
   const variants =
     productDetail?.ProductVariantDetail?.productVariantCombinationList ?? [];
-  const images = productDetail ? getProductImages(productDetail) : [];
+  const variantGroups = productDetail
+    ? parseVariantGroupOptions(productDetail)
+    : [];
+  const images = productDetail
+    ? getDisplayImages(productDetail, selectedVariant)
+    : [];
   const activePrice =
     selectedVariant != null
       ? getVariantPrice(selectedVariant)
-      : productDetail?.MinPrice ?? 0;
-  const comparePrice =
-    selectedVariant != null &&
-    selectedVariant.DiscountedPrice > 0 &&
-    selectedVariant.DiscountedPrice < selectedVariant.Price
-      ? selectedVariant.Price
-      : productDetail?.MaxPrice ?? activePrice;
+      : (productDetail?.MinPrice ?? 0);
+  const comparePrice = productDetail
+    ? getComparePrice(productDetail, selectedVariant)
+    : 0;
   const percentSale =
     comparePrice > activePrice
       ? Math.floor(100 - (activePrice / comparePrice) * 100)
       : 0;
   const productId = selectedProduct?.id ?? productDetail?.ProductId?.toString();
+  const relatedProducts = productDetail?.relatedProductList ?? [];
+  const showPriceRange =
+    !selectedVariant &&
+    productDetail &&
+    productDetail.MinPrice !== productDetail.MaxPrice;
+  const inStock = selectedVariant?.InStock ?? productDetail?.InStock ?? false;
+  const totalPrice = activePrice * productQty;
+  const activeImage = images[activeImageIndex] ?? images[0];
+
+  const syncGroupSelections = (
+    detail: ProductDetailData,
+    variant: ProductVariantCombination | null,
+  ) => {
+    if (!variant || !detail.ProductVariantGroups?.length) {
+      setGroupSelections({});
+      return;
+    }
+
+    const parts = variant.VariantName.split(",").map((part) => part.trim());
+    const nextSelections: Record<string, string> = {};
+    detail.ProductVariantGroups.forEach((group, index) => {
+      const value = parts[index] ?? parts[parts.length - 1];
+      if (value) {
+        nextSelections[group.VariantGroupName] = value;
+      }
+    });
+    setGroupSelections(nextSelections);
+  };
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedVariant, productDetail?.ProductId]);
 
   useEffect(() => {
     if (!selectedProduct) {
       setProductDetail(null);
       setSelectedVariant(null);
+      setGroupSelections({});
       setError("");
       return;
     }
@@ -72,6 +123,7 @@ const ModalQuickview = () => {
       setLoading(true);
       setError("");
       setProductQty(1);
+      setActiveImageIndex(0);
 
       try {
         const detail = await fetchProductDetails(
@@ -82,19 +134,21 @@ const ModalQuickview = () => {
         );
 
         setProductDetail(detail);
+
         const defaultVariant =
           detail.ProductVariantDetail?.productVariantCombinationList?.find(
             (variant) => variant.ProductDetailId === detail.ProductDetailId,
           ) ??
           detail.ProductVariantDetail?.productVariantCombinationList?.[0] ??
           null;
+
         setSelectedVariant(defaultVariant);
+        syncGroupSelections(detail, defaultVariant);
       } catch (err) {
         setProductDetail(null);
         setSelectedVariant(null);
-        setError(
-          getApiErrorMessage(err, "Failed to load product details."),
-        );
+        setGroupSelections({});
+        setError(getApiErrorMessage(err, "Failed to load product details."));
       } finally {
         setLoading(false);
       }
@@ -103,85 +157,78 @@ const ModalQuickview = () => {
     void loadProductDetails();
   }, [selectedProduct]);
 
-  const handleIncreaseQuantity = () => {
-    setProductQty((prev) => prev + 1);
-  };
+  const handleGroupSelection = (groupName: string, option: string) => {
+    if (!productDetail) return;
 
-  const handleDecreaseQuantity = () => {
-    if (productQty > 1) {
-      setProductQty((prev) => prev - 1);
+    const nextSelections = { ...groupSelections, [groupName]: option };
+    setGroupSelections(nextSelections);
+
+    const matchedVariant = findVariantByGroupSelection(
+      productDetail,
+      nextSelections,
+    );
+    if (matchedVariant) {
+      setSelectedVariant(matchedVariant);
     }
   };
 
-  const handleAddToCart = async () => {
-    if (!selectedProduct || !productDetail) return;
+  const handleVariantSelect = (variant: ProductVariantCombination) => {
+    if (!productDetail) return;
+    setSelectedVariant(variant);
+    syncGroupSelections(productDetail, variant);
+    setActiveImageIndex(0);
+  };
 
-    const cartProduct = {
-      ...selectedProduct,
-      id: String(productDetail.ProductId),
-      productDetailId: selectedVariant?.ProductDetailId ?? productDetail.ProductDetailId,
-      name: productDetail.Name,
-      price: activePrice,
-      originPrice: comparePrice,
-      description: productDetail.Description,
-      images,
-      thumbImage: images.slice(0, 1),
-      quantityPurchase: productQty,
-    };
+  const handleAddToCart = async () => {
+    if (!selectedProduct || !productDetail || !inStock) return;
+
+    const cartProduct = mapProductDetailToProductType(
+      productDetail,
+      selectedVariant ?? undefined,
+    );
+    cartProduct.quantityPurchase = productQty;
 
     try {
       await addToCart(cartProduct);
       openModalCart();
       closeQuickview();
     } catch {
-      // Error toast is handled in CartContext
+      // handled in CartContext
     }
   };
 
   const handleAddToWishlist = () => {
     if (!selectedProduct || !productDetail) return;
 
-    const wishlistProduct = {
-      ...selectedProduct,
-      id: String(productDetail.ProductId),
-      productDetailId: selectedVariant?.ProductDetailId ?? productDetail.ProductDetailId,
-      name: productDetail.Name,
-      price: activePrice,
-      originPrice: comparePrice,
-      description: productDetail.Description,
-      images,
-      thumbImage: images.slice(0, 1),
-    };
+    const wishlistProduct = mapProductDetailToProductType(
+      productDetail,
+      selectedVariant ?? undefined,
+    );
 
     if (
       wishlistState.wishlistArray.some(
-        (item) => item.id === wishlistProduct.id,
+        (item: ProductType) => item.id === wishlistProduct.id,
       )
     ) {
       removeFromWishlist(wishlistProduct.id);
     } else {
       addToWishlist(wishlistProduct);
     }
-
     openModalWishlist();
   };
 
   const handleAddToCompare = () => {
     if (!selectedProduct || !productDetail) return;
 
-    const compareProduct = {
-      ...selectedProduct,
-      id: String(productDetail.ProductId),
-      name: productDetail.Name,
-      price: activePrice,
-      originPrice: comparePrice,
-      description: productDetail.Description,
-      images,
-      thumbImage: images.slice(0, 1),
-    };
+    const compareProduct = mapProductDetailToProductType(
+      productDetail,
+      selectedVariant ?? undefined,
+    );
 
     if (compareState.compareArray.length < 3) {
-      if (compareState.compareArray.some((item) => item.id === compareProduct.id)) {
+      if (
+        compareState.compareArray.some((item) => item.id === compareProduct.id)
+      ) {
         removeFromCompare(compareProduct.id);
       } else {
         addToCompare(compareProduct);
@@ -189,221 +236,386 @@ const ModalQuickview = () => {
     } else {
       alert("Compare up to 3 products");
     }
-
     openModalCompare();
+  };
+
+  const handleRelatedProductClick = (related: RelatedProduct) => {
+    openQuickview(mapRelatedProductToProductType(related));
   };
 
   return (
     <>
-      <div className={`modal-quickview-block`} onClick={closeQuickview}>
+      <div className="modal-quickview-block" onClick={closeQuickview}>
         <div
-          className={`modal-quickview-main py-6 ${selectedProduct !== null ? "open" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
+          className={`modal-quickview-main ${selectedProduct !== null ? "open" : ""}`}
+          onClick={(e) => e.stopPropagation()}
         >
           {loading ? (
-            <div className="flex items-center justify-center min-h-[420px] px-6">
+            <div className="modal-quickview-scroll flex items-center justify-center min-h-[420px] px-6 py-10">
               <p className="text-secondary">Loading product details...</p>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center min-h-[420px] px-6 text-center">
+            <div className="modal-quickview-scroll flex flex-col items-center justify-center min-h-[420px] px-6 py-10 text-center">
               <p className="text-red-600 mb-4">{error}</p>
-              <button className="button-main" onClick={closeQuickview}>
+              <button type="button" className="button-main" onClick={closeQuickview}>
                 Close
               </button>
             </div>
           ) : productDetail ? (
-            <div className="flex h-full max-md:flex-col-reverse gap-y-6">
-              <div className="left lg:w-[388px] md:w-[300px] flex-shrink-0 px-6">
-                <div className="list-img max-md:flex items-center gap-4">
-                  {images.map((item, index) => (
-                    <div
-                      className="bg-img w-full aspect-[3/4] max-md:w-[150px] max-md:flex-shrink-0 rounded-[20px] overflow-hidden md:mt-6"
-                      key={`${item}-${index}`}
-                    >
-                      <Image
-                        src={item}
-                        width={1500}
-                        height={2000}
-                        alt={productDetail.Name}
-                        priority={index === 0}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
+            <div className="modal-quickview-scroll py-6">
+              {/* Header */}
+              <div className="px-6 pb-4 flex items-center justify-between border-b border-line sticky top-0 bg-white z-10">
+                <div className="heading5">Quick View</div>
+                <button
+                  type="button"
+                  className="close-btn w-8 h-8 rounded-full bg-surface flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
+                  onClick={closeQuickview}
+                  aria-label="Close"
+                >
+                  <Icon.X size={16} />
+                </button>
               </div>
 
-              <div className="right w-full px-4">
-                <div className="heading pb-6 px-4 flex items-center justify-between relative">
-                  <div className="heading5">Quick View</div>
-                  <div
-                    className="close-btn absolute right-0 top-0 w-6 h-6 rounded-full bg-surface flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
-                    onClick={closeQuickview}
-                  >
-                    <Icon.X size={14} />
+              {/* Main content */}
+              <div className="flex flex-col lg:flex-row gap-6 px-4 sm:px-6 pt-6">
+                {/* Images */}
+                <div className="w-full lg:w-[42%] flex-shrink-0">
+                  <div className="main-img bg-img w-full aspect-[3/4] rounded-2xl overflow-hidden bg-surface">
+                    {activeImage && (
+                      <Image
+                        src={activeImage}
+                        width={800}
+                        height={1066}
+                        alt={productDetail.Name}
+                        priority
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
+
+                  {images.length > 1 && (
+                    <div className="flex gap-2 sm:gap-3 mt-3 overflow-x-auto pb-1">
+                      {images.map((item, index) => (
+                        <button
+                          type="button"
+                          key={`${item}-${index}`}
+                          className={`flex-shrink-0 w-16 h-20 sm:w-[72px] sm:h-[96px] rounded-xl overflow-hidden border-2 transition-colors ${activeImageIndex === index ? "border-black" : "border-line"}`}
+                          onClick={() => setActiveImageIndex(index)}
+                        >
+                          <Image
+                            src={item}
+                            width={72}
+                            height={96}
+                            alt={`${productDetail.Name} ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="product-infor px-4">
-                  <div className="flex justify-between">
-                    <div>
+                {/* Product info */}
+                <div className="w-full lg:w-[58%] min-w-0">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
                       <div className="caption2 text-secondary font-semibold uppercase">
                         {productDetail.Category}
                       </div>
-                      <div className="heading4 mt-1">{productDetail.Name}</div>
+                      <h2 className="heading4 mt-1 break-words">{productDetail.Name}</h2>
                     </div>
-                    <div
-                      className={`add-wishlist-btn w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-lg duration-300 flex-shrink-0 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some((item) => item.id === productId) ? "active" : ""}`}
+                    <button
+                      type="button"
+                      className={`add-wishlist-btn w-10 h-10 flex-shrink-0 flex items-center justify-center border border-line rounded-lg duration-300 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some((item: ProductType) => item.id === productId) ? "active bg-black text-white" : ""}`}
                       onClick={handleAddToWishlist}
+                      aria-label="Add to wishlist"
                     >
                       {wishlistState.wishlistArray.some(
-                        (item) => item.id === productId,
+                        (item: ProductType) => item.id === productId,
                       ) ? (
                         <Icon.Heart size={20} weight="fill" className="text-red" />
                       ) : (
                         <Icon.Heart size={20} />
                       )}
+                    </button>
+                  </div>
+
+                  {productDetail.AverageRating > 0 && (
+                    <div className="flex items-center mt-3">
+                      <Rate currentRate={productDetail.AverageRating} size={14} />
+                      <span className="caption1 text-secondary ml-2">
+                        ({productDetail.AverageRating} rating)
+                      </span>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-center mt-3">
-                    <Rate currentRate={productDetail.AverageRating || 5} size={14} />
-                    <span className="caption1 text-secondary ml-2">
-                      ({productDetail.AverageRating || 5} rating)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-wrap mt-5 pb-6 border-b border-line">
-                    <div className="product-price heading5">Rs. {activePrice}</div>
+                  <div className="flex items-center gap-3 flex-wrap mt-4 pb-5 border-b border-line">
+                    {showPriceRange ? (
+                      <div className="product-price heading5">
+                        {formatRsPrice(productDetail.MinPrice)} –{" "}
+                        {formatRsPrice(productDetail.MaxPrice)}
+                      </div>
+                    ) : (
+                      <div className="product-price heading5">
+                        {formatRsPrice(activePrice)}
+                        {productQty > 1 && (
+                          <span className="caption1 text-secondary ml-2">
+                            (Total: {formatRsPrice(totalPrice)})
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {comparePrice > activePrice && (
                       <>
-                        <div className="w-px h-4 bg-line"></div>
-                        <div className="product-origin-price font-normal text-secondary2">
-                          <del>Rs. {comparePrice}</del>
+                        <div className="w-px h-4 bg-line" />
+                        <div className="product-origin-price text-secondary2">
+                          <del>{formatRsPrice(comparePrice)}</del>
                         </div>
-                        <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 inline-block rounded-full">
+                        <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 rounded-full">
                           -{percentSale}%
                         </div>
                       </>
                     )}
                   </div>
 
-                  <div className="desc text-secondary mt-4">
-                    {productDetail.Description}
-                  </div>
-
-                  {productDetail.LongDescription && (
-                    <div className="desc text-secondary mt-3">
-                      {productDetail.LongDescription}
-                    </div>
+                  {productDetail.Description && (
+                    <p className="desc text-secondary mt-4">{productDetail.Description}</p>
                   )}
 
-                  <div className="list-action mt-6">
-                    {variants.length > 0 && (
-                      <div className="choose-variant">
-                        <div className="text-title">Available Variants</div>
-                        <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                          {variants.map((variant) => (
+                  {productDetail.LongDescription && (
+                    <p className="desc text-secondary mt-3 whitespace-pre-line line-clamp-4 sm:line-clamp-none">
+                      {productDetail.LongDescription}
+                    </p>
+                  )}
+
+                  {/* Size & Color groups */}
+                  {variantGroups.length > 0 &&
+                    variantGroups.map((group) => (
+                      <div className="mt-5" key={group.groupName}>
+                        <div className="text-title mb-3">{group.groupName}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {group.options.map((option) => (
                             <button
                               type="button"
-                              key={variant.ProductDetailId}
-                              className={`size-item px-4 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${selectedVariant?.ProductDetailId === variant.ProductDetailId ? "active bg-black text-white" : ""} ${!variant.InStock ? "opacity-50 cursor-not-allowed" : ""}`}
-                              disabled={!variant.InStock}
-                              onClick={() => setSelectedVariant(variant)}
+                              key={`${group.groupName}-${option}`}
+                              className={`px-4 py-2 text-button rounded-full border transition-colors ${groupSelections[group.groupName] === option ? "bg-black text-white border-black" : "bg-white border-line hover:border-black"}`}
+                              onClick={() =>
+                                handleGroupSelection(group.groupName, option)
+                              }
                             >
-                              {variant.VariantName}
+                              {option}
                             </button>
                           ))}
                         </div>
                       </div>
+                    ))}
+
+                  {/* Variants with images */}
+                  {variants.length > 0 && (
+                    <div className="mt-6">
+                      <div className="text-title mb-3">Variants</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {variants.map((variant) => {
+                          const variantImage = productDetail
+                            ? getVariantDisplayImage(variant, productDetail)
+                            : "/images/product/1000x1000.png";
+                          const isSelected =
+                            selectedVariant?.ProductDetailId ===
+                            variant.ProductDetailId;
+
+                          return (
+                            <button
+                              type="button"
+                              key={variant.ProductDetailId}
+                              disabled={!variant.InStock}
+                              className={`text-left rounded-xl border overflow-hidden transition-all ${isSelected ? "border-black ring-1 ring-black" : "border-line hover:border-black"} ${!variant.InStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                              onClick={() => handleVariantSelect(variant)}
+                            >
+                              <div className="aspect-square relative bg-surface">
+                                <Image
+                                  src={variantImage}
+                                  fill
+                                  sizes="(max-width: 640px) 50vw, 120px"
+                                  alt={variant.VariantName}
+                                  className="object-cover"
+                                />
+                              </div>
+                              <div className="p-2 sm:p-3">
+                                <div className="text-button line-clamp-2 leading-tight">
+                                  {variant.VariantName}
+                                </div>
+                            <div className="caption1 font-semibold mt-1.5">
+                              {formatRsPrice(getVariantPrice(variant))}
+                            </div>
+                                <div className="caption2 text-secondary mt-0.5">
+                                  {variant.InStock ? "In Stock" : "Out of Stock"}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quantity & Add to cart */}
+                  <div className="text-title mt-6 mb-3">Quantity</div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="quantity-block p-3 flex items-center justify-between rounded-lg border border-line w-full sm:w-[140px] flex-shrink-0">
+                      <Icon.Minus
+                        size={18}
+                        onClick={() => setProductQty((q) => Math.max(1, q - 1))}
+                        className={`${productQty === 1 ? "opacity-30" : ""} cursor-pointer`}
+                      />
+                      <span className="body1 font-semibold">{productQty}</span>
+                      <Icon.Plus
+                        size={18}
+                        onClick={() => setProductQty((q) => q + 1)}
+                        className="cursor-pointer"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddToCart()}
+                      disabled={!inStock}
+                      className={`button-main flex-1 text-center bg-white text-black border border-black ${inStock ? "cursor-pointer hover:bg-black hover:text-white" : "opacity-50 cursor-not-allowed"}`}
+                    >
+                      {inStock ? "Add To Cart" : "Out of Stock"}
+                    </button>
+                  </div>
+
+                  <Link
+                    href={getProductDetailUrl(
+                      productDetail.ProductId,
+                      selectedVariant?.ProductDetailId ??
+                        productDetail.ProductDetailId,
                     )}
+                    className="button-main w-full text-center inline-block mt-3"
+                    onClick={closeQuickview}
+                  >
+                    View Full Details
+                  </Link>
 
-                    <div className="text-title mt-5">Quantity:</div>
-                    <div className="choose-quantity flex items-center max-xl:flex-wrap lg:justify-between gap-5 mt-3">
-                      <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
-                        <Icon.Minus
-                          onClick={handleDecreaseQuantity}
-                          className={`${productQty === 1 ? "disabled" : ""} cursor-pointer body1`}
-                        />
-                        <div className="body1 font-semibold">{productQty}</div>
-                        <Icon.Plus
-                          onClick={handleIncreaseQuantity}
-                          className="cursor-pointer body1"
-                        />
-                      </div>
-                      <div
-                        onClick={handleAddToCart}
-                        className="button-main w-full text-center bg-white text-black border border-black cursor-pointer"
-                      >
-                        Add To Cart
-                      </div>
+                  <button
+                    type="button"
+                    className="compare flex items-center gap-3 mt-4 bg-transparent border-0 cursor-pointer"
+                    onClick={handleAddToCompare}
+                  >
+                    <div className="w-10 h-10 flex items-center justify-center border border-line rounded-xl hover:bg-black hover:text-white duration-300">
+                      <Icon.ArrowsCounterClockwise size={20} />
                     </div>
+                    <span>Compare</span>
+                  </button>
 
-                    <div className="button-block mt-5">
-                      <Link
-                        href={getProductDetailUrl(
-                          productDetail.ProductId,
-                          selectedVariant?.ProductDetailId ??
-                            productDetail.ProductDetailId,
-                        )}
-                        className="button-main w-full text-center inline-block"
-                        onClick={closeQuickview}
-                      >
-                        View Full Details
-                      </Link>
+                  {/* Meta info */}
+                  <div className="more-infor mt-6 pt-5 border-t border-line space-y-2">
+                    <div className="flex flex-wrap gap-x-2">
+                      <span className="text-title">SKU:</span>
+                      <span className="text-secondary">
+                        {selectedVariant?.SKU || productDetail.DefaultSKU}
+                      </span>
                     </div>
-
-                    <div className="flex items-center flex-wrap lg:gap-20 gap-8 gap-y-4 mt-5">
-                      <div
-                        className="compare flex items-center gap-3 cursor-pointer"
-                        onClick={handleAddToCompare}
-                      >
-                        <div className="compare-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                          <Icon.ArrowsCounterClockwise className="heading6" />
-                        </div>
-                        <span>Compare</span>
-                      </div>
+                    <div className="flex flex-wrap gap-x-2">
+                      <span className="text-title">Category:</span>
+                      <span className="text-secondary">{productDetail.Category}</span>
                     </div>
-
-                    <div className="more-infor mt-6">
-                      <div className="flex items-center gap-1 mt-3">
-                        <div className="text-title">SKU:</div>
-                        <div className="text-secondary">
-                          {selectedVariant?.SKU || productDetail.DefaultSKU}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 mt-3">
-                        <div className="text-title">Categories:</div>
-                        <div className="text-secondary">{productDetail.Category}</div>
-                      </div>
-                      <div className="flex items-center gap-1 mt-3">
-                        <div className="text-title">Stock:</div>
-                        <div className="text-secondary">
-                          {selectedVariant?.InStock ?? productDetail.InStock
-                            ? "In Stock"
-                            : "Out of Stock"}
-                        </div>
-                      </div>
-                      {productDetail.BrandName && (
-                        <div className="flex items-center gap-1 mt-3">
-                          <div className="text-title">Brand:</div>
-                          <div className="text-secondary">
-                            {productDetail.BrandName}
-                          </div>
-                        </div>
-                      )}
-                      {productDetail.Tags && (
-                        <div className="flex items-center gap-1 mt-3">
-                          <div className="text-title">Tags:</div>
-                          <div className="text-secondary">{productDetail.Tags}</div>
-                        </div>
-                      )}
+                    <div className="flex flex-wrap gap-x-2">
+                      <span className="text-title">Brand:</span>
+                      <span className="text-secondary">
+                        {productDetail.BrandName || "—"}
+                      </span>
                     </div>
+                    <div className="flex flex-wrap gap-x-2">
+                      <span className="text-title">Stock:</span>
+                      <span className="text-secondary">
+                        {inStock ? "In Stock" : "Out of Stock"}
+                      </span>
+                    </div>
+                    {productDetail.Tags && (
+                      <div className="flex flex-wrap gap-x-2">
+                        <span className="text-title">Tags:</span>
+                        <span className="text-secondary">{productDetail.Tags}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
+
+              {/* Related Products */}
+              {relatedProducts.length > 0 && (
+                <div className="px-4 sm:px-6 pt-8 mt-6 border-t border-line">
+                  <div className="heading6 mb-1">Related Products</div>
+                  <p className="caption1 text-secondary mb-4">
+                    You may also like these items
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {relatedProducts.map((related) => {
+                      const image =
+                        related.ThumbnailImagePath &&
+                        !related.ThumbnailImagePath.includes("noImage")
+                          ? related.ThumbnailImagePath
+                          : "/images/product/1000x1000.png";
+
+                      return (
+                        <div
+                          key={related.ProductId}
+                          className="related-card border border-line rounded-2xl overflow-hidden hover:border-black transition-colors"
+                        >
+                          <button
+                            type="button"
+                            className="w-full text-left bg-transparent border-0 p-0 cursor-pointer"
+                            onClick={() => handleRelatedProductClick(related)}
+                          >
+                            <div className="aspect-[4/5] relative bg-surface">
+                              <Image
+                                src={image}
+                                fill
+                                sizes="(max-width: 640px) 100vw, 33vw"
+                                alt={related.ProductName}
+                                className="object-cover"
+                              />
+                              {related.IsNewProduct && (
+                                <span className="absolute top-2 left-2 caption2 bg-green text-white px-2 py-0.5 rounded-full">
+                                  New
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                          <div className="p-4">
+                            <div className="caption2 text-secondary uppercase">
+                              {related.Category?.CategoryName}
+                            </div>
+                            <div className="text-button mt-1 font-semibold line-clamp-2">
+                              {related.ProductName}
+                            </div>
+                            {related.Category?.CategoryDescription && (
+                              <p className="caption1 text-secondary mt-2 line-clamp-2">
+                                {related.Category.CategoryDescription}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              <button
+                                type="button"
+                                className="caption2 px-3 py-1 rounded-full border border-line hover:bg-black hover:text-white transition-colors"
+                                onClick={() => handleRelatedProductClick(related)}
+                              >
+                                Quick View
+                              </button>
+                              <Link
+                                href={getProductDetailUrl(related.ProductId)}
+                                className="caption2 px-3 py-1 rounded-full border border-line hover:bg-black hover:text-white transition-colors inline-block"
+                                onClick={closeQuickview}
+                              >
+                                View Details
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

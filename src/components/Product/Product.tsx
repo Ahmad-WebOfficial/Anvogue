@@ -116,19 +116,19 @@ const Product: React.FC<ProductProps> = ({
             className="product-main cursor-pointer block"
           >
             <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
-              {data.new && (
+              {/* {data.new && (
                 <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                   New
                 </div>
-              )}
-              {data.sale && (
+              )} */}
+              {/* {data.sale && (
                 <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                   Sale
                 </div>
-              )}
+              )} */}
               {style === "style-1" ||
-              style === "style-3" ||
-              style === "style-4" ? (
+                style === "style-3" ||
+                style === "style-4" ? (
                 <div className="list-action-right absolute top-3 right-3 max-lg:hidden">
                   {style === "style-4" && (
                     <div
@@ -237,42 +237,7 @@ const Product: React.FC<ProductProps> = ({
                   </>
                 )}
               </div>
-              {data.sale && (
-                <>
-                  <Marquee className="banner-sale-auto bg-black absolute bottom-0 left-0 w-full py-1.5">
-                    <div
-                      className={`caption2 font-semibold uppercase text-white px-2.5`}
-                    >
-                      Hot Sale {percentSale}% OFF
-                    </div>
-                    <Icon.Lightning weight="fill" className="text-red" />
-                    <div
-                      className={`caption2 font-semibold uppercase text-white px-2.5`}
-                    >
-                      Hot Sale {percentSale}% OFF
-                    </div>
-                    <Icon.Lightning weight="fill" className="text-red" />
-                    <div
-                      className={`caption2 font-semibold uppercase text-white px-2.5`}
-                    >
-                      Hot Sale {percentSale}% OFF
-                    </div>
-                    <Icon.Lightning weight="fill" className="text-red" />
-                    <div
-                      className={`caption2 font-semibold uppercase text-white px-2.5`}
-                    >
-                      Hot Sale {percentSale}% OFF
-                    </div>
-                    <Icon.Lightning weight="fill" className="text-red" />
-                    <div
-                      className={`caption2 font-semibold uppercase text-white px-2.5`}
-                    >
-                      Hot Sale {percentSale}% OFF
-                    </div>
-                    <Icon.Lightning weight="fill" className="text-red" />
-                  </Marquee>
-                </>
-              )}
+
               {style === "style-2" || style === "style-4" ? (
                 <div className="list-size-block flex items-center justify-center gap-4 absolute bottom-0 left-0 w-full h-8">
                   {data.sizes.map((item, index) => (
@@ -502,15 +467,15 @@ const Product: React.FC<ProductProps> = ({
               )}
 
               <div className="product-price-block flex items-center gap-2 flex-wrap mt-1">
-                <div className="product-price text-title">₨{displayPrice}</div>
+                <div className="product-price text-title">₨: {displayPrice}</div>
 
-                {showOriginPrice && (
+                {/* {showOriginPrice && (
                   <div className="product-origin-price caption1 text-secondary2">
                     <del>₨{data.originPrice}</del>
                   </div>
-                )}
+                )} */}
 
-                {showSaleBadge && (
+                {/* {showSaleBadge && (
                   <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 rounded-full">
                     -
                     {Math.round(
@@ -519,7 +484,7 @@ const Product: React.FC<ProductProps> = ({
                     )}
                     %
                   </div>
-                )}
+                )} */}
               </div>
               {style === "style-5" && (
                 <>
@@ -559,16 +524,16 @@ const Product: React.FC<ProductProps> = ({
                     onClick={() => handleDetailProduct(data.id)}
                     className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2"
                   >
-                    {data.new && (
+                    {/* {data.new && (
                       <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                        New
+                        Newss
                       </div>
                     )}
                     {data.sale && (
                       <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                         Sale
                       </div>
-                    )}
+                    )} */}
                     <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
                       {thumbImages.map((img, index) => (
                         <Image
@@ -636,7 +601,7 @@ const Product: React.FC<ProductProps> = ({
                         )}
                       </div>
                       {data.variation.length > 0 &&
-                      data.action === "add to cart" ? (
+                        data.action === "add to cart" ? (
                         <div className="list-color max-md:hidden py-2 mt-5 mb-1 flex items-center gap-3 flex-wrap duration-300">
                           {data.variation.map((item, index) => (
                             <div
@@ -653,7 +618,7 @@ const Product: React.FC<ProductProps> = ({
                       ) : (
                         <>
                           {data.variation.length > 0 &&
-                          data.action === "quick shop" ? (
+                            data.action === "quick shop" ? (
                             <>
                               <div className="list-color flex items-center gap-2 flex-wrap mt-5">
                                 {data.variation.map((item, index) => (

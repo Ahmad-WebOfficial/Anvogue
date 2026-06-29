@@ -4,14 +4,20 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import productData from "@/data/Product.json";
-import { ProductType } from "@/type/ProductType";
 import { useModalCartContext } from "@/context/ModalCartContext";
 import { useCart } from "@/context/CartContext";
 import { countdownTime } from "@/store/countdownTime";
 import CountdownTimeType from "@/type/CountdownType";
 import api from "@/lib/api";
 import toaster from "react-hot-toast";
+import { formatRsPrice } from "@/lib/cart";
+import { fetchProductDetails } from "@/lib/product-details";
+import {
+  getProductDetailUrl,
+  mapProductDetailToProductType,
+} from "@/lib/featured-products";
+import { RelatedProduct } from "@/lib/product-details";
+
 const ModalCart = ({
   serverTimeLeft,
 }: {
@@ -23,7 +29,6 @@ const ModalCart = ({
     const timer = setInterval(() => {
       setTimeLeft(countdownTime());
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
@@ -33,6 +38,8 @@ const ModalCart = ({
   const [promoCode, setPromoCode] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedState, setSelectedState] = useState("");
+  const [addingRelatedId, setAddingRelatedId] = useState<number | null>(null);
+
   const { isModalOpen, closeModalCart } = useModalCartContext();
   const {
     cartState,
@@ -49,55 +56,30 @@ const ModalCart = ({
     }
   }, [isModalOpen, fetchCart]);
 
-  const handleAddToCart = async (productItem: ProductType) => {
+  const handleAddRelatedToCart = async (related: RelatedProduct) => {
+    setAddingRelatedId(related.ProductId);
     try {
-      await addToCart({ ...productItem, quantityPurchase: 1 });
-    } catch {}
+      const detail = await fetchProductDetails(related.ProductId);
+      const cartProduct = mapProductDetailToProductType(detail);
+      cartProduct.quantityPurchase = 1;
+      await addToCart(cartProduct);
+    } catch {
+      // toast handled in context
+    } finally {
+      setAddingRelatedId(null);
+    }
   };
 
-  const handleActiveTab = (tab: string) => {
-    setActiveTab(tab);
-  };
   const getCountries = async () => {
     try {
       const res = await api.get("/api/v1/Common/countries");
-
       if (res.data?.Data) {
         setCountries(res.data.Data);
       } else {
-        console.warn("No country data found in response");
         setCountries([]);
       }
     } catch (error) {
       console.error("Failed to fetch countries:", error);
-    }
-  };
-
-  const handleApplyCoupon = async () => {
-    if (!promoCode) {
-      toaster.error("Please enter a coupon code!");
-      return;
-    }
-
-    const orderId = cartState?.orderId || cartState?.id || cartState?.data?.id;
-    console.log("Applying Coupon. Code:", promoCode, "OrderId:", orderId);
-
-    if (!orderId) {
-      toaster.error("Order ID nahi mil rahi!");
-      return;
-    }
-
-    try {
-      const response = await api.post(
-        `/api/v1/Payment/PromoCode?Code=${promoCode}&OrderId=${orderId}`,
-      );
-
-      toaster.success("Coupon applied successfully!");
-      await fetchCart();
-      setActiveTab("");
-    } catch (error: any) {
-      console.error("Error Response Data:", error.response?.data);
-      toaster.error(error.response?.data?.Message || "Invalid coupon code");
     }
   };
 
@@ -106,7 +88,6 @@ const ModalCart = ({
       const res = await api.get(`/api/v1/Common/states`, {
         params: { CountryId: countryId },
       });
-
       if (res.data?.Data) {
         setStates(res.data.Data);
       } else {
@@ -116,85 +97,119 @@ const ModalCart = ({
       console.error("Failed to fetch states:", error);
     }
   };
+
   useEffect(() => {
-    getCountries();
+    void getCountries();
   }, []);
+
   const moneyForFreeship = 150;
-  const totalCart = cartState.subTotal || 0;
+  const displayTotal = cartState.netTotal || cartState.subTotal || 0;
+  const relatedProducts = cartState.relatedProducts ?? [];
 
   return (
     <>
-      <div className={`modal-cart-block`} onClick={closeModalCart}>
+      <div className="modal-cart-block" onClick={closeModalCart}>
         <div
           className={`modal-cart-main flex ${isModalOpen ? "open" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="left w-1/2 border-r border-line py-6 max-md:hidden">
+          {/* You May Also Like — from API relatedProductList */}
+          <div className="left w-1/2 border-r border-line py-6 max-md:hidden flex flex-col">
             <div className="heading5 px-6 pb-3">You May Also Like</div>
-            <div className="list px-6">
-              {productData.slice(0, 4).map((product) => (
-                <div
-                  key={product.id}
-                  className="item py-5 flex items-center justify-between gap-3 border-b border-line"
-                >
-                  <div className="infor flex items-center gap-5">
-                    <div className="bg-img w-[100px] aspect-square flex-shrink-0 rounded-lg overflow-hidden">
-                      <div className="bg-img w-[100px] aspect-square flex-shrink-0 rounded-lg overflow-hidden">
-                        {product.images && product.images.length > 0 ? (
+            <div className="list px-6 flex-1 overflow-y-auto">
+              {relatedProducts.length > 0 ? (
+                relatedProducts.map((related) => {
+                  const image =
+                    related.ThumbnailImagePath &&
+                    !related.ThumbnailImagePath.includes("noImage")
+                      ? related.ThumbnailImagePath
+                      : "/images/product/1000x1000.png";
+
+                  return (
+                    <div
+                      key={related.ProductId}
+                      className="item py-5 flex items-start justify-between gap-3 border-b border-line"
+                    >
+                      <div className="infor flex items-start gap-4 min-w-0">
+                        <Link
+                          href={getProductDetailUrl(related.ProductId)}
+                          className="bg-img w-[100px] h-[120px] flex-shrink-0 rounded-lg overflow-hidden relative"
+                          onClick={closeModalCart}
+                        >
                           <Image
-                            src={
-                              product.images?.[0] || "/placeholder-image.png"
-                            }
-                            width={300}
-                            height={300}
-                            alt={product.name || "Product Image"}
-                            className="w-full h-full object-cover"
+                            src={image}
+                            fill
+                            sizes="100px"
+                            alt={related.ProductName}
+                            className="object-cover"
                           />
-                        ) : (
-                          <div className="w-full h-full bg-gray-200" />
-                        )}
-                      </div>
-                    </div>
-                    <div className="">
-                      <div className="name text-button">{product.name}</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="product-price text-title">
-                          ${product.price}.00
+                        </Link>
+                        <div className="min-w-0">
+                          <div className="caption2 text-secondary uppercase">
+                            {related.Category?.CategoryName}
+                          </div>
+                          <Link
+                            href={getProductDetailUrl(related.ProductId)}
+                            className="name text-button mt-1 line-clamp-2 hover:underline"
+                            onClick={closeModalCart}
+                          >
+                            {related.ProductName}
+                          </Link>
+                          {related.Category?.CategoryDescription && (
+                            <p className="caption1 text-secondary mt-2 line-clamp-2">
+                              {related.Category.CategoryDescription}
+                            </p>
+                          )}
+                          {related.IsNewProduct && (
+                            <span className="caption2 text-green mt-1 inline-block">
+                              New
+                            </span>
+                          )}
                         </div>
-                        <div className="product-origin-price text-title text-secondary2">
-                          <del>${product.originPrice}.00</del>
-                        </div>
                       </div>
+                      <button
+                        type="button"
+                        aria-label={`Add ${related.ProductName} to cart`}
+                        disabled={addingRelatedId === related.ProductId}
+                        className="text-xl bg-white w-10 h-10 rounded-xl border border-black flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white flex-shrink-0 disabled:opacity-50"
+                        onClick={() => void handleAddRelatedToCart(related)}
+                      >
+                        <Icon.Handbag />
+                      </button>
                     </div>
-                  </div>
-                  <div
-                    className="text-xl bg-white w-10 h-10 rounded-xl border border-black flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddToCart(product);
-                    }}
-                  >
-                    <Icon.Handbag />
-                  </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-10 text-secondary caption1">
+                  Add items to see related products
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
+          {/* Cart items */}
           <div className="right cart-block md:w-1/2 w-full py-6 relative overflow-hidden">
             <div className="heading px-6 pb-3 flex items-center justify-between relative">
-              <div className="heading5">Shopping Cart</div>
-              <div
+              <div className="heading5">
+                Shopping Cart
+                {cartState.totalItems > 0 && (
+                  <span className="caption1 text-secondary ml-2">
+                    ({cartState.totalItems} items)
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                aria-label="Close cart"
                 className="close-btn absolute right-6 top-0 w-6 h-6 rounded-full bg-surface flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
                 onClick={closeModalCart}
               >
                 <Icon.X size={14} />
-              </div>
+              </button>
             </div>
+
             <div className="time px-6">
-              <div className=" flex items-center gap-3 px-5 py-3 bg-green rounded-lg">
+              <div className="flex items-center gap-3 px-5 py-3 bg-green rounded-lg">
                 <p className="text-3xl">🔥</p>
                 <div className="caption1">
                   Your cart will expire in{" "}
@@ -205,242 +220,265 @@ const ModalCart = ({
                       : timeLeft.seconds}
                   </span>{" "}
                   minutes!
-                  <br />
-                  Please checkout now before your items sell out!
                 </div>
               </div>
             </div>
+
             <div className="heading banner mt-3 px-6">
-              <div className="text">
+              <div className="text caption1">
                 Buy{" "}
-                <span className="text-button">
-                  {" "}
-                  $
-                  <span className="more-price">
-                    {moneyForFreeship - totalCart > 0 ? (
-                      <>{moneyForFreeship - totalCart}</>
-                    ) : (
-                      0
-                    )}
-                  </span>
-                  .00{" "}
-                </span>
-                <span>more to get </span>
-                <span className="text-button">freeship</span>
+                <span className="text-button font-semibold">
+                  {formatRsPrice(
+                    Math.max(moneyForFreeship - displayTotal, 0),
+                  )}
+                </span>{" "}
+                more to get <span className="text-button font-semibold">free shipping</span>
               </div>
               <div className="tow-bar-block mt-3">
                 <div
                   className="progress-line"
                   style={{
                     width:
-                      totalCart <= moneyForFreeship
-                        ? `${(totalCart / moneyForFreeship) * 100}%`
-                        : `100%`,
+                      displayTotal <= moneyForFreeship
+                        ? `${Math.min((displayTotal / moneyForFreeship) * 100, 100)}%`
+                        : "100%",
                   }}
-                ></div>
+                />
               </div>
             </div>
+
             <div className="list-product px-6">
               {cartLoading ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-secondary">
                   Loading cart...
                 </div>
-              ) : cartState?.cartArray?.length > 0 ? (
-                cartState.cartArray.map((product, index) => (
-                  <div
-                    key={product.cartId || product.id || index}
-                    className="item py-5 flex items-center justify-between gap-3 border-b border-line"
-                  >
-                    <div className="infor flex items-center gap-3 w-full">
-                      <div className="w-[100px] h-[100px] flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 relative">
-                        <Image
-                          src={
-                            product.apiItem
-                              ? product.thumbImage[0]
-                              : product.images?.[0] ||
-                                "/images/product/1000x1000.png"
-                          }
-                          fill
-                          alt={product.name || "Product"}
-                          className="object-cover"
-                        />
-                      </div>
+              ) : cartState.cartArray.length > 0 ? (
+                cartState.cartArray.map((product, index) => {
+                  const image =
+                    product.thumbImage?.[0] ||
+                    product.images?.[0] ||
+                    "/images/product/1000x1000.png";
+                  const variantsLabel = product.apiItem
+                    ? product.apiItem.ProductVariants?.replace(/,/g, ", ") ||
+                      product.apiItem.cartItemVariantList
+                        ?.map(
+                          (v) => `${v.VariantGroup}: ${v.VariantName}`,
+                        )
+                        .join(" · ")
+                    : "";
 
-                      <div className="w-full">
-                        <div className="flex items-center justify-between">
-                          <div className="name text-button">{product.name}</div>
+                  return (
+                    <div
+                      key={product.cartId || `${product.id}-${index}`}
+                      className="item py-5 flex items-start justify-between gap-3 border-b border-line"
+                    >
+                      <div className="infor flex items-start gap-3 w-full min-w-0">
+                        <Link
+                          href={getProductDetailUrl(
+                            product.id,
+                            product.productDetailId,
+                          )}
+                          className="w-[100px] h-[120px] flex-shrink-0 rounded-lg overflow-hidden bg-surface relative"
+                          onClick={closeModalCart}
+                        >
+                          <Image
+                            src={image}
+                            fill
+                            sizes="100px"
+                            alt={product.name}
+                            className="object-cover"
+                          />
+                        </Link>
 
-                          <div
-                            className="remove-cart-btn caption1 font-semibold text-red underline cursor-pointer"
-                            onClick={() => removeFromCart(product.cartId)}
-                          >
-                            Remove
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-3 border border-line rounded-lg px-3 py-1">
+                        <div className="w-full min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              {product.category && (
+                                <div className="caption2 text-secondary uppercase">
+                                  {product.category}
+                                </div>
+                              )}
+                              <Link
+                                href={getProductDetailUrl(
+                                  product.id,
+                                  product.productDetailId,
+                                )}
+                                className="name text-button line-clamp-2 hover:underline"
+                                onClick={closeModalCart}
+                              >
+                                {product.name}
+                              </Link>
+                            </div>
                             <button
                               type="button"
-                              className="text-lg font-bold"
-                              onClick={() =>
-                                updateCart(
-                                  product.cartId,
-                                  product.quantity - 1,
-                                  product.selectedSize,
-                                  product.selectedColor,
-                                )
-                              }
-                              disabled={product.quantity <= 1}
+                              className="remove-cart-btn caption1 font-semibold text-red underline cursor-pointer flex-shrink-0"
+                              onClick={() => removeFromCart(product.cartId)}
                             >
-                              -
-                            </button>
-
-                            <span className="text-secondary2 w-8 text-center">
-                              {product.quantity}
-                            </span>
-
-                            <button
-                              type="button"
-                              className="text-lg font-bold"
-                              onClick={() =>
-                                updateCart(
-                                  product.cartId,
-                                  product.quantity + 1,
-                                  product.selectedSize,
-                                  product.selectedColor,
-                                )
-                              }
-                            >
-                              +
+                              Remove
                             </button>
                           </div>
 
-                          <div className="product-price text-title">
-                            Rs. {product.price}
-                          </div>
-                        </div>
+                          {variantsLabel && (
+                            <div className="caption1 text-secondary mt-2">
+                              Variant: {variantsLabel}
+                            </div>
+                          )}
 
-                        {product.apiItem?.VariantName && (
-                          <div className="caption1 text-secondary mt-2">
-                            Variant: {product.apiItem.VariantName}
+                          {product.apiItem?.ProductDetailId && (
+                            <div className="caption2 text-secondary mt-1">
+                              Detail ID: {product.apiItem.ProductDetailId}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                            <div className="flex items-center gap-3 border border-line rounded-lg px-3 py-1">
+                              <button
+                                type="button"
+                                aria-label="Decrease quantity"
+                                className="text-lg font-bold disabled:opacity-30"
+                                disabled={product.quantity <= 1}
+                                onClick={() =>
+                                  updateCart(
+                                    product.cartId,
+                                    product.quantity - 1,
+                                    product.selectedSize,
+                                    product.selectedColor,
+                                  )
+                                }
+                              >
+                                -
+                              </button>
+                              <span className="text-secondary2 w-8 text-center">
+                                {product.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label="Increase quantity"
+                                className="text-lg font-bold"
+                                onClick={() =>
+                                  updateCart(
+                                    product.cartId,
+                                    product.quantity + 1,
+                                    product.selectedSize,
+                                    product.selectedColor,
+                                  )
+                                }
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="product-price text-title font-semibold">
+                                {formatRsPrice(product.lineTotal)}
+                              </div>
+                              {product.quantity > 1 && (
+                                <div className="caption2 text-secondary mt-0.5">
+                                  {formatRsPrice(product.price)} each
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                        {product.apiItem?.SKU && (
-                          <div className="caption1 text-secondary mt-1">
-                            SKU: {product.apiItem.SKU}
-                          </div>
-                        )}
+
+                          {product.apiItem?.IsProductAvailableInStock ===
+                            false && (
+                            <div className="caption2 text-red mt-2">
+                              Limited stock
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  Cart is empty
+                <div className="text-center py-8 text-secondary">
+                  Your cart is empty
                 </div>
               )}
             </div>
 
+            {/* Footer */}
             <div className="footer-modal bg-white absolute bottom-0 left-0 w-full">
               <div className="flex items-center justify-center lg:gap-14 gap-8 px-6 py-4 border-b border-line">
-                <div
-                  className="item flex items-center gap-3 cursor-pointer"
-                  onClick={() => handleActiveTab("shipping")}
+                <button
+                  type="button"
+                  className="item flex items-center gap-3 cursor-pointer bg-transparent border-0"
+                  onClick={() => setActiveTab("shipping")}
                 >
                   <Icon.Truck className="text-xl" />
-                  <div className="caption1">Shipping</div>
-                </div>
-                <div
-                  className="item flex items-center gap-3 cursor-pointer"
-                  onClick={() => handleActiveTab("coupon")}
+                  <span className="caption1">Shipping</span>
+                </button>
+                <button
+                  type="button"
+                  className="item flex items-center gap-3 cursor-pointer bg-transparent border-0"
+                  onClick={() => setActiveTab("coupon")}
                 >
                   <Icon.Tag className="text-xl" />
-                  <div className="caption1">Coupon</div>
+                  <span className="caption1">Coupon</span>
+                </button>
+              </div>
+
+              <div className="px-6 pt-4 space-y-2">
+                <div className="flex items-center justify-between caption1">
+                  <span className="text-secondary">Subtotal</span>
+                  <span>{formatRsPrice(cartState.subTotal)}</span>
+                </div>
+                {cartState.totalDiscount > 0 && (
+                  <div className="flex items-center justify-between caption1">
+                    <span className="text-secondary">Discount</span>
+                    <span className="text-green">
+                      -{formatRsPrice(cartState.totalDiscount)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between heading5 pt-2 border-t border-line">
+                  <span>Total</span>
+                  <span>{formatRsPrice(displayTotal)}</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-6 px-6">
-                <div className="heading5">Subtotal</div>
-                <div className="heading5">Rs. {totalCart}</div>
-              </div>
+
               <div className="block-button text-center p-6">
                 <div className="flex items-center gap-4">
                   <Link
-                    href={"/cart"}
+                    href="/cart"
                     className="button-main basis-1/2 bg-white border border-black text-black text-center uppercase"
                     onClick={closeModalCart}
                   >
                     View cart
                   </Link>
                   <Link
-                    href={"/checkout"}
+                    href="/checkout"
                     className="button-main basis-1/2 text-center uppercase"
                     onClick={closeModalCart}
                   >
                     Check Out
                   </Link>
                 </div>
-                <div
+                <button
+                  type="button"
                   onClick={closeModalCart}
-                  className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block"
+                  className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block bg-transparent border-0"
                 >
                   Or continue shopping
-                </div>
+                </button>
               </div>
+
+              {/* Shipping tab */}
               <div
-                className={`tab-item note-block ${activeTab === "note" ? "active" : ""}`}
+                className={`tab-item note-block ${activeTab === "shipping" ? "active" : ""}`}
               >
                 <div className="px-6 py-4 border-b border-line">
-                  <div className="item flex items-center gap-3 cursor-pointer">
-                    <Icon.NotePencil className="text-xl" />
-                    <div className="caption1">Note</div>
-                  </div>
-                </div>
-                <div className="form pt-4 px-6">
-                  <textarea
-                    name="form-note"
-                    id="form-note"
-                    rows={4}
-                    placeholder="Add special instructions for your order..."
-                    className="caption1 py-3 px-4 bg-surface border-line rounded-md w-full"
-                  ></textarea>
-                </div>
-                <div className="block-button text-center pt-4 px-6 pb-6">
-                  <div
-                    className="button-main w-full text-center"
-                    onClick={() => setActiveTab("")}
-                  >
-                    Save
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("")}
-                    className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block"
-                  >
-                    Cancel
-                  </div>
-                </div>
-              </div>
-              <div
-                className={`tab-item note-block ${
-                  activeTab === "shipping" ? "active" : ""
-                }`}
-              >
-                <div className="px-6 py-4 border-b border-line">
-                  <div className="item flex items-center gap-3 cursor-pointer">
+                  <div className="item flex items-center gap-3">
                     <Icon.Truck className="text-xl" />
                     <div className="caption1">Estimate shipping rates</div>
                   </div>
                 </div>
-
                 <div className="form pt-4 px-6">
                   <div>
-                    <label
-                      htmlFor="select-country"
-                      className="caption1 text-secondary"
-                    >
+                    <label htmlFor="select-country" className="caption1 text-secondary">
                       Country/Region
                     </label>
-
                     <div className="select-block relative mt-2">
                       <select
                         id="select-country"
@@ -448,33 +486,26 @@ const ModalCart = ({
                         value={selectedCountry}
                         onChange={(e) => {
                           setSelectedCountry(e.target.value);
-                          getStates(e.target.value);
+                          void getStates(e.target.value);
                         }}
                       >
                         <option value="">Select Country</option>
-
-                        {countries.map((country: any) => (
+                        {countries.map((country: { Value: string; Text: string }) => (
                           <option key={country.Value} value={country.Value}>
                             {country.Text}
                           </option>
                         ))}
                       </select>
-
                       <Icon.CaretDown
                         size={12}
-                        className="absolute top-1/2 -translate-y-1/2 md:right-5 right-2"
+                        className="absolute top-1/2 -translate-y-1/2 md:right-5 right-2 pointer-events-none"
                       />
                     </div>
                   </div>
-
                   <div className="mt-3">
-                    <label
-                      htmlFor="select-state"
-                      className="caption1 text-secondary"
-                    >
+                    <label htmlFor="select-state" className="caption1 text-secondary">
                       State
                     </label>
-
                     <div className="select-block relative mt-2">
                       <select
                         id="select-state"
@@ -483,99 +514,78 @@ const ModalCart = ({
                         onChange={(e) => setSelectedState(e.target.value)}
                       >
                         <option value="">Select State</option>
-
-                        {states.map((state: any) => (
+                        {states.map((state: { Value: string; Text: string }) => (
                           <option key={state.Value} value={state.Value}>
                             {state.Text}
                           </option>
                         ))}
                       </select>
-
                       <Icon.CaretDown
                         size={12}
-                        className="absolute top-1/2 -translate-y-1/2 md:right-5 right-2"
+                        className="absolute top-1/2 -translate-y-1/2 md:right-5 right-2 pointer-events-none"
                       />
                     </div>
                   </div>
-
-                  <div className="mt-3">
-                    <label
-                      htmlFor="select-code"
-                      className="caption1 text-secondary"
-                    >
-                      Postal/Zip Code
-                    </label>
-
-                    <input
-                      className="border-line px-5 py-3 w-full rounded-xl mt-3"
-                      id="select-code"
-                      type="text"
-                      placeholder="Postal/Zip Code"
-                    />
-                  </div>
                 </div>
-
                 <div className="block-button text-center pt-4 px-6 pb-6">
-                  <div
+                  <button
+                    type="button"
                     className="button-main w-full text-center"
                     onClick={() => setActiveTab("")}
                   >
-                    Calculator
-                  </div>
-
-                  <div
-                    onClick={() => setActiveTab("")}
-                    className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block"
-                  >
-                    Cancel
-                  </div>
+                    Done
+                  </button>
                 </div>
               </div>
+
+              {/* Coupon tab */}
               <div
                 className={`tab-item note-block ${activeTab === "coupon" ? "active" : ""}`}
               >
                 <div className="px-6 py-4 border-b border-line">
-                  <div className="item flex items-center gap-3 cursor-pointer">
+                  <div className="item flex items-center gap-3">
                     <Icon.Tag className="text-xl" />
                     <div className="caption1">Add A Coupon Code</div>
                   </div>
                 </div>
-
                 <div className="form pt-4 px-6">
-                  <div className="">
-                    <label
-                      htmlFor="select-discount"
-                      className="caption1 text-secondary"
-                    >
-                      Enter Code
-                    </label>
-                    <input
-                      className="border-line px-5 py-3 w-full rounded-xl mt-3"
-                      id="select-discount"
-                      type="text"
-                      placeholder="Discount code"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                    />
-                  </div>
+                  <label htmlFor="select-discount" className="caption1 text-secondary">
+                    Enter Code
+                  </label>
+                  <input
+                    className="border-line px-5 py-3 w-full rounded-xl mt-3 border"
+                    id="select-discount"
+                    type="text"
+                    placeholder="Discount code"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                  />
                 </div>
-
                 <div className="block-button text-center pt-4 px-6 pb-6">
-                  <div
-                    className="button-main w-full text-center cursor-pointer"
-                    onClick={handleApplyCoupon}
+                  <button
+                    type="button"
+                    className="button-main w-full text-center"
+                    onClick={() => {
+                      if (!promoCode) {
+                        toaster.error("Please enter a coupon code!");
+                        return;
+                      }
+                      toaster.success("Coupon feature coming soon");
+                      setActiveTab("");
+                    }}
                   >
                     Apply
-                  </div>
-                  <div
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                       setPromoCode("");
                       setActiveTab("");
                     }}
-                    className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block"
+                    className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block bg-transparent border-0"
                   >
                     Cancel
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>

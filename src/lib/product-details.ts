@@ -39,6 +39,32 @@ export interface ProductVariantGroup {
   ProductDetails: unknown[];
 }
 
+export interface RelatedProduct {
+  ProductId: number;
+  ProductName: string;
+  IsPromotionalProduct: boolean;
+  IsFeaturedProduct: boolean;
+  IsNewProduct: boolean;
+  ThumbnailImagePath: string;
+  Category: {
+    CategoryId: number;
+    CategoryName: string;
+    CategoryDescription: string;
+    Seo: {
+      MetaTitle: string | null;
+      MetaDescription: string | null;
+      UrlSlug: string | null;
+      MetaKeywords: string | null;
+    };
+  };
+  Seo: {
+    MetaTitle: string | null;
+    MetaDescription: string | null;
+    UrlSlug: string | null;
+    MetaKeywords: string | null;
+  };
+}
+
 export interface ProductDetailData {
   ProductId: number;
   ProductDetailId: number;
@@ -50,7 +76,7 @@ export interface ProductDetailData {
     productVariantCombinationList: ProductVariantCombination[];
   };
   RelatedProductIds: number[];
-  relatedProductList: unknown[];
+  relatedProductList: RelatedProduct[];
   ProductImages: ProductImage[];
   WishItemList: unknown[];
   InStock: boolean;
@@ -99,17 +125,29 @@ type LandingPageProduct = {
   ProductDetailId?: number;
 };
 
+const PLACEHOLDER_IMAGE_PATTERNS = ["large_noImage", "noImage"];
+
+export function isPlaceholderImage(url: string | null | undefined): boolean {
+  if (!url) return true;
+  return PLACEHOLDER_IMAGE_PATTERNS.some((pattern) => url.includes(pattern));
+}
+
 export function getProductImages(detail: ProductDetailData): string[] {
   const galleryImages = (detail.ProductImages ?? [])
-    .map((image) => image.LargeImagePath || image.OriginalImagePath || image.IconImagePath)
-    .filter(Boolean);
+    .map(
+      (image) =>
+        image.LargeImagePath || image.OriginalImagePath || image.IconImagePath,
+    )
+    .filter((url) => url && !isPlaceholderImage(url));
 
   if (galleryImages.length > 0) {
     return galleryImages;
   }
 
   const variantImage =
-    detail.ProductVariantDetail?.productVariantCombinationList?.[0]?.ImageName;
+    detail.ProductVariantDetail?.productVariantCombinationList?.find(
+      (variant) => variant.ImageName && !isPlaceholderImage(variant.ImageName),
+    )?.ImageName;
 
   if (variantImage) {
     return [variantImage];
@@ -118,8 +156,119 @@ export function getProductImages(detail: ProductDetailData): string[] {
   return ["/images/product/1000x1000.png"];
 }
 
+export function getVariantDisplayImage(
+  variant: ProductVariantCombination,
+  detail: ProductDetailData,
+): string {
+  if (variant.ImageName && !isPlaceholderImage(variant.ImageName)) {
+    return variant.ImageName;
+  }
+
+  return getProductImages(detail)[0] ?? "/images/product/1000x1000.png";
+}
+
+export function getDisplayImages(
+  detail: ProductDetailData,
+  selectedVariant?: ProductVariantCombination | null,
+): string[] {
+  const galleryImages = getProductImages(detail);
+
+  if (!selectedVariant) {
+    return galleryImages;
+  }
+
+  const variantImage = getVariantDisplayImage(selectedVariant, detail);
+  if (galleryImages.includes(variantImage)) {
+    return [variantImage, ...galleryImages.filter((img) => img !== variantImage)];
+  }
+
+  return [variantImage, ...galleryImages];
+}
+
 export function getVariantPrice(variant: ProductVariantCombination): number {
   return variant.DiscountedPrice > 0 ? variant.DiscountedPrice : variant.Price;
+}
+
+export function formatRsPrice(amount: number): string {
+  return `Rs. ${amount.toLocaleString("en-PK")}`;
+}
+
+export function getComparePrice(
+  detail: ProductDetailData,
+  selectedVariant?: ProductVariantCombination | null,
+): number {
+  if (selectedVariant) {
+    if (
+      selectedVariant.DiscountedPrice > 0 &&
+      selectedVariant.DiscountedPrice < selectedVariant.Price
+    ) {
+      return selectedVariant.Price;
+    }
+    return 0;
+  }
+
+  if (detail.Discount > 0 && detail.MinPrice < detail.MaxPrice) {
+    return detail.MaxPrice;
+  }
+
+  return 0;
+}
+
+export function parseVariantGroupOptions(detail: ProductDetailData): {
+  groupName: string;
+  options: string[];
+}[] {
+  const variants =
+    detail.ProductVariantDetail?.productVariantCombinationList ?? [];
+  const groups = detail.ProductVariantGroups ?? [];
+
+  if (variants.length === 0 || groups.length === 0) {
+    return [];
+  }
+
+  return groups.map((group, groupIndex) => {
+    const options = Array.from(
+      new Set(
+        variants
+          .map((variant) => {
+            const parts = variant.VariantName.split(",").map((part) =>
+              part.trim(),
+            );
+            return parts[groupIndex] ?? parts[parts.length - 1] ?? variant.VariantName;
+          })
+          .filter(Boolean),
+      ),
+    );
+
+    return {
+      groupName: group.VariantGroupName,
+      options,
+    };
+  });
+}
+
+export function findVariantByGroupSelection(
+  detail: ProductDetailData,
+  selections: Record<string, string>,
+): ProductVariantCombination | null {
+  const variants =
+    detail.ProductVariantDetail?.productVariantCombinationList ?? [];
+  const groups = detail.ProductVariantGroups ?? [];
+
+  if (variants.length === 0) return null;
+
+  return (
+    variants.find((variant) => {
+      const parts = variant.VariantName.split(",").map((part) => part.trim());
+
+      return groups.every((group, index) => {
+        const selected = selections[group.VariantGroupName];
+        if (!selected) return true;
+        const part = parts[index] ?? parts[parts.length - 1];
+        return part === selected;
+      });
+    }) ?? null
+  );
 }
 
 export async function resolveProductDetailId(

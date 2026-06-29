@@ -1,0 +1,412 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import TopNavOne from "@/components/Header/TopNav/TopNavOne";
+import MenuOne from "@/components/Header/Menu/MenuOne";
+import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
+import Footer from "@/components/Footer/Footer";
+import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { formatRsPrice } from "@/lib/cart";
+import {
+  cancelCustomerOrder,
+  fetchCustomerOrderDetails,
+  fetchSelectPayment,
+  formatOrderDate,
+  getDeliveryOptionLabel,
+  OrderDetailData,
+  PaymentGateway,
+  SelectPaymentData,
+} from "@/lib/order";
+import { getProductDetailUrl } from "@/lib/featured-products";
+import { getApiErrorMessage } from "@/lib/api";
+import toast from "react-hot-toast";
+
+const OrderDetailsPage = () => {
+  const params = useParams();
+  const orderId = Number(params.orderId);
+
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState("");
+  const [order, setOrder] = useState<OrderDetailData | null>(null);
+  const [paymentData, setPaymentData] = useState<SelectPaymentData | null>(
+    null,
+  );
+  const [selectedGateway, setSelectedGateway] = useState<number | null>(null);
+  const [isCancelled, setIsCancelled] = useState(false);
+
+  const loadOrder = async () => {
+    if (!orderId || Number.isNaN(orderId)) {
+      setError("Invalid order ID.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const [orderDetails, paymentOptions] = await Promise.all([
+        fetchCustomerOrderDetails(orderId),
+        fetchSelectPayment(orderId),
+      ]);
+
+      setOrder(orderDetails);
+      setPaymentData(paymentOptions);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to load order details."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadOrder();
+  }, [orderId]);
+
+  const handleCancelOrder = async () => {
+    if (!order || isCancelled) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this order?",
+    );
+    if (!confirmed) return;
+
+    setCancelling(true);
+    try {
+      const message = await cancelCustomerOrder(order.OrderId);
+      toast.success(message);
+      setIsCancelled(true);
+      await loadOrder();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to cancel order."));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleSelectPayment = (gateway: PaymentGateway) => {
+    setSelectedGateway(gateway.PGId);
+    toast.success(`${gateway.Name} selected as payment method.`);
+  };
+
+  const displayOrder = paymentData?.OrderDto ?? order;
+  const gateways = paymentData?.PaymentGateways ?? [];
+  const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
+
+  return (
+    <>
+      <TopNavOne
+        props="style-one bg-black"
+        slogan="New customers save 10% with the code GET10"
+      />
+      <div id="header" className="relative w-full">
+        <MenuOne props="bg-transparent" />
+        <Breadcrumb heading="Order Details" subHeading="Order Details" />
+      </div>
+
+      <div className="md:py-16 py-10">
+        <div className="container">
+          {loading ? (
+            <div className="text-center py-20 text-secondary">
+              Loading order details...
+            </div>
+          ) : error ? (
+            <div className="text-center py-20">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Link href="/" className="button-main inline-block">
+                Back to Home
+              </Link>
+            </div>
+          ) : displayOrder ? (
+            <div className="flex flex-col xl:flex-row gap-8 xl:gap-10">
+              {/* Main content */}
+              <div className="w-full xl:w-2/3 space-y-6">
+                {/* Order header */}
+                <div className="bg-surface border border-line rounded-2xl p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="caption2 text-secondary uppercase">
+                        Order Number
+                      </div>
+                      <h1 className="heading4 mt-1">{displayOrder.OrderNumber}</h1>
+                      <p className="caption1 text-secondary mt-2">
+                        Order ID: {displayOrder.OrderId}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="caption2 bg-black text-white px-3 py-1 rounded-full">
+                        {displayOrder.OrderStatusDisplayName}
+                      </span>
+                      <span className="caption2 bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
+                        {displayOrder.PaymentStatusDisplayName}
+                      </span>
+                      {displayOrder.IsGiftOrder && (
+                        <span className="caption2 bg-green text-white px-3 py-1 rounded-full">
+                          Gift Order
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-line">
+                    <div>
+                      <div className="caption2 text-secondary">Delivery Date</div>
+                      <div className="text-button mt-1">
+                        {formatOrderDate(displayOrder.DeliveryDate)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="caption2 text-secondary">Delivery Option</div>
+                      <div className="text-button mt-1">
+                        {getDeliveryOptionLabel(displayOrder.DeliveryOption)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="caption2 text-secondary">Customer</div>
+                      <div className="text-button mt-1">
+                        {displayOrder.CustomerFullName ||
+                          displayOrder.OrderShippingDetails?.FullName}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="caption2 text-secondary">Total Items</div>
+                      <div className="text-button mt-1">
+                        {displayOrder.TotalItems}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order items */}
+                <div className="bg-white border border-line rounded-2xl p-6">
+                  <h2 className="heading6 mb-4">Order Items</h2>
+                  <div className="space-y-4">
+                    {items.map((item) => {
+                      const image =
+                        item.ProductImageURL &&
+                        !item.ProductImageURL.includes("noImage")
+                          ? item.ProductImageURL
+                          : "/images/product/1000x1000.png";
+
+                      return (
+                        <div
+                          key={item.OrderDetailId}
+                          className="flex gap-4 pb-4 border-b border-line last:border-0 last:pb-0"
+                        >
+                          <Link
+                            href={getProductDetailUrl(
+                              item.ProductId,
+                              item.ProductDetailId,
+                            )}
+                            className="w-20 h-24 flex-shrink-0 rounded-lg overflow-hidden relative bg-surface"
+                          >
+                            <Image
+                              src={image}
+                              fill
+                              sizes="80px"
+                              alt={item.ProductName}
+                              className="object-cover"
+                            />
+                          </Link>
+                          <div className="flex-1 min-w-0">
+                            <Link
+                              href={getProductDetailUrl(
+                                item.ProductId,
+                                item.ProductDetailId,
+                              )}
+                              className="text-button font-semibold hover:underline line-clamp-2"
+                            >
+                              {item.ProductName}
+                            </Link>
+                            <div className="caption1 text-secondary mt-1">
+                              Variant: {item.VariantName.replace(/,/g, ", ")}
+                            </div>
+                            <div className="caption2 text-secondary mt-0.5">
+                              Product ID: {item.ProductId} · Detail:{" "}
+                              {item.ProductDetailId}
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="caption1">
+                                Qty: {item.Quantity}
+                              </span>
+                              <span className="text-button font-semibold">
+                                {formatRsPrice(item.TotalAmount)}
+                              </span>
+                            </div>
+                            {item.Quantity > 1 && (
+                              <div className="caption2 text-secondary">
+                                {formatRsPrice(item.Amount)} each
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Shipping & Billing */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-surface border border-line rounded-2xl p-6">
+                    <h3 className="heading6 mb-4">Shipping Address</h3>
+                    <div className="space-y-2 caption1 text-secondary">
+                      <p className="text-button text-black">
+                        {displayOrder.OrderShippingDetails?.FullName}
+                      </p>
+                      <p>{displayOrder.OrderShippingDetails?.Phone}</p>
+                      <p>{displayOrder.OrderShippingDetails?.Address}</p>
+                      <p>
+                        {displayOrder.OrderShippingDetails?.City},{" "}
+                        {displayOrder.OrderShippingDetails?.Country}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-surface border border-line rounded-2xl p-6">
+                    <h3 className="heading6 mb-4">Billing Details</h3>
+                    <div className="space-y-2 caption1 text-secondary">
+                      <p>
+                        {displayOrder.OrderBillingDetails?.FullName ||
+                          displayOrder.OrderShippingDetails?.FullName}
+                      </p>
+                      <p>{displayOrder.OrderBillingDetails?.EmailAddress}</p>
+                      <p>{displayOrder.OrderBillingDetails?.Phone}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                {(displayOrder.SpecialInstructions ||
+                  displayOrder.DeliveryInstructions) && (
+                  <div className="bg-surface border border-line rounded-2xl p-6">
+                    <h3 className="heading6 mb-4">Instructions</h3>
+                    {displayOrder.SpecialInstructions && (
+                      <div className="mb-3">
+                        <div className="caption2 text-secondary">
+                          Special Instructions
+                        </div>
+                        <p className="caption1 mt-1">
+                          {displayOrder.SpecialInstructions}
+                        </p>
+                      </div>
+                    )}
+                    {displayOrder.DeliveryInstructions && (
+                      <div>
+                        <div className="caption2 text-secondary">
+                          Delivery Instructions
+                        </div>
+                        <p className="caption1 mt-1">
+                          {displayOrder.DeliveryInstructions}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Payment methods */}
+                {gateways.length > 0 && (
+                  <div className="bg-white border border-line rounded-2xl p-6">
+                    <h2 className="heading6 mb-1">Select Payment Method</h2>
+                    <p className="caption1 text-secondary mb-4">
+                      Choose a payment gateway to proceed with your order
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {gateways.map((gateway) => (
+                        <button
+                          type="button"
+                          key={gateway.PGId}
+                          onClick={() => handleSelectPayment(gateway)}
+                          className={`p-4 rounded-xl border text-button transition-all ${selectedGateway === gateway.PGId ? "border-black bg-black text-white" : "border-line hover:border-black"}`}
+                        >
+                          {gateway.Name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cancel order */}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelOrder()}
+                    disabled={cancelling || isCancelled}
+                    className="px-6 py-3 rounded-full border border-red text-red hover:bg-red hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {cancelling
+                      ? "Cancelling..."
+                      : isCancelled
+                        ? "Order Cancelled"
+                        : "Cancel Order"}
+                  </button>
+                  <Link href="/" className="button-main inline-flex items-center">
+                    Continue Shopping
+                  </Link>
+                </div>
+              </div>
+
+              {/* Order summary sidebar */}
+              <div className="w-full xl:w-1/3">
+                <div className="bg-surface border border-line rounded-2xl p-6 sticky top-24">
+                  <h2 className="heading6 mb-4">Order Summary</h2>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between caption1">
+                      <span className="text-secondary">Order Amount</span>
+                      <span>{formatRsPrice(displayOrder.OrderAmount)}</span>
+                    </div>
+                    <div className="flex justify-between caption1">
+                      <span className="text-secondary">Delivery Charges</span>
+                      <span>
+                        {displayOrder.DeliveryCharges > 0
+                          ? formatRsPrice(displayOrder.DeliveryCharges)
+                          : "Free"}
+                      </span>
+                    </div>
+                    {displayOrder.NetDiscount > 0 && (
+                      <div className="flex justify-between caption1">
+                        <span className="text-secondary">Discount</span>
+                        <span className="text-green">
+                          -{formatRsPrice(displayOrder.NetDiscount)}
+                        </span>
+                      </div>
+                    )}
+                    {displayOrder.PromoCode && (
+                      <div className="flex justify-between caption1">
+                        <span className="text-secondary">Promo Code</span>
+                        <span>{displayOrder.PromoCode}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between heading5 pt-5 mt-5 border-t border-line">
+                    <span>Net Amount</span>
+                    <span>{formatRsPrice(displayOrder.NetAmount)}</span>
+                  </div>
+
+                  <p className="caption2 text-secondary text-center mt-4">
+                    All amounts in PKR (Rs.)
+                  </p>
+
+                  {selectedGateway && (
+                    <div className="mt-4 p-3 bg-white rounded-lg border border-line caption1 text-center">
+                      Selected:{" "}
+                      {gateways.find((g) => g.PGId === selectedGateway)?.Name}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <Footer />
+    </>
+  );
+};
+
+export default OrderDetailsPage;

@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
+import { RelatedProduct } from "@/lib/product-details";
 
 export interface FeaturedProductCategory {
   CategoryId: number;
@@ -105,6 +106,40 @@ export function mapProductDetailToProductType(
     description: detail.Description,
     action: "add to cart",
     slug: detail.Seo?.UrlSlug || String(detail.ProductId),
+  };
+}
+
+export function mapRelatedProductToProductType(
+  product: RelatedProduct,
+): ProductType {
+  const image =
+    product.ThumbnailImagePath &&
+    !product.ThumbnailImagePath.includes("noImage")
+      ? product.ThumbnailImagePath
+      : "/images/product/1000x1000.png";
+
+  return {
+    id: String(product.ProductId),
+    category: product.Category?.CategoryName || "",
+    type: "product",
+    name: product.ProductName,
+    gender: "",
+    new: product.IsNewProduct,
+    sale: product.IsPromotionalProduct,
+    rate: 5,
+    price: 0,
+    originPrice: 0,
+    brand: "",
+    sold: 0,
+    quantity: 100,
+    quantityPurchase: 1,
+    sizes: [],
+    variation: [],
+    thumbImage: [image],
+    images: [image],
+    description: product.Category?.CategoryDescription || "",
+    action: "add to cart",
+    slug: product.Seo?.UrlSlug || String(product.ProductId),
   };
 }
 

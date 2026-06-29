@@ -175,81 +175,39 @@
 
     .modal-quickview-main {
         width: 856px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
 
-        .list-img {
-            max-height: calc(100%);
-            height: 100%;
-            overflow-x: auto;
-
-            .bg-img {
-                &:first-child {
-                    margin-top: 0;
-                }
-            }
+        .modal-quickview-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            max-height: 100%;
         }
 
-        .product-infor {
-            overflow-x: auto;
-            max-height: calc(100% - 54px);
-            height: 100%;
-        }
-
-        .list-img::-webkit-scrollbar,
-        .product-infor::-webkit-scrollbar {
+        .modal-quickview-scroll::-webkit-scrollbar {
             width: 6px;
             background: var(--line);
         }
 
-        .list-img::-webkit-scrollbar-thumb,
-        .product-infor::-webkit-scrollbar-thumb {
+        .modal-quickview-scroll::-webkit-scrollbar-thumb {
             background-color: var(--secondary2);
             border-radius: 4px;
         }
 
         @media (max-width: 1023.98px) {
             width: 720px;
-
-            .list-product {
-                max-height: calc(100% - 210px - 212px);
-            }
         }
 
         @media (max-width: 767.98px) {
-            width: 480px;
-
-            >div {
-                overflow-x: auto;
-                max-height: calc(100%);
-                height: 100%;
-
-                &::-webkit-scrollbar {
-                    width: 6px;
-                    background: var(--line);
-                }
-
-                &::-webkit-scrollbar-thumb {
-                    background-color: var(--secondary2);
-                    border-radius: 4px;
-                }
-            }
-
-            .list-img::-webkit-scrollbar {
-                width: 2px;
-            }
-
-            .product-infor {
-                overflow-x: unset;
-                max-height: unset;
-                height: 100%;
-            }
+            width: calc(100vw - 40px);
+            max-width: 480px;
         }
 
         @media (max-width: 575.98px) {
-            width: unset;
-
-            .list-product {
-                max-height: calc(100% - 210px - 165px);
-            }
+            width: calc(100vw - 40px);
+            max-width: unset;
         }
     }
 

@@ -438,8 +438,9 @@ const Checkout = () => {
 
                     <div className="block-button md:mt-10 mt-6">
                       <button
+                      title="Create Your Order"
                         type="submit"
-                        className="button-main w-full disabled:opacity-50"
+                        className="button-main bg-black w-full disabled:opacity-50"
                         disabled={submitting || cartState.cartArray.length === 0}
                       >
                         {submitting ? "Creating Order..." : "Create Order"}

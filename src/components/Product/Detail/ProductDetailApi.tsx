@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Thumbs } from "swiper/modules";
+import { Navigation } from "swiper/modules";
 import "swiper/css/bundle";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import SwiperCore from "swiper/core";
+import type { Swiper as SwiperType } from "swiper";
 import Rate from "@/components/Other/Rate";
 import { useCart } from "@/context/CartContext";
 import { useModalCartContext } from "@/context/ModalCartContext";
@@ -16,15 +18,23 @@ import { useCompare } from "@/context/CompareContext";
 import { useModalCompareContext } from "@/context/ModalCompareContext";
 import {
   fetchProductDetails,
-  getProductImages,
+  getDisplayImages,
+  getVariantDisplayImage,
   getVariantPrice,
+  getComparePrice,
+  formatRsPrice,
+  parseVariantGroupOptions,
+  findVariantByGroupSelection,
   ProductDetailData,
   ProductVariantCombination,
+  RelatedProduct,
 } from "@/lib/product-details";
-import { mapProductDetailToProductType } from "@/lib/featured-products";
+import {
+  getProductDetailUrl,
+  mapProductDetailToProductType,
+} from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
-
-SwiperCore.use([Navigation, Thumbs]);
+import { ProductType } from "@/type/ProductType";
 
 interface Props {
   productId: string;
@@ -32,16 +42,23 @@ interface Props {
 }
 
 const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
+  const router = useRouter();
   const [productDetail, setProductDetail] = useState<ProductDetailData | null>(
     null,
   );
   const [selectedVariant, setSelectedVariant] =
     useState<ProductVariantCombination | null>(null);
+  const [groupSelections, setGroupSelections] = useState<
+    Record<string, string>
+  >({});
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("description");
-  const [thumbsSwiper, setThumbsSwiper] = useState<SwiperCore | null>(null);
+  const [activeTab, setActiveTab] = useState<"description" | "details">(
+    "description",
+  );
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [mainSwiper, setMainSwiper] = useState<SwiperType | null>(null);
 
   const { addToCart } = useCart();
   const { openModalCart } = useModalCartContext();
@@ -49,6 +66,26 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   const { openModalWishlist } = useModalWishlistContext();
   const { addToCompare, removeFromCompare, compareState } = useCompare();
   const { openModalCompare } = useModalCompareContext();
+
+  const syncGroupSelections = (
+    detail: ProductDetailData,
+    variant: ProductVariantCombination | null,
+  ) => {
+    if (!variant || !detail.ProductVariantGroups?.length) {
+      setGroupSelections({});
+      return;
+    }
+
+    const parts = variant.VariantName.split(",").map((part) => part.trim());
+    const nextSelections: Record<string, string> = {};
+    detail.ProductVariantGroups.forEach((group, index) => {
+      const value = parts[index] ?? parts[parts.length - 1];
+      if (value) {
+        nextSelections[group.VariantGroupName] = value;
+      }
+    });
+    setGroupSelections(nextSelections);
+  };
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -76,9 +113,11 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
           null;
 
         setSelectedVariant(defaultVariant);
+        syncGroupSelections(detail, defaultVariant);
         setQuantity(1);
       } catch (err) {
         setError(getApiErrorMessage(err, "Failed to load product details."));
+        setProductDetail(null);
       } finally {
         setLoading(false);
       }
@@ -87,10 +126,16 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     void loadProduct();
   }, [productId, productDetailId]);
 
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedVariant?.ProductDetailId, productDetail?.ProductId]);
+
   if (loading) {
     return (
       <div className="product-detail default md:py-20 py-10">
-        <div className="container text-center">Loading product details...</div>
+        <div className="container text-center text-secondary">
+          Loading product details...
+        </div>
       </div>
     );
   }
@@ -105,19 +150,64 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     );
   }
 
-  const images = getProductImages(productDetail);
+  const images = getDisplayImages(productDetail, selectedVariant);
   const variants =
     productDetail.ProductVariantDetail?.productVariantCombinationList ?? [];
-  const activePrice = selectedVariant
+  const variantGroups = parseVariantGroupOptions(productDetail);
+  const relatedProducts = productDetail.relatedProductList ?? [];
+  const unitPrice = selectedVariant
     ? getVariantPrice(selectedVariant)
     : productDetail.MinPrice;
-  const comparePrice = selectedVariant?.Price ?? productDetail.MaxPrice;
+  const compareUnitPrice = getComparePrice(productDetail, selectedVariant);
+  const totalPrice = unitPrice * quantity;
+  const totalComparePrice =
+    compareUnitPrice > unitPrice ? compareUnitPrice * quantity : 0;
   const percentSale =
-    comparePrice > activePrice
-      ? Math.floor(100 - (activePrice / comparePrice) * 100)
+    compareUnitPrice > unitPrice
+      ? Math.floor(100 - (unitPrice / compareUnitPrice) * 100)
       : 0;
+  const showPriceRange =
+    !selectedVariant && productDetail.MinPrice !== productDetail.MaxPrice;
+  const inStock = selectedVariant?.InStock ?? productDetail.InStock ?? false;
+  const productIdStr = String(productDetail.ProductId);
+
+  const handleGroupSelection = (groupName: string, option: string) => {
+    const nextSelections = { ...groupSelections, [groupName]: option };
+    setGroupSelections(nextSelections);
+
+    const matchedVariant = findVariantByGroupSelection(
+      productDetail,
+      nextSelections,
+    );
+    if (matchedVariant) {
+      setSelectedVariant(matchedVariant);
+      setActiveImageIndex(0);
+      if (mainSwiper && !mainSwiper.destroyed) {
+        mainSwiper.slideTo(0, 0);
+      }
+    }
+  };
+
+  const handleVariantSelect = (variant: ProductVariantCombination) => {
+    setSelectedVariant(variant);
+    syncGroupSelections(productDetail, variant);
+    setActiveImageIndex(0);
+  };
+
+  const handleThumbnailClick = (index: number) => {
+    setActiveImageIndex(index);
+    if (mainSwiper && !mainSwiper.destroyed) {
+      mainSwiper.slideTo(index);
+    }
+  };
+
+  const handleQuantityChange = (delta: number) => {
+    setQuantity((prev) => Math.max(1, prev + delta));
+  };
 
   const handleAddToCart = async () => {
+    if (!inStock) return;
+
     const cartProduct = mapProductDetailToProductType(
       productDetail,
       selectedVariant ?? undefined,
@@ -138,7 +228,11 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
       selectedVariant ?? undefined,
     );
 
-    if (wishlistState.wishlistArray.some((item) => item.id === wishlistProduct.id)) {
+    if (
+      wishlistState.wishlistArray.some(
+        (item: ProductType) => item.id === wishlistProduct.id,
+      )
+    ) {
       removeFromWishlist(wishlistProduct.id);
     } else {
       addToWishlist(wishlistProduct);
@@ -153,7 +247,9 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     );
 
     if (compareState.compareArray.length < 3) {
-      if (compareState.compareArray.some((item) => item.id === compareProduct.id)) {
+      if (
+        compareState.compareArray.some((item) => item.id === compareProduct.id)
+      ) {
         removeFromCompare(compareProduct.id);
       } else {
         addToCompare(compareProduct);
@@ -164,217 +260,439 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     openModalCompare();
   };
 
+  const handleRelatedProductClick = (related: RelatedProduct) => {
+    router.push(getProductDetailUrl(related.ProductId));
+  };
+
   return (
     <div className="product-detail default">
-      <div className="featured-product underwear md:py-20 py-10">
-        <div className="container flex justify-between gap-y-6 flex-wrap">
-          <div className="list-img md:w-1/2 md:pr-[45px] w-full">
-            <Swiper
-              slidesPerView={1}
-              spaceBetween={0}
-              thumbs={{ swiper: thumbsSwiper }}
-              modules={[Thumbs]}
-              className="mySwiper2 rounded-2xl overflow-hidden"
-            >
-              {images.map((item, index) => (
-                <SwiperSlide key={`${item}-${index}`}>
-                  <Image
-                    src={item}
-                    width={1000}
-                    height={1000}
-                    alt={productDetail.Name}
-                    className="w-full aspect-[3/4] object-cover"
-                  />
-                </SwiperSlide>
-              ))}
-            </Swiper>
-
-            <Swiper
-              onSwiper={setThumbsSwiper}
-              spaceBetween={12}
-              slidesPerView={4}
-              freeMode
-              watchSlidesProgress
-              modules={[Navigation, Thumbs]}
-              className="mySwiper mt-4"
-            >
-              {images.map((item, index) => (
-                <SwiperSlide key={`thumb-${item}-${index}`}>
-                  <Image
-                    src={item}
-                    width={300}
-                    height={300}
-                    alt={productDetail.Name}
-                    className="w-full aspect-[3/4] object-cover rounded-xl cursor-pointer"
-                  />
-                </SwiperSlide>
-              ))}
-            </Swiper>
-          </div>
-
-          <div className="product-infor md:w-1/2 w-full lg:pl-[15px] md:pl-2">
-            <div className="flex justify-between">
-              <div>
-                <div className="caption2 text-secondary font-semibold uppercase">
-                  {productDetail.Category}
-                </div>
-                <div className="heading4 mt-1">{productDetail.Name}</div>
-              </div>
-              <button
-                type="button"
-                className={`add-wishlist-btn w-12 h-12 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some((item) => item.id === String(productDetail.ProductId)) ? "active bg-black text-white" : ""}`}
-                onClick={handleWishlist}
+      <div className="md:py-16 py-8">
+        <div className="container">
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+            {/* Gallery */}
+            <div className="w-full lg:w-1/2">
+              <Swiper
+                onSwiper={setMainSwiper}
+                onSlideChange={(swiper) => setActiveImageIndex(swiper.activeIndex)}
+                slidesPerView={1}
+                spaceBetween={0}
+                modules={[Navigation]}
+                navigation
+                className="rounded-2xl overflow-hidden bg-surface product-detail-gallery"
               >
-                <Icon.Heart
-                  size={24}
-                  weight={
-                    wishlistState.wishlistArray.some(
-                      (item) => item.id === String(productDetail.ProductId),
-                    )
-                      ? "fill"
-                      : "regular"
-                  }
-                />
-              </button>
-            </div>
+                {images.map((item, index) => (
+                  <SwiperSlide key={`${item}-${index}`}>
+                    <Image
+                      src={item}
+                      width={1000}
+                      height={1333}
+                      alt={productDetail.Name}
+                      priority={index === 0}
+                      className="w-full aspect-[3/4] object-cover"
+                    />
+                  </SwiperSlide>
+                ))}
+              </Swiper>
 
-            <div className="flex items-center mt-3">
-              <Rate currentRate={productDetail.AverageRating || 5} size={14} />
-              <span className="caption1 text-secondary ml-2">
-                ({productDetail.AverageRating || 5} rating)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap mt-5 pb-6 border-b border-line">
-              <div className="product-price heading5">Rs. {activePrice}</div>
-              {comparePrice > activePrice && (
-                <>
-                  <div className="w-px h-4 bg-line"></div>
-                  <div className="product-origin-price font-normal text-secondary2">
-                    <del>Rs. {comparePrice}</del>
-                  </div>
-                  <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 inline-block rounded-full">
-                    -{percentSale}%
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="desc text-secondary mt-4">{productDetail.Description}</div>
-
-            {variants.length > 0 && (
-              <div className="choose-variant mt-6">
-                <div className="text-title">Available Variants</div>
-                <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                  {variants.map((variant) => (
+              {images.length > 1 && (
+                <div className="flex gap-2 sm:gap-3 mt-4 overflow-x-auto pb-1">
+                  {images.map((item, index) => (
                     <button
                       type="button"
-                      key={variant.ProductDetailId}
-                      className={`size-item px-4 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${selectedVariant?.ProductDetailId === variant.ProductDetailId ? "active bg-black text-white" : ""} ${!variant.InStock ? "opacity-50 cursor-not-allowed" : ""}`}
-                      disabled={!variant.InStock}
-                      onClick={() => setSelectedVariant(variant)}
+                      key={`thumb-${item}-${index}`}
+                      aria-label={`Show image ${index + 1}`}
+                      className={`flex-shrink-0 w-16 h-20 sm:w-[72px] sm:h-[96px] rounded-xl overflow-hidden border-2 transition-colors ${activeImageIndex === index ? "border-black" : "border-line hover:border-black"}`}
+                      onClick={() => handleThumbnailClick(index)}
                     >
-                      {variant.VariantName}
+                      <Image
+                        src={item}
+                        width={72}
+                        height={96}
+                        alt={`${productDetail.Name} ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            <div className="text-title mt-5">Quantity:</div>
-            <div className="choose-quantity flex items-center lg:justify-between gap-5 gap-y-3 mt-3">
-              <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
-                <Icon.Minus
-                  size={20}
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className={`${quantity === 1 ? "disabled" : ""} cursor-pointer`}
-                />
-                <div className="body1 font-semibold">{quantity}</div>
-                <Icon.Plus
-                  size={20}
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="cursor-pointer"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleAddToCart()}
-                className="button-main w-full text-center bg-white text-black border border-black"
-              >
-                Add To Cart
-              </button>
+              )}
             </div>
 
-            <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
-              <button
-                type="button"
-                className="compare flex items-center gap-3 cursor-pointer bg-transparent border-0"
-                onClick={handleCompare}
-              >
-                <div className="compare-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line rounded-xl duration-300 hover:bg-black hover:text-white">
-                  <Icon.ArrowsCounterClockwise className="heading6" />
+            {/* Product info */}
+            <div className="w-full lg:w-1/2">
+              <div className="flex justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="caption2 text-secondary font-semibold uppercase tracking-wide">
+                    {productDetail.Category}
+                  </div>
+                  <h1 className="heading3 mt-2 break-words">{productDetail.Name}</h1>
                 </div>
-                <span>Compare</span>
-              </button>
-            </div>
-
-            <div className="more-infor mt-6">
-              <div className="flex items-center gap-1 mt-3">
-                <div className="text-title">SKU:</div>
-                <div className="text-secondary">
-                  {selectedVariant?.SKU || productDetail.DefaultSKU}
-                </div>
-              </div>
-              <div className="flex items-center gap-1 mt-3">
-                <div className="text-title">Categories:</div>
-                <div className="text-secondary">{productDetail.Category}</div>
-              </div>
-              <div className="flex items-center gap-1 mt-3">
-                <div className="text-title">Brand:</div>
-                <div className="text-secondary">
-                  {productDetail.BrandName || "N/A"}
-                </div>
-              </div>
-              <div className="flex items-center gap-1 mt-3">
-                <div className="text-title">Stock:</div>
-                <div className="text-secondary">
-                  {selectedVariant?.InStock ?? productDetail.InStock
-                    ? "In Stock"
-                    : "Out of Stock"}
-                </div>
-              </div>
-              <div className="flex items-center gap-1 mt-3">
-                <div className="text-title">Price Range:</div>
-                <div className="text-secondary">
-                  Rs. {productDetail.MinPrice} - Rs. {productDetail.MaxPrice}
-                </div>
-              </div>
-            </div>
-
-            <div className="desc-tab mt-8">
-              <div className="flex items-center gap-6 border-b border-line">
                 <button
                   type="button"
-                  className={`caption1 pb-3 ${activeTab === "description" ? "border-b-2 border-black font-semibold" : "text-secondary"}`}
-                  onClick={() => setActiveTab("description")}
+                  className={`add-wishlist-btn w-12 h-12 flex-shrink-0 flex items-center justify-center border border-line rounded-xl duration-300 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some((item: ProductType) => item.id === productIdStr) ? "bg-black text-white" : ""}`}
+                  onClick={handleWishlist}
+                  aria-label="Add to wishlist"
                 >
-                  Description
-                </button>
-                <button
-                  type="button"
-                  className={`caption1 pb-3 ${activeTab === "details" ? "border-b-2 border-black font-semibold" : "text-secondary"}`}
-                  onClick={() => setActiveTab("details")}
-                >
-                  Details
+                  <Icon.Heart
+                    size={22}
+                    weight={
+                      wishlistState.wishlistArray.some(
+                        (item: ProductType) => item.id === productIdStr,
+                      )
+                        ? "fill"
+                        : "regular"
+                    }
+                  />
                 </button>
               </div>
-              <div className="desc-block mt-4 text-secondary whitespace-pre-line">
-                {activeTab === "description"
-                  ? productDetail.LongDescription || productDetail.Description
-                  : `Product ID: ${productDetail.ProductId}\nDetail ID: ${selectedVariant?.ProductDetailId ?? productDetail.ProductDetailId}\nCategory ID: ${productDetail.CategoryId}`}
+
+              {productDetail.AverageRating > 0 && (
+                <div className="flex items-center mt-4">
+                  <Rate currentRate={productDetail.AverageRating} size={16} />
+                  <span className="caption1 text-secondary ml-2">
+                    ({productDetail.AverageRating} rating)
+                  </span>
+                </div>
+              )}
+
+              {/* Pricing */}
+              <div className="mt-6 p-5 rounded-2xl bg-surface border border-line">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {showPriceRange ? (
+                    <span className="heading4">
+                      {formatRsPrice(productDetail.MinPrice)} –{" "}
+                      {formatRsPrice(productDetail.MaxPrice)}
+                    </span>
+                  ) : (
+                    <span className="heading4">{formatRsPrice(unitPrice)}</span>
+                  )}
+                  {compareUnitPrice > unitPrice && (
+                    <>
+                      <span className="text-secondary2 line-through">
+                        {formatRsPrice(compareUnitPrice)}
+                      </span>
+                      <span className="caption2 font-semibold bg-green text-white px-3 py-0.5 rounded-full">
+                        -{percentSale}%
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {quantity > 1 && (
+                  <div className="mt-4 pt-4 border-t border-line">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-secondary">
+                        {formatRsPrice(unitPrice)} × {quantity}
+                      </span>
+                      <span className="heading5">{formatRsPrice(totalPrice)}</span>
+                    </div>
+                    {totalComparePrice > totalPrice && (
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="caption2 text-secondary">You save</span>
+                        <span className="caption2 text-green font-semibold">
+                          {formatRsPrice(totalComparePrice - totalPrice)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {productDetail.Description && (
+                <p className="desc text-secondary mt-5 leading-relaxed">
+                  {productDetail.Description}
+                </p>
+              )}
+
+              {/* Size & Color */}
+              {variantGroups.map((group) => (
+                <div className="mt-6" key={group.groupName}>
+                  <div className="text-title mb-3">{group.groupName}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.options.map((option) => (
+                      <button
+                        type="button"
+                        key={`${group.groupName}-${option}`}
+                        className={`px-4 py-2.5 text-button rounded-full border transition-all ${groupSelections[group.groupName] === option ? "bg-black text-white border-black" : "bg-white border-line hover:border-black"}`}
+                        onClick={() =>
+                          handleGroupSelection(group.groupName, option)
+                        }
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Variants with images */}
+              {variants.length > 0 && (
+                <div className="mt-8">
+                  <div className="text-title mb-4">Select Variant</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {variants.map((variant) => {
+                      const variantImage = getVariantDisplayImage(
+                        variant,
+                        productDetail,
+                      );
+                      const isSelected =
+                        selectedVariant?.ProductDetailId ===
+                        variant.ProductDetailId;
+
+                      return (
+                        <button
+                          type="button"
+                          key={variant.ProductDetailId}
+                          disabled={!variant.InStock}
+                          className={`text-left rounded-2xl border overflow-hidden transition-all ${isSelected ? "border-black ring-2 ring-black shadow-md" : "border-line hover:border-black"} ${!variant.InStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                          onClick={() => handleVariantSelect(variant)}
+                        >
+                          <div className="aspect-square relative bg-surface">
+                            <Image
+                              src={variantImage}
+                              fill
+                              sizes="(max-width: 640px) 50vw, 160px"
+                              alt={variant.VariantName}
+                              className="object-cover"
+                            />
+                          </div>
+                          <div className="p-3">
+                            <div className="text-button line-clamp-2 leading-snug">
+                              {variant.VariantName}
+                            </div>
+                            <div className="caption1 font-semibold mt-1.5">
+                              {formatRsPrice(getVariantPrice(variant))}
+                            </div>
+                            <div className="caption2 text-secondary mt-1">
+                              SKU: {variant.SKU}
+                            </div>
+                            <div
+                              className={`caption2 mt-0.5 ${variant.InStock ? "text-green" : "text-red"}`}
+                            >
+                              {variant.InStock ? "In Stock" : "Out of Stock"}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity */}
+              <div className="mt-8">
+                <div className="text-title mb-3">Quantity</div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                  <div className="quantity-block p-3 flex items-center justify-between rounded-xl border border-line w-full sm:w-[160px] flex-shrink-0 bg-white">
+                    <button
+                      type="button"
+                      aria-label="Decrease quantity"
+                      onClick={() => handleQuantityChange(-1)}
+                      disabled={quantity <= 1}
+                      className={`p-1 ${quantity <= 1 ? "opacity-30 cursor-not-allowed" : "cursor-pointer hover:text-black"}`}
+                    >
+                      <Icon.Minus size={20} />
+                    </button>
+                    <span className="body1 font-semibold min-w-[32px] text-center">
+                      {quantity}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Increase quantity"
+                      onClick={() => handleQuantityChange(1)}
+                      className="p-1 cursor-pointer hover:text-black"
+                    >
+                      <Icon.Plus size={20} />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleAddToCart()}
+                      disabled={!inStock}
+                      className={`button-main flex-1 text-center ${inStock ? "hover:opacity-90" : "opacity-50 cursor-not-allowed"}`}
+                    >
+                      {inStock
+                        ? `Add To Cart — ${formatRsPrice(totalPrice)}`
+                        : "Out of Stock"}
+                    </button>
+                    <button
+                      type="button"
+                      className="compare flex items-center justify-center gap-2 px-5 py-3 border border-line rounded-full hover:bg-black hover:text-white transition-colors"
+                      onClick={handleCompare}
+                    >
+                      <Icon.ArrowsCounterClockwise size={20} />
+                      <span>Compare</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Meta info */}
+              <div className="more-infor mt-8 pt-6 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex gap-2">
+                  <span className="text-title">SKU:</span>
+                  <span className="text-secondary">
+                    {selectedVariant?.SKU || productDetail.DefaultSKU}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-title">Brand:</span>
+                  <span className="text-secondary">
+                    {productDetail.BrandName || "—"}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-title">Category:</span>
+                  <span className="text-secondary">{productDetail.Category}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-title">Stock:</span>
+                  <span
+                    className={`${inStock ? "text-green" : "text-red"} font-medium`}
+                  >
+                    {inStock ? "In Stock" : "Out of Stock"}
+                  </span>
+                </div>
+                <div className="flex gap-2 sm:col-span-2">
+                  <span className="text-title">Price Range:</span>
+                  <span className="text-secondary">
+                    {formatRsPrice(productDetail.MinPrice)} –{" "}
+                    {formatRsPrice(productDetail.MaxPrice)}
+                  </span>
+                </div>
+                {productDetail.Tags && (
+                  <div className="flex gap-2 sm:col-span-2">
+                    <span className="text-title">Tags:</span>
+                    <span className="text-secondary">{productDetail.Tags}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tabs */}
+              <div className="desc-tab mt-10">
+                <div className="flex items-center gap-6 border-b border-line">
+                  <button
+                    type="button"
+                    className={`caption1 pb-3 transition-colors ${activeTab === "description" ? "border-b-2 border-black font-semibold" : "text-secondary hover:text-black"}`}
+                    onClick={() => setActiveTab("description")}
+                  >
+                    Description
+                  </button>
+                  <button
+                    type="button"
+                    className={`caption1 pb-3 transition-colors ${activeTab === "details" ? "border-b-2 border-black font-semibold" : "text-secondary hover:text-black"}`}
+                    onClick={() => setActiveTab("details")}
+                  >
+                    Product Details
+                  </button>
+                </div>
+                <div className="desc-block mt-5 text-secondary whitespace-pre-line leading-relaxed">
+                  {activeTab === "description" ? (
+                    productDetail.LongDescription || productDetail.Description
+                  ) : (
+                    <>
+                      <p>
+                        <strong>Product ID:</strong> {productDetail.ProductId}
+                      </p>
+                      <p className="mt-2">
+                        <strong>Detail ID:</strong>{" "}
+                        {selectedVariant?.ProductDetailId ??
+                          productDetail.ProductDetailId}
+                      </p>
+                      <p className="mt-2">
+                        <strong>Category ID:</strong> {productDetail.CategoryId}
+                      </p>
+                      {selectedVariant && (
+                        <p className="mt-2">
+                          <strong>Selected Variant:</strong>{" "}
+                          {selectedVariant.VariantName} —{" "}
+                          {formatRsPrice(getVariantPrice(selectedVariant))}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Related Products */}
+          {relatedProducts.length > 0 && (
+            <section className="related-product mt-16 md:mt-24 pt-10 border-t border-line">
+              <div className="text-center mb-2">
+                <h2 className="heading4">Related Products</h2>
+                <p className="caption1 text-secondary mt-2">
+                  You may also like these items
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6 mt-8">
+                {relatedProducts.map((related) => {
+                  const image =
+                    related.ThumbnailImagePath &&
+                    !related.ThumbnailImagePath.includes("noImage")
+                      ? related.ThumbnailImagePath
+                      : "/images/product/1000x1000.png";
+
+                  return (
+                    <div
+                      key={related.ProductId}
+                      className="related-card group border border-line rounded-2xl overflow-hidden hover:border-black hover:shadow-lg transition-all duration-300"
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left bg-transparent border-0 p-0 cursor-pointer"
+                        onClick={() => handleRelatedProductClick(related)}
+                      >
+                        <div className="aspect-[4/5] relative bg-surface overflow-hidden">
+                          <Image
+                            src={image}
+                            fill
+                            sizes="(max-width: 640px) 100vw, 25vw"
+                            alt={related.ProductName}
+                            className="object-cover duration-500 group-hover:scale-105"
+                          />
+                          {related.IsNewProduct && (
+                            <span className="absolute top-3 left-3 caption2 bg-green text-white px-2.5 py-0.5 rounded-full">
+                              New
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      <div className="p-4">
+                        <div className="caption2 text-secondary uppercase tracking-wide">
+                          {related.Category?.CategoryName}
+                        </div>
+                        <h3 className="text-button font-semibold mt-1 line-clamp-2">
+                          {related.ProductName}
+                        </h3>
+                        {related.Category?.CategoryDescription && (
+                          <p className="caption1 text-secondary mt-2 line-clamp-2">
+                            {related.Category.CategoryDescription}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          <button
+                            type="button"
+                            className="caption2 px-4 py-1.5 rounded-full border border-line hover:bg-black hover:text-white transition-colors"
+                            onClick={() => handleRelatedProductClick(related)}
+                          >
+                            View Product
+                          </button>
+                          <Link
+                            href={getProductDetailUrl(related.ProductId)}
+                            className="caption2 px-4 py-1.5 rounded-full border border-line hover:bg-black hover:text-white transition-colors inline-block"
+                          >
+                            Shop Now
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

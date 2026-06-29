@@ -17,7 +17,13 @@ import {
   CartSummary,
   fetchCurrentCart,
   getCartItemId,
+  getCartItemImage,
+  getCartItemLineTotal,
+  getCartItemName,
+  getCartItemUnitPrice,
+  getCartItemVariantsLabel,
 } from "@/lib/cart";
+import { RelatedProduct } from "@/lib/product-details";
 import { getApiErrorMessage } from "@/lib/api";
 
 export interface CartLineItem extends ProductType {
@@ -25,14 +31,18 @@ export interface CartLineItem extends ProductType {
   cartId: string;
   selectedSize: string;
   selectedColor: string;
+  lineTotal: number;
   apiItem?: ApiCartItem;
 }
 
 interface CartState {
   cartArray: CartLineItem[];
   subTotal: number;
+  totalDiscount: number;
+  netTotal: number;
   totalAmount: number;
   totalItems: number;
+  relatedProducts: RelatedProduct[];
 }
 
 type CartAction =
@@ -66,51 +76,82 @@ const CartContext = createContext<CartContextProps | undefined>(undefined);
 const initialState: CartState = {
   cartArray: [],
   subTotal: 0,
+  totalDiscount: 0,
+  netTotal: 0,
   totalAmount: 0,
   totalItems: 0,
+  relatedProducts: [],
 };
 
-function mapSummaryToCartState(summary: CartSummary): CartState {
+function calculateTotals(
+  cartArray: CartLineItem[],
+  totalDiscount: number,
+): Pick<CartState, "subTotal" | "netTotal" | "totalAmount" | "totalItems"> {
+  const subTotal = cartArray.reduce((sum, item) => sum + item.lineTotal, 0);
+  const netTotal = Math.max(subTotal - totalDiscount, 0);
+
   return {
+    subTotal,
+    netTotal,
+    totalAmount: netTotal,
+    totalItems: cartArray.reduce((count, item) => count + item.quantity, 0),
+  };
+}
+
+function mapApiItemToLineItem(apiItem: ApiCartItem): CartLineItem {
+  const unitPrice = getCartItemUnitPrice(apiItem);
+  const quantity = apiItem.Quantity ?? 1;
+  const variants = apiItem.cartItemVariantList ?? [];
+  const sizeVariant = variants.find((v) => v.VariantGroup === "Size");
+  const colorVariant = variants.find((v) => v.VariantGroup === "Color");
+
+  return {
+    id: String(apiItem.ProductId),
+    productDetailId: apiItem.ProductDetailId,
+    category: apiItem.Category?.CategoryName || "",
+    type: "product",
+    name: getCartItemName(apiItem),
+    gender: "",
+    new: false,
+    sale: Boolean(
+      apiItem.DiscountedPrice &&
+        apiItem.DiscountedPrice > 0 &&
+        apiItem.DiscountedPrice < (apiItem.Price ?? 0),
+    ),
+    rate: 5,
+    price: unitPrice,
+    originPrice: apiItem.Price ?? unitPrice,
+    brand: "",
+    sold: 0,
+    quantity,
+    quantityPurchase: quantity,
+    sizes: apiItem.ProductVariants ? [apiItem.ProductVariants] : [],
+    variation: [],
+    thumbImage: [getCartItemImage(apiItem)],
+    images: [getCartItemImage(apiItem)],
+    description:
+      apiItem.Category?.CategoryDescription || getCartItemVariantsLabel(apiItem),
+    action: "add to cart",
+    slug: String(apiItem.ProductId),
+    cartId: getCartItemId(apiItem),
+    selectedSize: sizeVariant?.VariantName || "",
+    selectedColor: colorVariant?.VariantName || "",
+    lineTotal: getCartItemLineTotal(apiItem),
+    apiItem,
+  };
+}
+
+function mapSummaryToCartState(summary: CartSummary): CartState {
+  const cartArray = summary.items.map(mapApiItemToLineItem);
+
+  return {
+    cartArray,
     subTotal: summary.subTotal,
+    totalDiscount: summary.totalDiscount,
+    netTotal: summary.netTotal,
     totalAmount: summary.totalAmount,
     totalItems: summary.totalItems,
-    cartArray: summary.items.map((apiItem) => ({
-      id: String(apiItem.ProductId),
-      productDetailId: apiItem.ProductDetailId,
-      category: "",
-      type: "product",
-      name: apiItem.ProductName || apiItem.Name || "Product",
-      gender: "",
-      new: false,
-      sale: false,
-      rate: 5,
-      price: apiItem.Price ?? apiItem.UnitPrice ?? 0,
-      originPrice: apiItem.Price ?? apiItem.UnitPrice ?? 0,
-      brand: "",
-      sold: 0,
-      quantity: apiItem.Quantity ?? 1,
-      quantityPurchase: apiItem.Quantity ?? 1,
-      sizes: apiItem.VariantName ? [apiItem.VariantName] : [],
-      variation: [],
-      thumbImage: [
-        apiItem.ThumbnailImagePath ||
-          apiItem.IconImagePath ||
-          "/images/product/1000x1000.png",
-      ],
-      images: [
-        apiItem.ThumbnailImagePath ||
-          apiItem.IconImagePath ||
-          "/images/product/1000x1000.png",
-      ],
-      description: apiItem.VariantName || "",
-      action: "add to cart",
-      slug: String(apiItem.ProductId),
-      cartId: getCartItemId(apiItem),
-      selectedSize: apiItem.VariantName || "",
-      selectedColor: "",
-      apiItem,
-    })),
+    relatedProducts: summary.relatedProducts,
   };
 }
 
@@ -118,25 +159,44 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case "SET_CART":
       return mapSummaryToCartState(action.payload);
-    case "UPDATE_CART":
+    case "UPDATE_CART": {
+      const cartArray = state.cartArray.map((item) => {
+        if (
+          item.cartId !== action.payload.itemId &&
+          item.id !== action.payload.itemId
+        ) {
+          return item;
+        }
+
+        const unitPrice = item.apiItem
+          ? getCartItemUnitPrice(item.apiItem)
+          : item.price;
+        const lineTotal = unitPrice * action.payload.quantity;
+
+        return {
+          ...item,
+          quantity: action.payload.quantity,
+          quantityPurchase: action.payload.quantity,
+          selectedSize: action.payload.selectedSize,
+          selectedColor: action.payload.selectedColor,
+          lineTotal,
+          price: unitPrice,
+          apiItem: item.apiItem
+            ? {
+                ...item.apiItem,
+                Quantity: action.payload.quantity,
+                TotalAmount: lineTotal,
+              }
+            : item.apiItem,
+        };
+      });
+
       return {
         ...state,
-        cartArray: state.cartArray.map((item) =>
-          item.cartId === action.payload.itemId ||
-          item.id === action.payload.itemId
-            ? {
-                ...item,
-                quantity: action.payload.quantity,
-                quantityPurchase: action.payload.quantity,
-                selectedSize: action.payload.selectedSize,
-                selectedColor: action.payload.selectedColor,
-                apiItem: item.apiItem
-                  ? { ...item.apiItem, Quantity: action.payload.quantity }
-                  : item.apiItem,
-              }
-            : item,
-        ),
+        cartArray,
+        ...calculateTotals(cartArray, state.totalDiscount),
       };
+    }
     default:
       return state;
   }

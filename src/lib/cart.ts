@@ -1,30 +1,61 @@
 import api from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
+import { RelatedProduct } from "@/lib/product-details";
 import { ProductType } from "@/type/ProductType";
+
+export interface CartItemVariant {
+  VariantGroupId: number;
+  VariantId: number;
+  VariantName: string;
+  VariantGroup: string;
+}
 
 export interface ApiCartItem {
   CartId?: number | string;
   CartItemId?: number | string;
+  CampaignId?: number;
+  DiscountValueType?: number;
+  Discount?: number;
+  IsCampaignApplied?: boolean;
   ProductId: number;
-  ProductDetailId?: number;
+  CategoryId?: number;
   ProductName?: string;
   Name?: string;
+  ProductImage?: string;
+  ThumbnailImagePath?: string;
+  IconImagePath?: string;
+  LargeImagePath?: string;
+  Category?: {
+    CategoryId: number;
+    CategoryName: string;
+    CategoryDescription: string;
+  };
+  relatedProductList?: RelatedProduct[];
+  cartItemVariantList?: CartItemVariant[];
   Quantity?: number;
   Price?: number;
   UnitPrice?: number;
   DiscountedPrice?: number;
-  ThumbnailImagePath?: string;
-  IconImagePath?: string;
-  LargeImagePath?: string;
+  TotalAmount?: number;
+  IsPromotional?: boolean;
+  ProductDetailId?: number;
+  ProductVariants?: string;
   VariantName?: string;
   SKU?: string;
+  IsProductAvailableInStock?: boolean;
+  IsAvailableQuantity?: boolean;
+  InventoryManagement?: boolean;
 }
 
 export interface CartSummary {
   items: ApiCartItem[];
   subTotal: number;
+  totalDiscount: number;
+  netTotal: number;
   totalAmount: number;
   totalItems: number;
+  relatedProducts: RelatedProduct[];
+  homeDeliveryEnable: boolean;
 }
 
 const SESSION_STORAGE_KEY = "cart_session_id";
@@ -37,7 +68,7 @@ export function getCartSessionId(): string {
     const chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     sessionId = Array.from(
-      { length: 32 },
+      { length: 48 },
       () => chars[Math.floor(Math.random() * chars.length)],
     ).join("");
     localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
@@ -64,6 +95,24 @@ function extractCartItems(data: unknown): ApiCartItem[] {
   return Array.isArray(list) ? (list as ApiCartItem[]) : [];
 }
 
+export function collectRelatedProductsFromCart(
+  items: ApiCartItem[],
+): RelatedProduct[] {
+  const seen = new Set<number>();
+  const related: RelatedProduct[] = [];
+
+  for (const item of items) {
+    for (const product of item.relatedProductList ?? []) {
+      if (!seen.has(product.ProductId)) {
+        seen.add(product.ProductId);
+        related.push(product);
+      }
+    }
+  }
+
+  return related;
+}
+
 function extractCartSummary(data: unknown, items: ApiCartItem[]): CartSummary {
   const body = (data as Record<string, unknown>) ?? {};
   const nested =
@@ -71,24 +120,23 @@ function extractCartSummary(data: unknown, items: ApiCartItem[]): CartSummary {
       ? (body.Data as Record<string, unknown>)
       : null;
 
-  const subTotal = Number(
-    nested?.SubTotal ?? nested?.Subtotal ?? nested?.CartSubTotal ?? 0,
-  );
-  const totalAmount = Number(
-    nested?.TotalAmount ?? nested?.GrandTotal ?? nested?.Total ?? subTotal,
-  );
-
   const calculatedSubTotal = items.reduce((total, item) => {
-    const price = item.Price ?? item.UnitPrice ?? 0;
-    const qty = item.Quantity ?? 1;
-    return total + price * qty;
+    return total + getCartItemLineTotal(item);
   }, 0);
+
+  const subTotal = Number(nested?.TotalPrice ?? calculatedSubTotal);
+  const totalDiscount = Number(nested?.TotalDiscount ?? 0);
+  const netTotal = Number(nested?.NetTotal ?? subTotal - totalDiscount);
 
   return {
     items,
-    subTotal: subTotal || calculatedSubTotal,
-    totalAmount: totalAmount || calculatedSubTotal,
+    subTotal,
+    totalDiscount,
+    netTotal,
+    totalAmount: netTotal,
     totalItems: items.reduce((count, item) => count + (item.Quantity ?? 1), 0),
+    relatedProducts: collectRelatedProductsFromCart(items),
+    homeDeliveryEnable: Boolean(nested?.HomeDeliveryEnable),
   };
 }
 
@@ -97,14 +145,23 @@ export async function addProductToCart(
   productDetailId: number,
   quantity: number,
 ): Promise<void> {
-  await api.post("/api/v1/Cart/AddToCart/add-product", null, {
-    params: {
-      ProductId: productId,
-      ProductDetailId: productDetailId,
-      Quantity: quantity,
-      SessionId: getCartSessionId(),
-    },
-  });
+  const params = {
+    ProductId: productId,
+    ProductDetailId: productDetailId,
+    Quantity: quantity,
+  };
+
+  if (isAuthenticated()) {
+    await api.post("/api/v1/Cart/AddToCart/add-product", null, { params });
+    return;
+  }
+
+  const sessionId = getCartSessionId();
+  await api.post(
+    `/api/v1/Cart/AddToCartGuest/session/${sessionId}/add`,
+    null,
+    { params },
+  );
 }
 
 export async function fetchCurrentCart(): Promise<CartSummary> {
@@ -120,39 +177,8 @@ export async function fetchCurrentCart(): Promise<CartSummary> {
   return extractCartSummary(response.data, items);
 }
 
-export function mapApiCartItemToProductType(item: ApiCartItem): ProductType {
-  const image =
-    item.ThumbnailImagePath ||
-    item.IconImagePath ||
-    item.LargeImagePath ||
-    "/images/product/1000x1000.png";
-
-  const price = item.Price ?? item.UnitPrice ?? 0;
-
-  return {
-    id: String(item.ProductId),
-    productDetailId: item.ProductDetailId,
-    category: "",
-    type: "product",
-    name: item.ProductName || item.Name || "Product",
-    gender: "",
-    new: false,
-    sale: Boolean(item.DiscountedPrice && item.DiscountedPrice < price),
-    rate: 5,
-    price,
-    originPrice: price,
-    brand: "",
-    sold: 0,
-    quantity: item.Quantity ?? 1,
-    quantityPurchase: item.Quantity ?? 1,
-    sizes: item.VariantName ? [item.VariantName] : [],
-    variation: [],
-    thumbImage: [image],
-    images: [image],
-    description: item.VariantName || "",
-    action: "add to cart",
-    slug: String(item.ProductId),
-  };
+export function formatRsPrice(amount: number): string {
+  return `Rs. ${amount.toLocaleString("en-PK")}`;
 }
 
 export function getCartItemId(item: ApiCartItem): string {
@@ -160,24 +186,82 @@ export function getCartItemId(item: ApiCartItem): string {
 }
 
 export function getCartItemImage(item: ApiCartItem): string {
-  return (
+  const image =
+    item.ProductImage ||
     item.ThumbnailImagePath ||
     item.IconImagePath ||
-    item.LargeImagePath ||
-    "/images/product/1000x1000.png"
-  );
+    item.LargeImagePath;
+
+  if (!image || image.includes("noImage")) {
+    return "/images/product/1000x1000.png";
+  }
+
+  return image;
 }
 
 export function getCartItemName(item: ApiCartItem): string {
   return item.ProductName || item.Name || "Product";
 }
 
-export function getCartItemPrice(item: ApiCartItem): number {
-  return item.DiscountedPrice && item.DiscountedPrice > 0
-    ? item.DiscountedPrice
-    : item.Price ?? item.UnitPrice ?? 0;
+export function getCartItemUnitPrice(item: ApiCartItem): number {
+  if (item.DiscountedPrice && item.DiscountedPrice > 0) {
+    return item.DiscountedPrice;
+  }
+  return item.Price ?? item.UnitPrice ?? 0;
 }
 
 export function getCartItemQuantity(item: ApiCartItem): number {
   return item.Quantity ?? 1;
+}
+
+export function getCartItemLineTotal(item: ApiCartItem, quantity?: number): number {
+  const qty = quantity ?? getCartItemQuantity(item);
+  if (item.TotalAmount && item.Quantity && quantity === undefined) {
+    return item.TotalAmount;
+  }
+  return getCartItemUnitPrice(item) * qty;
+}
+
+export function getCartItemVariantsLabel(item: ApiCartItem): string {
+  if (item.ProductVariants) {
+    return item.ProductVariants.replace(/,/g, ", ");
+  }
+
+  if (item.cartItemVariantList?.length) {
+    return item.cartItemVariantList
+      .map((variant) => `${variant.VariantGroup}: ${variant.VariantName}`)
+      .join(" · ");
+  }
+
+  return item.VariantName || "";
+}
+
+export function mapApiCartItemToProductType(item: ApiCartItem): ProductType {
+  const image = getCartItemImage(item);
+  const price = getCartItemUnitPrice(item);
+
+  return {
+    id: String(item.ProductId),
+    productDetailId: item.ProductDetailId,
+    category: item.Category?.CategoryName || "",
+    type: "product",
+    name: getCartItemName(item),
+    gender: "",
+    new: false,
+    sale: Boolean(item.DiscountedPrice && item.DiscountedPrice < price),
+    rate: 5,
+    price,
+    originPrice: item.Price ?? price,
+    brand: "",
+    sold: 0,
+    quantity: getCartItemQuantity(item),
+    quantityPurchase: getCartItemQuantity(item),
+    sizes: item.ProductVariants ? [item.ProductVariants] : [],
+    variation: [],
+    thumbImage: [image],
+    images: [image],
+    description: item.Category?.CategoryDescription || getCartItemVariantsLabel(item),
+    action: "add to cart",
+    slug: String(item.ProductId),
+  };
 }

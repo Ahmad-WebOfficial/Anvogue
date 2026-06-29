@@ -21,13 +21,11 @@ const WishlistReducer = (
 ): WishlistState => {
   switch (action.type) {
     case "ADD_TO_WISHLIST":
-      console.log("Reducer: Adding to state", action.payload);
       return {
         ...state,
         wishlistArray: [...state.wishlistArray, action.payload],
       };
     case "REMOVE_FROM_WISHLIST":
-      console.log("Reducer: Removing from state", action.payload);
       return {
         ...state,
         wishlistArray: state.wishlistArray.filter(
@@ -35,7 +33,6 @@ const WishlistReducer = (
         ),
       };
     case "LOAD_WISHLIST":
-      console.log("Reducer: Loading full list", action.payload);
       return { ...state, wishlistArray: action.payload };
     default:
       return state;
@@ -118,21 +115,17 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const fetchWishlist = async () => {
-    console.log("Fetch: Starting request...");
     try {
       const res = await api.get("/api/v1/Customer/wishlist", {
         params: { PageNumber: 1, PageSize: 10 },
       });
-      console.log("Fetch: Response Data:", res.data);
 
       if (res.data?.Data?.WishItemList) {
         const normalized = res.data.Data.WishItemList.map(
           normalizeWishlistItem,
         ).filter((item) => item.id);
-        console.log("Fetch: Items found:", normalized);
         dispatch({ type: "LOAD_WISHLIST", payload: normalized });
       } else {
-        console.warn("Fetch: WishItemList not found in response.");
       }
     } catch (error) {
       console.error("Fetch: Error occurred:", error);
@@ -144,7 +137,7 @@ useEffect(() => {
     fetchWishlist();
   }, [fetchWishlist]);
   const addToWishlist = async (item: ProductType) => {
-    console.log("Add: Starting for item", item.id);
+    // console.log("Add: Starting for item", item.id);
     try {
       const productDetailId = item.productDetailId ?? item.id;
       const productId = (item.id ?? productDetailId) as any;
@@ -168,14 +161,12 @@ useEffect(() => {
   const removeFromWishlist = async (product: ProductType) => {
     const idToDelete = product.productDetailId || product.id;
 
-    console.log("Remove: Attempting to delete for ID:", idToDelete);
 
     try {
       const res = await api.delete(
         `/api/v1/Customer/RemoveFromWishlistByProduct/wishlist/items/product/${idToDelete}`,
       );
 
-      console.log("Remove: API Response:", res.data);
 
       if (res.data.HttpStatusCode === 200) {
         toast.success("Removed from wishlist!");

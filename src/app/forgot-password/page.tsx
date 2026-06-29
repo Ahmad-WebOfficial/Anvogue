@@ -15,22 +15,19 @@ const ForgotPassword = () => {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const SECURITY_KEY = process.env.NEXT_PUBLIC_SECURITY_KEY;
+  const router = useRouter();
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post(
-        "/api/v1/Account/SendOTP",
-        { PhoneNumber: phone, PhoneCode: 92 },
-        { headers: { "api-security-key": SECURITY_KEY } },
-      );
-      toast.success("OTP sent successfully!");
+      await api.post("/api/v2/Account/SendForgotPasswordEmail", {
+        Username: phone,
+      });
       setStep(2);
-    } catch (err: any) {
-      toast.error(err.response?.data?.Message || "Failed to send OTP");
+      toast.success("OTP sent successfully!");
+    } catch (error) {
+      toast.error("Failed to send code.");
     } finally {
       setLoading(false);
     }
@@ -38,21 +35,17 @@ const ForgotPassword = () => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters long");
-      return;
-    }
     setLoading(true);
     try {
-      await api.post(
-        "/api/v1/Account/ResetPassword",
-        { Username: phone, Password: newPassword, Code: otp },
-        { headers: { "api-security-key": SECURITY_KEY } },
-      );
-      toast.success("Password reset successfully!");
-      window.location.href = "/login";
-    } catch (err: any) {
-      toast.error(err.response?.data?.Message || "Invalid OTP or data");
+      await api.post("/api/v2/Account/ResetPassword", {
+        Username: phone,
+        Password: newPassword,
+        Code: otp,
+      });
+      toast.success("Password reset successful!");
+      router.push("/login");
+    } catch (error) {
+      toast.error("Reset failed. Please check your OTP or Password.");
     } finally {
       setLoading(false);
     }
@@ -85,7 +78,7 @@ const ForgotPassword = () => {
                   <input
                     className="border-line px-4 pt-3 pb-3 w-full rounded-lg border"
                     type="text"
-                    placeholder="Enter Phone Number *"
+                    placeholder="Enter username *"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     required

@@ -12,8 +12,9 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import api from "@/lib/api";
 import { formatRsPrice } from "@/lib/cart";
-import { buildCreateOrderPayload, createOrder, extractOrderId } from "@/lib/order";
+import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse } from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 import toast from "react-hot-toast";
 
 type SelectOption = { Value: string; Text: string };
@@ -62,6 +63,36 @@ const Checkout = () => {
   useEffect(() => {
     void fetchCart();
   }, [fetchCart]);
+
+  useEffect(() => {
+    const prefillProfile = async () => {
+      if (!isAuthenticated()) return;
+
+      try {
+        const res = await api.get("/api/v1/Customer/GetProfile");
+        const profile = res.data?.Data;
+        if (!profile) return;
+
+        const fullName = String(profile.FullName || "").trim();
+        const nameParts = fullName.split(/\s+/).filter(Boolean);
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ");
+
+        setForm((prev) => ({
+          ...prev,
+          firstName: prev.firstName || firstName,
+          lastName: prev.lastName || lastName,
+          email: prev.email || profile.Email || "",
+          phone: prev.phone || profile.PhoneNumber || "",
+          phoneCode: profile.PhoneCode || prev.phoneCode,
+        }));
+      } catch (error) {
+        console.error("Failed to prefill checkout profile:", error);
+      }
+    };
+
+    void prefillProfile();
+  }, []);
 
   useEffect(() => {
     const getCountries = async () => {
@@ -168,11 +199,20 @@ const Checkout = () => {
       const response = await createOrder(payload);
       const newOrderId = extractOrderId(response.Data);
 
-      toast.success(response.Message || "Order created successfully!");
+      let guestLoggedIn = false;
+      if (!isAuthenticated()) {
+        guestLoggedIn = applyGuestAuthFromOrderResponse(response);
+      }
+
+      toast.success(
+        guestLoggedIn
+          ? "Order created successfully! You're now logged in."
+          : response.Message || "Order created successfully!",
+      );
       await fetchCart();
 
       if (newOrderId) {
-        router.push(`/order/${newOrderId}`);
+        router.push(`/order/${newOrderId}?pay=1`);
       } else {
         router.push("/");
       }

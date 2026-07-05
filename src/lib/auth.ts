@@ -85,6 +85,7 @@ export function parseAuthResponse(data: unknown): AuthSessionData | null {
     "expiresIn",
     "ExpiresIn",
     "expires_in",
+    "AccessTokenExpiresIn",
   ]);
 
   const userRole = readNestedValue(source, [

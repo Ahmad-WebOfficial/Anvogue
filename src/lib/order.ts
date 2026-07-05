@@ -1,6 +1,6 @@
 import api from "@/lib/api";
 import { getCartSessionId } from "@/lib/cart";
-import { isAuthenticated } from "@/lib/auth";
+import { setAuthSessionFromResponse } from "@/lib/auth";
 
 export interface ShippingDetailPayload {
   FullName: string;
@@ -13,6 +13,7 @@ export interface ShippingDetailPayload {
   ISOCode: string;
   City: string;
   AddressBookId: number;
+  AreaId: number;
   Longitude: string;
   Latitude: string;
 }
@@ -131,6 +132,24 @@ export interface PaymentGateway {
   Name: string;
 }
 
+function normalizePaymentGateways(gateways: unknown): PaymentGateway[] {
+  if (!Array.isArray(gateways)) return [];
+
+  return gateways
+    .map((gateway) => {
+      const item = gateway as Record<string, unknown>;
+      const pgId = Number(
+        item.PGId ?? item.PgId ?? item.pgId ?? item.Value ?? 0,
+      );
+      const name = String(
+        item.Name ?? item.DisplayName ?? item.name ?? "Payment",
+      );
+
+      return { PGId: pgId, Name: name };
+    })
+    .filter((gateway) => gateway.PGId > 0);
+}
+
 export interface SelectPaymentData {
   OrderDto: OrderDetailData;
   PaymentMethodCampaignList: unknown[];
@@ -162,6 +181,36 @@ export function extractOrderId(data: unknown): number | null {
   return null;
 }
 
+function extractLoginTokenModel(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null;
+
+  const root = data as Record<string, unknown>;
+  const orderData = (root.Data ?? root) as Record<string, unknown>;
+  const userInfo = orderData?.UserInfoDto;
+
+  if (!userInfo || typeof userInfo !== "object") return null;
+
+  const tokenModel = (userInfo as Record<string, unknown>)
+    .LoginTokenResponseModel;
+
+  if (!tokenModel || typeof tokenModel !== "object") return null;
+
+  return tokenModel as Record<string, unknown>;
+}
+
+/** Log in a guest customer using tokens returned from order creation. */
+export function applyGuestAuthFromOrderResponse(data: unknown): boolean {
+  const tokenModel = extractLoginTokenModel(data);
+  if (!tokenModel) return false;
+
+  return setAuthSessionFromResponse({
+    AccessToken: tokenModel.AccessToken,
+    RefreshToken: tokenModel.RefreshToken,
+    AccessTokenExpiresIn: tokenModel.AccessTokenExpiresIn,
+    UserRole: tokenModel.UserRole,
+  });
+}
+
 export function buildCreateOrderPayload(
   values: CreateOrderFormValues,
 ): CreateOrderPayload {
@@ -182,6 +231,7 @@ export function buildCreateOrderPayload(
       ISOCode: values.isoCode || "PK",
       City: values.cityName || "",
       AddressBookId: 0,
+      AreaId: Number(values.areaId) || 0,
       Longitude: "",
       Latitude: "",
     },
@@ -190,7 +240,7 @@ export function buildCreateOrderPayload(
       Phone: values.phone.trim(),
       FullName: fullName,
     },
-    SessionId: isAuthenticated() ? "" : getCartSessionId(),
+    SessionId: getCartSessionId(),
     BranchId: Number(values.branchId) || 0,
     DeliveryDate: values.deliveryDate
       ? new Date(values.deliveryDate).toISOString()
@@ -244,7 +294,12 @@ export async function fetchSelectPayment(
     throw new Error("Payment options not found.");
   }
 
-  return response.data.Data;
+  const data = response.data.Data;
+
+  return {
+    ...data,
+    PaymentGateways: normalizePaymentGateways(data.PaymentGateways),
+  };
 }
 
 export async function cancelCustomerOrder(orderId: number): Promise<string> {
@@ -255,6 +310,222 @@ export async function cancelCustomerOrder(orderId: number): Promise<string> {
   );
 
   return response.data?.Message || "Order cancelled successfully.";
+}
+
+export interface PayInvoicePayload {
+  OrderId: number;
+  OrderAmount: number;
+  TenantPaymentGatewayId: number;
+  PaymentGateway: number;
+  ReturnUrl?: string;
+}
+
+export function getStripePaymentReturnUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const base =
+    configured ||
+    (typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3000");
+
+  return `${base.replace(/\/$/, "")}/PaymentResponse/stripe`;
+}
+
+export interface PayInvoiceData {
+  Transaction: {
+    PaymentPortal: string | null;
+    TransactionID?: string;
+    BillUrl?: string | null;
+    ReturnUrl?: string | null;
+  };
+  IsOpenNewTab: boolean;
+  PaymentGateway?: {
+    Value: number;
+    Name: string;
+    DisplayName: string;
+  };
+  GatewayDescription?: string;
+}
+
+interface PayInvoiceResponse {
+  Message?: string;
+  StatusCode?: number;
+  Data?: PayInvoiceData;
+}
+
+export async function payInvoice(
+  payload: PayInvoicePayload,
+): Promise<PayInvoiceData> {
+  const response = await api.post<PayInvoiceResponse>(
+    "/api/v1/Payment/payinvoice",
+    {
+      ...payload,
+      ReturnUrl: payload.ReturnUrl ?? getStripePaymentReturnUrl(),
+    },
+  );
+
+  const body = response.data;
+  const data = (body?.Data ?? body) as PayInvoiceData | undefined;
+
+  if (data?.Transaction) {
+    return data;
+  }
+
+  throw new Error(body?.Message || "Failed to process payment invoice.");
+}
+
+export function getPaymentPortalUrl(data: PayInvoiceData): string | null {
+  const portal = data.Transaction?.PaymentPortal?.trim();
+  if (portal) return portal;
+
+  const billUrl = data.Transaction?.BillUrl?.trim();
+  if (billUrl) return billUrl;
+
+  return null;
+}
+
+export const PENDING_PAYMENT_ORDER_KEY = "pending_payment_order_id";
+export const PENDING_PAYMENT_TRANSACTION_KEY = "pending_payment_transaction_id";
+
+export interface StripePaymentConfirmResult {
+  message: string;
+  orderId: number | null;
+  orderNumber: string | null;
+  paymentStatus: string | null;
+  transactionId: string | null;
+  isSuccess: boolean;
+}
+
+function readNestedValue(
+  source: Record<string, unknown>,
+  keys: string[],
+): unknown {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+  return undefined;
+}
+
+function parseStripeConfirmResponse(data: unknown): StripePaymentConfirmResult {
+  const body = (data && typeof data === "object" ? data : {}) as Record<
+    string,
+    unknown
+  >;
+  const nested = (
+    body.Data && typeof body.Data === "object"
+      ? body.Data
+      : body.data && typeof body.data === "object"
+        ? body.data
+        : body
+  ) as Record<string, unknown>;
+
+  const orderIdRaw = readNestedValue(nested, ["OrderId", "orderId"]);
+  const orderId =
+    typeof orderIdRaw === "number"
+      ? orderIdRaw
+      : typeof orderIdRaw === "string"
+        ? Number(orderIdRaw) || null
+        : null;
+
+  const message = String(
+    readNestedValue(body, ["Message", "message"]) ??
+      readNestedValue(nested, ["Message", "message"]) ??
+      "Payment processed successfully.",
+  );
+
+  const orderNumber = String(
+    readNestedValue(nested, ["OrderNumber", "orderNumber"]) ?? "",
+  );
+
+  const paymentStatus = String(
+    readNestedValue(nested, [
+      "PaymentStatusDisplayName",
+      "PaymentStatus",
+      "paymentStatus",
+    ]) ?? "",
+  );
+
+  const transactionId = String(
+    readNestedValue(nested, [
+      "TransactionID",
+      "TransactionId",
+      "transactionId",
+    ]) ?? "",
+  );
+
+  const statusCode = Number(body.StatusCode ?? body.HttpStatusCode ?? 0);
+  const type = String(body.Type ?? "").toLowerCase();
+  const isSuccess =
+    type === "success" ||
+    statusCode === 200 ||
+    message.toLowerCase().includes("success") ||
+    message.toLowerCase().includes("confirmed") ||
+    message.toLowerCase().includes("processed");
+
+  return {
+    message,
+    orderId: orderId && !Number.isNaN(orderId) ? orderId : null,
+    orderNumber: orderNumber || null,
+    paymentStatus: paymentStatus || null,
+    transactionId: transactionId || null,
+    isSuccess,
+  };
+}
+
+const STRIPE_CONFIRM_ENDPOINTS = [
+  "/PaymentResponse/stripe",
+  "/api/v1/Payment/PaymentResponse/stripe",
+  "/api/v1/Payment/stripe-response",
+];
+
+export async function confirmStripePayment(
+  sessionId: string,
+): Promise<StripePaymentConfirmResult | null> {
+  for (const endpoint of STRIPE_CONFIRM_ENDPOINTS) {
+    try {
+      const response = await api.get(endpoint, {
+        params: { sessionId },
+      });
+      return parseStripeConfirmResponse(response.data);
+    } catch {
+      // Backend may not expose this as a JSON API — Stripe redirect is enough.
+    }
+  }
+
+  return null;
+}
+
+export function savePendingPaymentOrderId(orderId: number): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PENDING_PAYMENT_ORDER_KEY, String(orderId));
+}
+
+export function savePendingPaymentTransactionId(transactionId: string): void {
+  if (typeof window === "undefined") return;
+  const value = transactionId.trim();
+  if (!value) return;
+  localStorage.setItem(PENDING_PAYMENT_TRANSACTION_KEY, value);
+}
+
+export function getPendingPaymentOrderId(): number | null {
+  if (typeof window === "undefined") return null;
+  const value = localStorage.getItem(PENDING_PAYMENT_ORDER_KEY);
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+export function getPendingPaymentTransactionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(PENDING_PAYMENT_TRANSACTION_KEY);
+}
+
+export function clearPendingPaymentOrderId(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(PENDING_PAYMENT_ORDER_KEY);
+  localStorage.removeItem(PENDING_PAYMENT_TRANSACTION_KEY);
 }
 
 export function getDeliveryOptionLabel(option: number): string {

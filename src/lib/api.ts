@@ -59,7 +59,23 @@ const MESSAGE_KEYS = [
 ] as const;
 
 function collectValidationMessages(errors: unknown): string[] {
-  if (!errors || typeof errors !== "object") return [];
+  if (!errors) return [];
+
+  if (Array.isArray(errors)) {
+    return errors.flatMap((item) => {
+      if (typeof item === "string" && item.trim()) return [item.trim()];
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const message = record.Message ?? record.message;
+        if (typeof message === "string" && message.trim()) {
+          return [message.trim()];
+        }
+      }
+      return [];
+    });
+  }
+
+  if (typeof errors !== "object") return [];
 
   return Object.values(errors as Record<string, unknown>).flatMap((value) => {
     if (Array.isArray(value)) {
@@ -93,16 +109,18 @@ export function getApiErrorMessage(
     if (data && typeof data === "object") {
       const body = data as Record<string, unknown>;
 
+      const validationMessages = collectValidationMessages(
+        body.errors ?? body.Errors,
+      );
+      if (validationMessages.length > 0) {
+        return validationMessages.join(" ");
+      }
+
       for (const key of MESSAGE_KEYS) {
         const value = body[key];
         if (typeof value === "string" && value.trim()) {
           return value.trim();
         }
-      }
-
-      const validationMessages = collectValidationMessages(body.errors);
-      if (validationMessages.length > 0) {
-        return validationMessages.join(" ");
       }
 
       if (body.success === false) {

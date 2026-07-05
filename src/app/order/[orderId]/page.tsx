@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import TopNavOne from "@/components/Header/TopNav/TopNavOne";
 import MenuOne from "@/components/Header/Menu/MenuOne";
 import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
@@ -16,8 +16,13 @@ import {
   fetchSelectPayment,
   formatOrderDate,
   getDeliveryOptionLabel,
+  getPaymentPortalUrl,
+  getStripePaymentReturnUrl,
   OrderDetailData,
+  payInvoice,
   PaymentGateway,
+  savePendingPaymentOrderId,
+  savePendingPaymentTransactionId,
   SelectPaymentData,
 } from "@/lib/order";
 import { getProductDetailUrl } from "@/lib/featured-products";
@@ -26,7 +31,9 @@ import toast from "react-hot-toast";
 
 const OrderDetailsPage = () => {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orderId = Number(params.orderId);
+  const autopayTriggered = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -37,6 +44,7 @@ const OrderDetailsPage = () => {
   );
   const [selectedGateway, setSelectedGateway] = useState<number | null>(null);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const loadOrder = async () => {
     if (!orderId || Number.isNaN(orderId)) {
@@ -49,13 +57,25 @@ const OrderDetailsPage = () => {
     setError("");
 
     try {
-      const [orderDetails, paymentOptions] = await Promise.all([
-        fetchCustomerOrderDetails(orderId),
-        fetchSelectPayment(orderId),
-      ]);
-
+      const orderDetails = await fetchCustomerOrderDetails(orderId);
       setOrder(orderDetails);
-      setPaymentData(paymentOptions);
+
+      try {
+        const paymentOptions = await fetchSelectPayment(orderId);
+        setPaymentData(paymentOptions);
+
+        if (paymentOptions.PaymentGateways.length > 0) {
+          setSelectedGateway(paymentOptions.PaymentGateways[0].PGId);
+        }
+      } catch (paymentErr) {
+        console.error("Failed to load payment options:", paymentErr);
+        toast.error(
+          getApiErrorMessage(
+            paymentErr,
+            "Payment methods could not be loaded.",
+          ),
+        );
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to load order details."));
     } finally {
@@ -88,14 +108,92 @@ const OrderDetailsPage = () => {
     }
   };
 
+  const displayOrder = paymentData?.OrderDto ?? order;
+  const gateways = paymentData?.PaymentGateways ?? [];
+  const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
+
   const handleSelectPayment = (gateway: PaymentGateway) => {
     setSelectedGateway(gateway.PGId);
     toast.success(`${gateway.Name} selected as payment method.`);
   };
 
-  const displayOrder = paymentData?.OrderDto ?? order;
-  const gateways = paymentData?.PaymentGateways ?? [];
-  const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
+  const processPayment = useCallback(
+    async (gatewayId?: number | null) => {
+      const currentOrder = paymentData?.OrderDto ?? order;
+      const gatewayList = paymentData?.PaymentGateways ?? [];
+      const resolvedGatewayId =
+        gatewayId ?? selectedGateway ?? gatewayList[0]?.PGId ?? null;
+
+      if (!currentOrder) {
+        toast.error("Order details are not available.");
+        return;
+      }
+
+      if (!resolvedGatewayId) {
+        toast.error("Please select a payment method first.");
+        return;
+      }
+
+      if (!selectedGateway) {
+        setSelectedGateway(resolvedGatewayId);
+      }
+
+      setPaying(true);
+      try {
+        const paymentResult = await payInvoice({
+          OrderId: currentOrder.OrderId,
+          OrderAmount: currentOrder.NetAmount,
+          TenantPaymentGatewayId: resolvedGatewayId,
+          PaymentGateway: resolvedGatewayId,
+          ReturnUrl: getStripePaymentReturnUrl(),
+        });
+
+        const paymentUrl = getPaymentPortalUrl(paymentResult);
+        if (!paymentUrl) {
+          toast.error("Payment URL not received. Please try again.");
+          return;
+        }
+
+        savePendingPaymentOrderId(currentOrder.OrderId);
+        const transactionId = paymentResult.Transaction?.TransactionID?.trim();
+        if (transactionId) {
+          savePendingPaymentTransactionId(transactionId);
+        }
+        window.open(paymentUrl, "_blank", "noopener,noreferrer");
+        toast.success("Redirecting to payment gateway...");
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, "Failed to process payment."));
+      } finally {
+        setPaying(false);
+      }
+    },
+    [order, paymentData, selectedGateway],
+  );
+
+  const handlePayNow = () => {
+    void processPayment();
+  };
+
+  useEffect(() => {
+    const shouldAutopay = searchParams.get("pay") === "1";
+    if (
+      !shouldAutopay ||
+      autopayTriggered.current ||
+      loading ||
+      paying ||
+      !(paymentData?.OrderDto ?? order)
+    ) {
+      return;
+    }
+
+    const gatewayList = paymentData?.PaymentGateways ?? [];
+    if (gatewayList.length === 0) return;
+
+    autopayTriggered.current = true;
+    void processPayment(gatewayList[0].PGId);
+  }, [loading, paying, order, paymentData, processPayment, searchParams]);
+
+  const canPay = gateways.length > 0 && !isCancelled;
 
   return (
     <>
@@ -332,6 +430,15 @@ const OrderDetailsPage = () => {
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
+                    onClick={handlePayNow}
+                    disabled={paying || !canPay}
+                    className="button-main inline-flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Icon.CreditCard size={18} />
+                    {paying ? "Processing Payment..." : "Pay Now"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void handleCancelOrder()}
                     disabled={cancelling || isCancelled}
                     className="px-6 py-3 rounded-full border border-red text-red hover:bg-red hover:text-white transition-colors disabled:opacity-50"
@@ -342,7 +449,10 @@ const OrderDetailsPage = () => {
                         ? "Order Cancelled"
                         : "Cancel Order"}
                   </button>
-                  <Link href="/" className="button-main inline-flex items-center">
+                  <Link
+                    href="/"
+                    className="px-6 py-3 rounded-full border border-line hover:border-black transition-colors inline-flex items-center"
+                  >
                     Continue Shopping
                   </Link>
                 </div>
@@ -396,6 +506,21 @@ const OrderDetailsPage = () => {
                       Selected:{" "}
                       {gateways.find((g) => g.PGId === selectedGateway)?.Name}
                     </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handlePayNow}
+                    disabled={paying || !canPay}
+                    className="button-main w-full mt-4 disabled:opacity-50"
+                  >
+                    {paying ? "Processing Payment..." : "Proceed to Payment"}
+                  </button>
+
+                  {!selectedGateway && gateways.length > 0 && (
+                    <p className="caption2 text-secondary text-center mt-2">
+                      Select a payment method above to continue
+                    </p>
                   )}
                 </div>
               </div>

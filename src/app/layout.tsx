@@ -10,6 +10,7 @@ import ModalCompare from "@/components/Modal/ModalCompare";
 import CountdownTimeType from "@/type/CountdownType";
 import { Toaster } from "react-hot-toast";
 import { countdownTime } from "@/store/countdownTime";
+import LandingSeo from "@/components/Common/LandingSeo";
 
 const serverTimeLeft: CountdownTimeType = countdownTime();
 
@@ -33,6 +34,7 @@ export default function RootLayout({
     <GlobalProvider>
       <html lang="en">
         <body className={instrument.className}>
+          <LandingSeo />
           {children}
           <Toaster position="top-center" />
           <ModalCart serverTimeLeft={serverTimeLeft} />

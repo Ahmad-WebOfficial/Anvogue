@@ -69,8 +69,8 @@ const Checkout = () => {
       if (!isAuthenticated()) return;
 
       try {
-        const res = await api.get("/api/v1/Customer/GetProfile");
-        const profile = res.data?.Data;
+const res = await api.get<any>("/api/v1/Customer/GetProfile");
+        const profile = (res.data as any)?.Data;
         if (!profile) return;
 
         const fullName = String(profile.FullName || "").trim();

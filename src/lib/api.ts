@@ -7,10 +7,10 @@ import {
 } from "@/lib/auth-keys";
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_KEY,
+  baseURL: process.env.NEXT_PUBLIC_API_KEY?.trim(),
   headers: {
     "Content-Type": "application/json",
-    "api-security-key": process.env.NEXT_PUBLIC_SECURITY_KEY,
+    "api-security-key": process.env.NEXT_PUBLIC_SECURITY_KEY?.trim() ?? "",
   },
 });
 

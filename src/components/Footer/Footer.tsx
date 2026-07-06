@@ -2,6 +2,8 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import LandingFooterImage from '@/components/Home1/LandingFooterImage'
+import TenantLogo from '@/components/Common/TenantLogo'
 
 const Footer = () => {
     return (
@@ -9,11 +11,10 @@ const Footer = () => {
             <div id="footer" className='footer'>
                 <div className="footer-main bg-surface">
                     <div className="container">
+                        <LandingFooterImage />
                         <div className="content-footer py-[60px] flex justify-between flex-wrap gap-y-8">
                             <div className="company-infor basis-1/4 max-lg:basis-full pr-7">
-                                <Link href={'/'} className="logo">
-                                    <div className="heading4">Anvogue</div>
-                                </Link>
+                                <TenantLogo className="logo" />
                                 <div className='flex gap-3 mt-3'>
                                     <div className="flex flex-col ">
                                         <span className="text-button">Mail:</span>

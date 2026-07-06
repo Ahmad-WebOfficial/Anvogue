@@ -10,6 +10,7 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { formatRsPrice } from "@/lib/cart";
+import { useRouter } from "next/navigation";
 import {
   cancelCustomerOrder,
   fetchCustomerOrderDetails,
@@ -45,6 +46,7 @@ const OrderDetailsPage = () => {
   const [selectedGateway, setSelectedGateway] = useState<number | null>(null);
   const [isCancelled, setIsCancelled] = useState(false);
   const [paying, setPaying] = useState(false);
+  const router = useRouter();
 
   const loadOrder = async () => {
     if (!orderId || Number.isNaN(orderId)) {
@@ -101,6 +103,7 @@ const OrderDetailsPage = () => {
       toast.success(message);
       setIsCancelled(true);
       await loadOrder();
+      router.push("/");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Failed to cancel order."));
     } finally {
@@ -230,7 +233,9 @@ const OrderDetailsPage = () => {
                       <div className="caption2 text-secondary uppercase">
                         Order Number
                       </div>
-                      <h1 className="heading4 mt-1">{displayOrder.OrderNumber}</h1>
+                      <h1 className="heading4 mt-1">
+                        {displayOrder.OrderNumber}
+                      </h1>
                       <p className="caption1 text-secondary mt-2">
                         Order ID: {displayOrder.OrderId}
                       </p>
@@ -252,13 +257,17 @@ const OrderDetailsPage = () => {
 
                   <div className="grid sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-line">
                     <div>
-                      <div className="caption2 text-secondary">Delivery Date</div>
+                      <div className="caption2 text-secondary">
+                        Delivery Date
+                      </div>
                       <div className="text-button mt-1">
                         {formatOrderDate(displayOrder.DeliveryDate)}
                       </div>
                     </div>
                     <div>
-                      <div className="caption2 text-secondary">Delivery Option</div>
+                      <div className="caption2 text-secondary">
+                        Delivery Option
+                      </div>
                       <div className="text-button mt-1">
                         {getDeliveryOptionLabel(displayOrder.DeliveryOption)}
                       </div>
@@ -279,7 +288,6 @@ const OrderDetailsPage = () => {
                   </div>
                 </div>
 
-                {/* Order items */}
                 <div className="bg-white border border-line rounded-2xl p-6">
                   <h2 className="heading6 mb-4">Order Items</h2>
                   <div className="space-y-4">
@@ -347,7 +355,6 @@ const OrderDetailsPage = () => {
                   </div>
                 </div>
 
-                {/* Shipping & Billing */}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="bg-surface border border-line rounded-2xl p-6">
                     <h3 className="heading6 mb-4">Shipping Address</h3>
@@ -376,7 +383,6 @@ const OrderDetailsPage = () => {
                   </div>
                 </div>
 
-                {/* Instructions */}
                 {(displayOrder.SpecialInstructions ||
                   displayOrder.DeliveryInstructions) && (
                   <div className="bg-surface border border-line rounded-2xl p-6">
@@ -404,7 +410,6 @@ const OrderDetailsPage = () => {
                   </div>
                 )}
 
-                {/* Payment methods */}
                 {gateways.length > 0 && (
                   <div className="bg-white border border-line rounded-2xl p-6">
                     <h2 className="heading6 mb-1">Select Payment Method</h2>
@@ -426,13 +431,12 @@ const OrderDetailsPage = () => {
                   </div>
                 )}
 
-                {/* Cancel order */}
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center items-center w-full">
                   <button
                     type="button"
                     onClick={handlePayNow}
                     disabled={paying || !canPay}
-                    className="button-main inline-flex items-center gap-2 disabled:opacity-50"
+                    className="button-main bg-black inline-flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto px-6 py-4 rounded-full text-white"
                   >
                     <Icon.CreditCard size={18} />
                     {paying ? "Processing Payment..." : "Pay Now"}
@@ -441,7 +445,7 @@ const OrderDetailsPage = () => {
                     type="button"
                     onClick={() => void handleCancelOrder()}
                     disabled={cancelling || isCancelled}
-                    className="px-6 py-3 rounded-full border border-red text-red hover:bg-red hover:text-white transition-colors disabled:opacity-50"
+                    className="w-full sm:w-auto px-6 py-3 rounded-full border border-red text-red hover:bg-red hover:text-white transition-colors disabled:opacity-50 flex justify-center items-center text-center"
                   >
                     {cancelling
                       ? "Cancelling..."
@@ -451,14 +455,15 @@ const OrderDetailsPage = () => {
                   </button>
                   <Link
                     href="/"
-                    className="px-6 py-3 rounded-full border border-line hover:border-black transition-colors inline-flex items-center"
+                    className="w-full sm:w-auto px-6 py-3 rounded-full text-center border border-line 
+               hover:border-black hover:bg-black hover:text-white 
+               transition-all duration-300 flex justify-center items-center"
                   >
                     Continue Shopping
                   </Link>
                 </div>
               </div>
 
-              {/* Order summary sidebar */}
               <div className="w-full xl:w-1/3">
                 <div className="bg-surface border border-line rounded-2xl p-6 sticky top-24">
                   <h2 className="heading6 mb-4">Order Summary</h2>
@@ -512,7 +517,7 @@ const OrderDetailsPage = () => {
                     type="button"
                     onClick={handlePayNow}
                     disabled={paying || !canPay}
-                    className="button-main w-full mt-4 disabled:opacity-50"
+                    className="button-main w-full mt-4 bg-black disabled:opacity-50"
                   >
                     {paying ? "Processing Payment..." : "Proceed to Payment"}
                   </button>

@@ -1,4 +1,4 @@
-import React from 'react'
+import type { Metadata } from 'next'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import SliderOne from '@/components/Slider/SliderOne'
@@ -14,6 +14,25 @@ import Instagram from '@/components/Home1/Instagram'
 import Brand from '@/components/Home1/Brand'
 import Footer from '@/components/Footer/Footer'
 import ModalNewsletter from '@/components/Modal/ModalNewsletter'
+import LandingYoutube from '@/components/Home1/LandingYoutube'
+import { fetchTenantLanding } from '@/lib/tenant-landing'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const landing = await fetchTenantLanding()
+
+  if (!landing?.Seo) {
+    return {
+      title: 'Anvogue',
+      description: 'Multipurpose eCommerce Template',
+    }
+  }
+
+  return {
+    title: landing.Seo.MetaTitle || 'Anvogue',
+    description: landing.Seo.MetaDescription || undefined,
+    keywords: landing.Seo.MetaKeywords || undefined,
+  }
+}
 
 export default function Home() {
   return (
@@ -28,6 +47,7 @@ export default function Home() {
       <TabFeatures data={productData} start={0} limit={6} />
       <Banner />
       <Benefit props="md:py-20 py-10" />
+      <LandingYoutube />
       <Testimonial data={testimonialData} limit={6} />
       <Instagram />
       <Brand />

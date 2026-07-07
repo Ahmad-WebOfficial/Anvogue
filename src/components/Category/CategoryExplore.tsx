@@ -12,7 +12,9 @@ import {
 } from "@/lib/categories";
 import { getApiErrorMessage } from "@/lib/api";
 import CategoryDetailCard from "@/components/Home1/CategoryDetailCard";
+import CategorySwiper from "@/components/Home1/CategorySwiper";
 import CategoryProducts from "@/components/Category/CategoryProducts";
+import { CategorySiblingLinks } from "@/components/Category/CategoryQuickLinks";
 
 interface CategoryExploreProps {
   categoryId: number;
@@ -50,6 +52,8 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
 
   const currentCategory = findCategoryById(categories, categoryId);
   const breadcrumb = getCategoryBreadcrumb(categories, categoryId);
+  const parentCategory =
+    breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2] : null;
   const childCategories = currentCategory
     ? getVisibleChildren(currentCategory)
     : [];
@@ -101,21 +105,28 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
   return (
     <div className="category-explore md:py-20 py-10">
       <div className="container">
-        <nav className="flex flex-wrap items-center gap-2 text-secondary mb-8">
-          <Link href="/" className="hover:text-black duration-300">
+        <nav className="flex items-center gap-2 text-secondary mb-6 overflow-x-auto pb-2 scrollbar-hide whitespace-nowrap">
+          <Link href="/" className="hover:text-black duration-300 shrink-0">
             Home
+          </Link>
+          <Icon.CaretRight size={14} className="shrink-0" />
+          <Link
+            href="/categories"
+            className="hover:text-black duration-300 shrink-0"
+          >
+            Categories
           </Link>
           {breadcrumb.map((item, index) => {
             const isLast = index === breadcrumb.length - 1;
             return (
               <React.Fragment key={item.CategoryId}>
-                <Icon.CaretRight size={14} />
+                <Icon.CaretRight size={14} className="shrink-0" />
                 {isLast ? (
-                  <span className="text-black">{item.Name}</span>
+                  <span className="text-black shrink-0">{item.Name}</span>
                 ) : (
                   <Link
                     href={`/category/${item.CategoryId}`}
-                    className="hover:text-black duration-300"
+                    className="hover:text-black duration-300 shrink-0"
                   >
                     {item.Name}
                   </Link>
@@ -125,7 +136,14 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
           })}
         </nav>
 
-        <CategoryDetailCard category={currentCategory} variant="hero" />
+        <CategorySiblingLinks
+          parent={parentCategory}
+          activeCategoryId={currentCategory.CategoryId}
+        />
+
+        <div className="mt-6">
+          <CategoryDetailCard category={currentCategory} variant="hero" />
+        </div>
 
         {childCategories.length > 0 && (
           <div id="category-subcategories" className="md:mt-14 mt-10">
@@ -133,14 +151,19 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
               <div>
                 <div className="heading4">Subcategories</div>
                 <p className="body1 text-secondary mt-2">
-                  Select a subcategory to continue exploring.
+                  Choose a subcategory to continue in sequence.
                 </p>
               </div>
               <span className="caption1 text-secondary">
                 {childCategories.length} available
               </span>
             </div>
-            <div className="grid xl:grid-cols-3 lg:grid-cols-2 grid-cols-1 gap-6 md:mt-8 mt-6">
+
+            <div className="md:hidden mt-6">
+              <CategorySwiper categories={childCategories} />
+            </div>
+
+            <div className="hidden md:grid xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-6 md:mt-8 mt-6">
               {childCategories.map((child) => (
                 <CategoryDetailCard
                   key={child.CategoryId}
@@ -158,8 +181,7 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
               <div>
                 <div className="heading4">Products</div>
                 <p className="body1 text-secondary mt-2">
-                  Browse products in {currentCategory.Name}. Click a product to
-                  view details and add to cart.
+                  Browse products in {currentCategory.Name}.
                 </p>
               </div>
             </div>

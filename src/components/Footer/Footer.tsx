@@ -50,7 +50,8 @@ const Footer = () => {
                                         <div className="text-button-uppercase pb-3">Customer Services</div>
                                         <Link className='caption1 has-line-before duration-300 w-fit' href={'/pages/faqs'}>Orders FAQs</Link>
                                         <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Shipping</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Privacy Policy</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/terms-and-conditions'}>Terms & Conditions</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/privacy-policy'}>Privacy Policy</Link>
                                         <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/order-tracking'}>Return & Refund</Link>
                                     </div>
                                 </div>

@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { getProductDetailUrl } from "@/lib/featured-products";
 
 export interface TenantLandingSeo {
   MetaTitle: string;
@@ -63,11 +64,16 @@ export function getActiveBanners(
     .sort((a, b) => Number(a.SortOrder) - Number(b.SortOrder));
 }
 
+export function isBannerClickable(banner: TenantBanner): boolean {
+  const value = banner.Clickable as unknown;
+  return value === true || value === 1 || value === "true";
+}
+
 export function getBannerLink(banner: TenantBanner): string | null {
-  if (!banner.Clickable) return null;
+  if (!isBannerClickable(banner)) return null;
 
   if (banner.ProductId) {
-    return `/product/default?productId=${banner.ProductId}`;
+    return getProductDetailUrl(banner.ProductId);
   }
 
   if (banner.CategoryId > 0) {
@@ -75,6 +81,30 @@ export function getBannerLink(banner: TenantBanner): string | null {
   }
 
   return null;
+}
+
+export function getAllPlatformBanners(
+  data: TenantBannersData | null | undefined,
+): TenantBanner[] {
+  const web = getActiveBanners(data?.WebPlateFormBanners);
+  const mobile = getActiveBanners(data?.MobilePlateFormBanners);
+
+  return [...web, ...mobile].sort(
+    (a, b) =>
+      Number(a.SortOrder) - Number(b.SortOrder) || a.BannerId - b.BannerId,
+  );
+}
+
+export async function fetchTenantBannersData(): Promise<TenantBannersData | null> {
+  try {
+    const response = await api.get<TenantBannersResponse>(
+      "/api/v1/TenantLanding/banners",
+    );
+    return response.data?.Data ?? null;
+  } catch (error) {
+    console.error("Failed to fetch tenant banners:", error);
+    return null;
+  }
 }
 
 export function isLandingImageEnabled(flag: number | undefined): boolean {
@@ -118,19 +148,7 @@ export async function fetchTenantLanding(): Promise<TenantLandingData | null> {
   }
 }
 
-export async function fetchTenantBanners(): Promise<TenantBanner[] | null> {
-  try {
-    const response = await api.get<TenantBannersResponse>(
-      "/api/v1/TenantLanding/banners",
-    );
-    
-    // Sirf Web Banners return karein
-    const webBanners = response.data?.Data?.WebPlateFormBanners ?? [];
-    console.log("Using Web Banners Only:", webBanners);
-    
-    return webBanners;
-  } catch (error) {
-    console.error("Failed to fetch tenant banners:", error);
-    return null;
-  }
+export async function fetchTenantBanners(): Promise<TenantBanner[]> {
+  const data = await fetchTenantBannersData();
+  return getActiveBanners(data?.WebPlateFormBanners);
 }

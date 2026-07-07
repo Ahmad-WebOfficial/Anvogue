@@ -33,7 +33,7 @@ const CategoryDetailCard: React.FC<CategoryDetailCardProps> = ({
   if (variant === "hero") {
     return (
       <div className="category-hero rounded-3xl overflow-hidden border border-line bg-white">
-        <div className="relative aspect-[16/7] w-full">
+        <div className="relative aspect-[16/9] sm:aspect-[16/8] md:aspect-[16/7] w-full">
           <Image
             src={getCategoryImage(category)}
             alt={category.Name}

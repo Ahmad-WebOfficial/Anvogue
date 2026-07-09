@@ -44,9 +44,7 @@ interface BlogDetailResponse {
   Message?: string;
 }
 
-function extractNewsEvent(
-  data: BlogDetailResponse["Data"],
-): NewsEvent | null {
+function extractNewsEvent(data: BlogDetailResponse["Data"]): NewsEvent | null {
   if (!data) return null;
 
   if ("NewsEventsList" in data && Array.isArray(data.NewsEventsList)) {

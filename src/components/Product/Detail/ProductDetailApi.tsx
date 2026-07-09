@@ -25,6 +25,7 @@ import {
   formatRsPrice,
   parseVariantGroupOptions,
   findVariantByGroupSelection,
+  saveProductRating,
   ProductDetailData,
   ProductVariantCombination,
   RelatedProduct,
@@ -35,6 +36,7 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
+import { toast } from "react-hot-toast";
 
 interface Props {
   productId: string;
@@ -54,9 +56,15 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"description" | "details">(
+  const [activeTab, setActiveTab] = useState<"description" | "rating">(
     "description",
   );
+  const [ratingValue, setRatingValue] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingSuccess, setRatingSuccess] = useState<string | null>(null);
+  const [ratingError, setRatingError] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [mainSwiper, setMainSwiper] = useState<SwiperType | null>(null);
 
@@ -129,6 +137,15 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   useEffect(() => {
     setActiveImageIndex(0);
   }, [selectedVariant?.ProductDetailId, productDetail?.ProductId]);
+
+  useEffect(() => {
+    setRatingValue(0);
+    setHoverRating(0);
+    setReviewText("");
+    setRatingSuccess(null);
+    setRatingError(null);
+    setActiveTab("description");
+  }, [productId, productDetailId]);
 
   if (loading) {
     return (
@@ -263,6 +280,62 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   const handleRelatedProductClick = (related: RelatedProduct) => {
     router.push(getProductDetailUrl(related.ProductId));
   };
+
+  const reloadProductDetails = async () => {
+    const detail = await fetchProductDetails(
+      Number(productId),
+      productDetailId ? Number(productDetailId) : undefined,
+    );
+    setProductDetail(detail);
+  };
+
+  const handleSubmitRating = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!productDetail) return;
+
+    if (ratingValue < 1) {
+      setRatingError("Please select a star rating.");
+      return;
+    }
+
+    const trimmedReview = reviewText.trim();
+    if (!trimmedReview) {
+      setRatingError("Please write your review.");
+      return;
+    }
+
+    setSubmittingRating(true);
+    setRatingError(null);
+    setRatingSuccess(null);
+
+    try {
+      const result = await saveProductRating({
+        Rating: ratingValue,
+        Review: trimmedReview,
+        ProductId: productDetail.ProductId,
+      });
+
+      setRatingSuccess(result.message);
+      setRatingValue(0);
+      setHoverRating(0);
+      setReviewText("");
+      toast.success(result.message);
+
+      try {
+        await reloadProductDetails();
+      } catch {
+        // Rating saved; refresh is best-effort only.
+      }
+    } catch (err) {
+      const message = getApiErrorMessage(err, "Failed to submit rating.");
+      setRatingError(message);
+      toast.error(message);
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  const displayRating = hoverRating || ratingValue;
 
   return (
     <div className="product-detail default">
@@ -581,36 +654,111 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                   </button>
                   <button
                     type="button"
-                    className={`caption1 pb-3 transition-colors ${activeTab === "details" ? "border-b-2 border-black font-semibold" : "text-secondary hover:text-black"}`}
-                    onClick={() => setActiveTab("details")}
+                    className={`caption1 pb-3 transition-colors ${activeTab === "rating" ? "border-b-2 border-black font-semibold" : "text-secondary hover:text-black"}`}
+                    onClick={() => setActiveTab("rating")}
                   >
-                    Product Details
+                    Rating & Review
                   </button>
                 </div>
-                <div className="desc-block mt-5 text-secondary whitespace-pre-line leading-relaxed">
+                <div className="desc-block mt-5 text-secondary leading-relaxed">
                   {activeTab === "description" ? (
-                    productDetail.LongDescription || productDetail.Description
+                    <p className="whitespace-pre-line">
+                      {productDetail.LongDescription || productDetail.Description}
+                    </p>
                   ) : (
-                    <>
-                      <p>
-                        <strong>Product ID:</strong> {productDetail.ProductId}
-                      </p>
-                      <p className="mt-2">
-                        <strong>Detail ID:</strong>{" "}
-                        {selectedVariant?.ProductDetailId ??
-                          productDetail.ProductDetailId}
-                      </p>
-                      <p className="mt-2">
-                        <strong>Category ID:</strong> {productDetail.CategoryId}
-                      </p>
-                      {selectedVariant && (
-                        <p className="mt-2">
-                          <strong>Selected Variant:</strong>{" "}
-                          {selectedVariant.VariantName} —{" "}
-                          {formatRsPrice(getVariantPrice(selectedVariant))}
-                        </p>
-                      )}
-                    </>
+                    <div id="form-review" className="form-review">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                        <div>
+                          <div className="heading6 text-black">Rate this product</div>
+                          <p className="caption1 text-secondary mt-1">
+                            Share your experience with {productDetail.Name}
+                          </p>
+                        </div>
+                        {productDetail.AverageRating > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Rate currentRate={productDetail.AverageRating} size={16} />
+                            <span className="caption1 text-secondary">
+                              ({productDetail.AverageRating} avg)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <form
+                        className="grid grid-cols-1 gap-5"
+                        onSubmit={(event) => void handleSubmitRating(event)}
+                      >
+                        <div>
+                          <div className="text-button mb-3">Your Rating</div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {Array.from({ length: 5 }, (_, index) => {
+                              const starValue = index + 1;
+                              const isActive = starValue <= displayRating;
+
+                              return (
+                                <button
+                                  key={starValue}
+                                  type="button"
+                                  aria-label={`Rate ${starValue} star${starValue > 1 ? "s" : ""}`}
+                                  className="p-1 transition-transform hover:scale-110"
+                                  onClick={() => setRatingValue(starValue)}
+                                  onMouseEnter={() => setHoverRating(starValue)}
+                                  onMouseLeave={() => setHoverRating(0)}
+                                  disabled={submittingRating}
+                                >
+                                  <Icon.Star
+                                    size={28}
+                                    weight="fill"
+                                    color={isActive ? "#ECB018" : "#9FA09C"}
+                                  />
+                                </button>
+                              );
+                            })}
+                            <span className="caption1 text-secondary ml-2">
+                              {ratingValue > 0
+                                ? `${ratingValue} / 5`
+                                : "Select stars"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="product-review"
+                            className="text-button mb-3 block"
+                          >
+                            Your Review
+                          </label>
+                          <textarea
+                            id="product-review"
+                            className="border border-line px-4 py-3 w-full rounded-xl min-h-[140px] resize-y"
+                            placeholder="Write your review here..."
+                            value={reviewText}
+                            onChange={(event) => setReviewText(event.target.value)}
+                            disabled={submittingRating}
+                            required
+                          />
+                        </div>
+
+                        {ratingError && (
+                          <p className="caption1 text-red">{ratingError}</p>
+                        )}
+
+                        {ratingSuccess && (
+                          <p className="caption1 text-green">{ratingSuccess}</p>
+                        )}
+
+                        <div>
+                          <button
+                            type="submit"
+                            disabled={submittingRating}
+                            className="button-main bg-white text-black border border-black disabled:opacity-60"
+                          >
+                            {submittingRating ? "Submitting..." : "Submit Review"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   )}
                 </div>
               </div>

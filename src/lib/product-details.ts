@@ -357,3 +357,68 @@ export async function fetchProductDetails(
 
   return response.data.Data;
 }
+
+export interface SaveProductRatingPayload {
+  Rating: number;
+  Review: string;
+  ProductId: number;
+}
+
+export interface SaveProductRatingData {
+  Rating: number;
+  Review: string;
+  ProductId: number;
+}
+
+interface SaveProductRatingResponse {
+  Data: SaveProductRatingData | null;
+  Message: string;
+  Type: string;
+  HttpStatusCode: number;
+}
+
+function unwrapApiBody<T extends { Data?: unknown; Message?: string }>(
+  response: unknown,
+): T {
+  if (response && typeof response === "object") {
+    if ("Data" in response || "Message" in response) {
+      return response as T;
+    }
+
+    if ("data" in response) {
+      return (response as { data: T }).data;
+    }
+  }
+
+  throw new Error("Invalid API response.");
+}
+
+export async function saveProductRating(
+  payload: SaveProductRatingPayload,
+): Promise<{ data: SaveProductRatingData; message: string }> {
+  const response = await api.post<SaveProductRatingResponse>(
+    "/api/v1/Product/save/rating",
+    payload,
+  );
+
+  const body = unwrapApiBody<SaveProductRatingResponse>(response);
+  const isSuccess =
+    body.Type === "Success" ||
+    body.HttpStatusCode === 200 ||
+    Boolean(body.Data);
+
+  if (!isSuccess || !body.Data) {
+    throw new Error(body.Message || "Failed to submit rating.");
+  }
+
+  const apiMessage = body.Message?.trim() ?? "";
+  const message =
+    apiMessage && /rating|review|success/i.test(apiMessage)
+      ? apiMessage
+      : "Your review has been submitted successfully.";
+
+  return {
+    data: body.Data,
+    message,
+  };
+}

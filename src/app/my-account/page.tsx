@@ -12,7 +12,14 @@ import { motion } from "framer-motion";
 import { logout } from "@/lib/auth";
 import { toast } from "react-hot-toast";
 import Cookies from "js-cookie";
-import api from "@/lib/api";
+import api, { getApiErrorMessage } from "@/lib/api";
+import {
+  CustomerReview,
+  fetchCustomerReviews,
+  formatReviewDate,
+} from "@/lib/reviews";
+import { getProductDetailUrl } from "@/lib/featured-products";
+import Rate from "@/components/Other/Rate";
 const MyAccount = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string | undefined>("dashboard");
@@ -27,6 +34,11 @@ const MyAccount = () => {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(true);
+  const [customerReviews, setCustomerReviews] = useState<CustomerReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const reviewsPageSize = 10;
 
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingForgot, setLoadingForgot] = useState(false);
@@ -194,6 +206,28 @@ const MyAccount = () => {
     getOrders();
   }, []);
 
+  const getCustomerReviews = async (pageNumber = 1) => {
+    setReviewsLoading(true);
+    try {
+      const result = await fetchCustomerReviews(pageNumber, reviewsPageSize);
+      setCustomerReviews(result.reviews);
+      setReviewsTotal(result.totalRecords);
+      setReviewsPage(pageNumber);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to load your reviews."));
+      setCustomerReviews([]);
+      setReviewsTotal(0);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "reviews") {
+      void getCustomerReviews(1);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     getProfile();
   }, []);
@@ -261,6 +295,15 @@ const MyAccount = () => {
                   >
                     <Icon.Package size={20} />
                     <strong className="heading6">History Orders</strong>
+                  </Link>
+                  <Link
+                    href={"#!"}
+                    scroll={false}
+                    className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === "reviews" ? "active" : ""}`}
+                    onClick={() => setActiveTab("reviews")}
+                  >
+                    <Icon.Star size={20} />
+                    <strong className="heading6">Reviews</strong>
                   </Link>
 
                   <Link
@@ -495,6 +538,115 @@ const MyAccount = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div
+                className={`tab text-content overflow-hidden w-full p-7 border border-line rounded-xl ${activeTab === "reviews" ? "block" : "hidden"}`}
+              >
+                <h6 className="heading6">Your Reviews</h6>
+                <p className="caption1 text-secondary mt-2">
+                  All product reviews you have submitted.
+                </p>
+
+                {reviewsLoading ? (
+                  <p className="text-secondary text-center py-10">
+                    Loading reviews...
+                  </p>
+                ) : customerReviews.length === 0 ? (
+                  <p className="text-secondary text-center py-10">
+                    No reviews found.
+                  </p>
+                ) : (
+                  <div className="list_reviews mt-6 flex flex-col gap-5">
+                    {customerReviews.map((review, index) => (
+                      <div
+                        key={`${review.ProductId}-${review.ReviewPostedDate}-${index}`}
+                        className="review_item border border-line rounded-xl p-5 box-shadow-xs"
+                      >
+                        <div className="flex flex-col sm:flex-row gap-5">
+                          <Link
+                            href={getProductDetailUrl(review.ProductId)}
+                            className="flex-shrink-0 w-full sm:w-28 h-28 rounded-xl overflow-hidden bg-surface"
+                          >
+                            <Image
+                              src={
+                                review.ImagePath ||
+                                "/images/product/1000x1000.png"
+                              }
+                              width={112}
+                              height={112}
+                              alt={review.ProductName}
+                              unoptimized
+                              className="w-full h-full object-cover"
+                            />
+                          </Link>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <Link
+                                  href={getProductDetailUrl(review.ProductId)}
+                                  className="text-button font-semibold hover:underline"
+                                >
+                                  {review.ProductName}
+                                </Link>
+                                {review.Category?.CategoryName && (
+                                  <p className="caption1 text-secondary mt-1">
+                                    {review.Category.CategoryName}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="caption1 text-secondary whitespace-nowrap">
+                                {formatReviewDate(review.ReviewPostedDate)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-3">
+                              <Rate
+                                currentRate={Number(review.Rating) || 0}
+                                size={14}
+                              />
+                              <span className="caption1 text-secondary">
+                                {review.Rating} / 5
+                              </span>
+                            </div>
+
+                            <p className="body1 text-secondary mt-3 whitespace-pre-line">
+                              {review.Review}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!reviewsLoading && reviewsTotal > reviewsPageSize && (
+                  <div className="flex items-center justify-center gap-3 mt-8">
+                    <button
+                      type="button"
+                      className="button-main bg-white text-black border border-line disabled:opacity-50"
+                      disabled={reviewsPage <= 1}
+                      onClick={() => void getCustomerReviews(reviewsPage - 1)}
+                    >
+                      Previous
+                    </button>
+                    <span className="caption1 text-secondary">
+                      Page {reviewsPage} of{" "}
+                      {Math.ceil(reviewsTotal / reviewsPageSize)}
+                    </span>
+                    <button
+                      type="button"
+                      className="button-main bg-white text-black border border-line disabled:opacity-50"
+                      disabled={
+                        reviewsPage >= Math.ceil(reviewsTotal / reviewsPageSize)
+                      }
+                      onClick={() => void getCustomerReviews(reviewsPage + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div

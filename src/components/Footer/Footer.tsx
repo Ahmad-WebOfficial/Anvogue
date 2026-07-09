@@ -1,13 +1,42 @@
-import React from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
+"use client";
+
+import React, { FormEvent, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import LandingFooterImage from '@/components/Home1/LandingFooterImage'
-import TenantLogo from '@/components/Common/TenantLogo'
+import { toast } from "react-hot-toast";
+import LandingFooterImage from "@/components/Home1/LandingFooterImage";
+import TenantLogo from "@/components/Common/TenantLogo";
+import { subscribeNewsletter } from "@/lib/tenant-landing";
+import { getApiErrorMessage } from "@/lib/api";
 
 const Footer = () => {
-    return (
-        <>
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleSubscribe = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return;
+
+    setSubmitting(true);
+    setSuccessMessage(null);
+
+    try {
+      const message = await subscribeNewsletter(trimmedEmail);
+      setSuccessMessage(message);
+      setEmail("");
+      toast.success(message);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to subscribe. Please try again."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (        <>
             <div id="footer" className='footer'>
                 <div className="footer-main bg-surface">
                     <div className="container">
@@ -59,14 +88,28 @@ const Footer = () => {
                                     <div className="text-button-uppercase">Newletter</div>
                                     <div className="caption1 mt-3">Sign up for our newsletter and get 10% off your first purchase</div>
                                     <div className="input-block w-full h-[52px] mt-4">
-                                        <form className='w-full h-full relative' action="post">
-                                            <input type="email" placeholder='Enter your e-mail' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line' required />
-                                            <button className='w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1'>
-                                                <Icon.ArrowRight size={24} color='#fff' />
+                                        <form className="w-full h-full relative" onSubmit={handleSubscribe}>
+                                            <input
+                                                type="email"
+                                                placeholder="Enter your e-mail"
+                                                className="caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line"
+                                                value={email}
+                                                onChange={(event) => setEmail(event.target.value)}
+                                                disabled={submitting}
+                                                required
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={submitting}
+                                                className="w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1 disabled:opacity-60"
+                                            >
+                                                <Icon.ArrowRight size={24} color="#fff" />
                                             </button>
                                         </form>
                                     </div>
-                                    <div className="list-social flex items-center gap-6 mt-4">
+                                    {successMessage && (
+                                        <p className="caption1 text-green mt-3">{successMessage}</p>
+                                    )}                                    <div className="list-social flex items-center gap-6 mt-4">
                                         <Link href={'https://www.facebook.com/'} target='_blank'>
                                             <div className="icon-facebook text-2xl text-black"></div>
                                         </Link>

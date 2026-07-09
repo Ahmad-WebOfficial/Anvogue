@@ -1,5 +1,6 @@
 ﻿"use client";
 import { getAuthToken, logout } from "@/lib/auth";
+import { jwtDecode } from "jwt-decode"; // Import add karein
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,14 +37,38 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   const [fixedHeader, setFixedHeader] = useState(false);
   const [lastScrollPosition, setLastScrollPosition] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
- useEffect(() => {
-  setIsLoggedIn(!!getAuthToken());
-}, []);
+  const [user, setUser] = useState<any>(null); // State add ki
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      setIsLoggedIn(true);
+      try {
+        const decoded: any = jwtDecode(token);
+
+        // Email se naam extract karna (ahmadbilal71al@gmail.com -> ahmadbilal71al)
+        const email = decoded.email || "";
+        const nameFromName = email.split("@")[0];
+
+        setUser({
+          name: nameFromName || "User", // Agar email se bhi naam na mile
+          email: email,
+        });
+      } catch (error) {
+        console.error("Token decode error:", error);
+      }
+    } else {
+      setIsLoggedIn(false);
+    }
+  }, []);
+
+  // 3. Logout function mein user ko bhi clear kar dein
   const handleLogout = async () => {
-  logout();
-  setIsLoggedIn(false);
-  window.location.href = "/login";
-};
+    logout();
+    setIsLoggedIn(false);
+    setUser(null); // User ka data hata dein
+    localStorage.removeItem("user"); // Storage se bhi delete kar dein
+    window.location.href = "/login";
+  };
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
@@ -64,27 +89,25 @@ const MenuOne: React.FC<Props> = ({ props }) => {
         className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full  md:h-[60px] h-[56px] ${props}`}
       >
         <div className="container mx-auto  h-full">
-          <div className="header-main flex justify-between h-full">
-            <div
-              className="menu-mobile-icon lg:hidden flex items-center"
-              onClick={handleMenuMobile}
-            >
-              <i className="icon-category text-2xl"></i>
-            </div>
-            <div className="left flex items-center gap-16">
+          <div className="header-main flex items-center justify-between h-full">
+            <div className="left flex items-center gap-4">
+              <div
+                className="menu-mobile-icon lg:hidden flex items-center"
+                onClick={handleMenuMobile}
+              >
+                <i className="icon-category text-2xl"></i>
+              </div>
               <div className="flex items-center">
                 {isLoggedIn ? (
-                  <Link
-                    href={"/"}
-                    className="flex items-center max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2"
-                  >
+                  <Link href={"/"} className="flex items-center">
                     <div className="heading4 text-xl">Welcome Back!</div>
                   </Link>
                 ) : (
-                  <TenantLogo className="max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" />
+                  <TenantLogo />
                 )}
               </div>
-
+            </div>
+            <div className="left flex items-center gap-16">
               <div className="menu-main h-full max-lg:hidden">
                 <ul className="flex items-center gap-8 h-full">
                   <li className="h-full">
@@ -114,7 +137,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                     <div className="sub-menu py-3 px-5 -left-10 absolute bg-white rounded-b-xl">
                       <ul className="w-full">
                         <li>
-                          <Link href="/categories" className="link text-secondary duration-300">
+                          <Link
+                            href="/categories"
+                            className="link text-secondary duration-300"
+                          >
                             All Categories
                           </Link>
                         </li>
@@ -155,123 +181,11 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   </li>
                   <li className="h-full relative">
                     <Link
-                      href="#!"
+                      href="blog/list"
                       className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname.includes("/blog") ? "active" : ""}`}
                     >
                       Blog
                     </Link>
-                    <div className="sub-menu py-3 px-5 -left-10 absolute bg-white rounded-b-xl">
-                      <ul className="w-full">
-                        <li>
-                          <Link
-                            href="/blog/default"
-                            className={`link text-secondary duration-300 ${pathname === "/blog/default" ? "active" : ""}`}
-                          >
-                            Blog Default
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/blog/list"
-                            className={`link text-secondary duration-300 ${pathname === "/blog/list" ? "active" : ""}`}
-                          >
-                            Blog List
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/blog/grid"
-                            className={`link text-secondary duration-300 ${pathname === "/blog/grid" ? "active" : ""}`}
-                          >
-                            Blog Grid
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </li>
-                  <li className="h-full relative">
-                    <Link
-                      href="#!"
-                      className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname.includes("/pages") ? "active" : ""}`}
-                    >
-                      Pages
-                    </Link>
-                    <div className="sub-menu py-3 px-5 -left-10 absolute bg-white rounded-b-xl">
-                      <ul className="w-full">
-                        <li>
-                          <Link
-                            href="/pages/about"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/about" ? "active" : ""}`}
-                          >
-                            About Us
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/contact"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/contact" ? "active" : ""}`}
-                          >
-                            Contact Us
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/store-list"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/store-list" ? "active" : ""}`}
-                          >
-                            Store List
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/page-not-found"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/page-not-found" ? "active" : ""}`}
-                          >
-                            404
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/faqs"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/faqs" ? "active" : ""}`}
-                          >
-                            FAQs
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/terms-and-conditions"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/terms-and-conditions" ? "active" : ""}`}
-                          >
-                            Terms & Conditions
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/privacy-policy"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/privacy-policy" ? "active" : ""}`}
-                          >
-                            Privacy Policy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/coming-soon"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/coming-soon" ? "active" : ""}`}
-                          >
-                            Coming Soon
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/pages/customer-feedbacks"
-                            className={`link text-secondary duration-300 ${pathname === "/pages/customer-feedbacks" ? "active" : ""}`}
-                          >
-                            Customer Feedbacks
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
                   </li>
                 </ul>
               </div>
@@ -304,7 +218,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   onMouseLeave={() => setOpenSubNavMobile(0)}
                 >
                   <div
-                    className={`login-popup absolute top-[50px] -right-5 w-[220px] p-5 rounded-xl bg-white shadow-lg border border-line transition-all duration-300 ${
+                    className={`login-popup absolute top-[10px] -right-5 w-[220px] p-5 rounded-xl bg-white shadow-lg border border-line transition-all duration-300 ${
                       openSubNavMobile === 99
                         ? "opacity-100 visible"
                         : "opacity-0 invisible"
@@ -312,6 +226,15 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   >
                     {isLoggedIn ? (
                       <div className="flex flex-col gap-4">
+                        <div className="pb-3 border-b text-center border-line">
+                          <p className="font-bold text-gray-800">
+                            {user?.name || "User Name"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {user?.email || "email@example.com"}
+                          </p>
+                        </div>
+
                         <Link
                           href={"/my-account"}
                           className="flex items-center hover:scale-110 gap-3 font-medium hover:text-blue-600 transition-all"
@@ -392,17 +315,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   imageClassName="h-10 w-10 object-contain"
                 />
               </div>
-              <div className="form-search relative mt-2">
-                <Icon.MagnifyingGlass
-                  size={20}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer"
-                />
-                <input
-                  type="text"
-                  placeholder="What are you looking for?"
-                  className=" h-12 rounded-lg border border-line text-sm w-full pl-10 pr-4"
-                />
-              </div>
+
               <div className="list-nav mt-6">
                 <ul>
                   <li>
@@ -426,7 +339,9 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                         <Icon.CaretRight size={20} />
                       </span>
                     </a>
-                    <DynamicCategoryMobileNav onBack={() => handleOpenSubNavMobile(2)} />
+                    <DynamicCategoryMobileNav
+                      onBack={() => handleOpenSubNavMobile(2)}
+                    />
                   </li>
                   <li
                     className={`${openSubNavMobile === 3 ? "open" : ""}`}
@@ -520,125 +435,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                         <ul className="w-full">
                           <li>
                             <Link
-                              href="/blog/default"
-                              className={`link text-secondary duration-300 ${pathname === "/blog/default" ? "active" : ""}`}
-                            >
-                              Blog Default
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
                               href="/blog/list"
                               className={`link text-secondary duration-300 ${pathname === "/blog/list" ? "active" : ""}`}
                             >
                               Blog List
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/blog/grid"
-                              className={`link text-secondary duration-300 ${pathname === "/blog/grid" ? "active" : ""}`}
-                            >
-                              Blog Grid
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </li>
-                  <li
-                    className={`${openSubNavMobile === 6 ? "open" : ""}`}
-                    onClick={() => handleOpenSubNavMobile(6)}
-                  >
-                    <a
-                      href={"#!"}
-                      className="text-xl font-semibold flex items-center justify-between mt-5"
-                    >
-                      Pages
-                      <span className="text-right">
-                        <Icon.CaretRight size={20} />
-                      </span>
-                    </a>
-                    <div className="sub-nav-mobile">
-                      <div
-                        className="back-btn flex items-center gap-3"
-                        onClick={() => handleOpenSubNavMobile(6)}
-                      >
-                        <Icon.CaretLeft />
-                        Back
-                      </div>
-                      <div className="list-nav-item w-full pt-2 pb-6">
-                        <ul className="w-full">
-                          <li>
-                            <Link
-                              href="/pages/about"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/about" ? "active" : ""}`}
-                            >
-                              About Us
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/contact"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/contact" ? "active" : ""}`}
-                            >
-                              Contact Us
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/store-list"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/store-list" ? "active" : ""}`}
-                            >
-                              Store List
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/page-not-found"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/page-not-found" ? "active" : ""}`}
-                            >
-                              404
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/faqs"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/faqs" ? "active" : ""}`}
-                            >
-                              FAQs
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/terms-and-conditions"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/terms-and-conditions" ? "active" : ""}`}
-                            >
-                              Terms & Conditions
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/privacy-policy"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/privacy-policy" ? "active" : ""}`}
-                            >
-                              Privacy Policy
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/coming-soon"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/coming-soon" ? "active" : ""}`}
-                            >
-                              Coming Soon
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              href="/pages/customer-feedbacks"
-                              className={`link text-secondary duration-300 ${pathname === "/pages/customer-feedbacks" ? "active" : ""}`}
-                            >
-                              Customer Feedbacks
                             </Link>
                           </li>
                         </ul>

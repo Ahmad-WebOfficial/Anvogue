@@ -154,10 +154,19 @@ export async function fetchTenantBanners(): Promise<TenantBanner[]> {
 }
 
 export async function subscribeNewsletter(email: string): Promise<string> {
-  const response = await api.post<null>(
-    "/api/v1/TenantLanding/subscribe",
-    { Email: email.trim() },
-  );
+  try {
+    const response = await api.post("/api/v1/TenantLanding/subscribe", { 
+      Email: email.trim() 
+    });
 
-  return response.Message?.trim() || "Subscribed successfully.";
+   
+    return response.data?.Message?.trim() || "Subscribed successfully.";
+
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      throw new Error("You are already subscribed!");
+    }
+    // Baaki sab errors ke liye
+    throw new Error("Failed to subscribe. Please try again.");
+  }
 }

@@ -125,7 +125,10 @@ const BlogDetailContent = () => {
 
             <div className="content md:mt-8 mt-5 space-y-4">
               {paragraphs.map((paragraph, index) => (
-                <p key={index} className="body1 text-secondary whitespace-pre-line">
+                <p
+                  key={index}
+                  className="body1 text-secondary whitespace-pre-line"
+                >
                   {paragraph}
                 </p>
               ))}
@@ -152,7 +155,11 @@ const BlogDetailContent = () => {
           <div className="heading4 mb-6">Recent Posts</div>
           <div className="grid lg:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-8">
             {recentBlogs.slice(0, 3).map((item) => (
-              <ApiBlogItem key={item.NewsEventsId} data={item} type="style-one" />
+              <ApiBlogItem
+                key={item.NewsEventsId}
+                data={item}
+                type="style-one"
+              />
             ))}
           </div>
         </div>

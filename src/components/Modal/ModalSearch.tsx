@@ -1,18 +1,41 @@
 'use client'
-
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import productData from '@/data/Product.json'
 import Product from '../Product/Product';
 import { useModalSearchContext } from '@/context/ModalSearchContext'
+import api from '@/lib/api'; 
 
 const ModalSearch = () => {
     const { isModalOpen, closeModalSearch } = useModalSearchContext();
     const [searchKeyword, setSearchKeyword] = useState('');
+    const [recentProducts, setRecentProducts] = useState([]);
     const router = useRouter()
+
+    useEffect(() => {
+        const fetchRecentProducts = async () => {
+            try {
+                // Yahan apna API endpoint check kar lein
+                const res = await api.get('/api/v1/Products/recent'); 
+                
+                // --- TEST LOG ---
+                console.log("Recent Products API Response:", res?.data);
+
+                if (res?.data?.Data) {
+                    setRecentProducts(res.data.Data.slice(0, 4));
+                }
+            } catch (err) {
+                console.error('Error fetching recent products:', err);
+            }
+        };
+
+        // Jab modal open ho tabhi fetch karein sdf\
+
+        
+        if (isModalOpen) {
+            fetchRecentProducts();
+        }
+    }, [isModalOpen]);
 
     const handleSearch = (value: string) => {
         router.push(`/search-result?query=${value}`)
@@ -30,9 +53,7 @@ const ModalSearch = () => {
                     <div className="form-search relative">
                         <Icon.MagnifyingGlass
                             className='absolute heading5 right-6 top-1/2 -translate-y-1/2 cursor-pointer'
-                            onClick={() => {
-                                handleSearch(searchKeyword)
-                            }}
+                            onClick={() => handleSearch(searchKeyword)}
                         />
                         <input
                             type="text"
@@ -43,41 +64,17 @@ const ModalSearch = () => {
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
                         />
                     </div>
-                    <div className="keyword mt-8">
-                        <div className="heading5">Feature keywords Today</div>
-                        <div className="list-keyword flex items-center flex-wrap gap-3 mt-4">
-                            <div
-                                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                                onClick={() => handleSearch('dress')}
-                            >
-                                Dress
-                            </div>
-                            <div
-                                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                                onClick={() => handleSearch('t-shirt')}
-                            >
-                                T-shirt
-                            </div>
-                            <div
-                                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                                onClick={() => handleSearch('underwear')}
-                            >
-                                Underwear
-                            </div>
-                            <div
-                                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                                onClick={() => handleSearch('top')}
-                            >
-                                Top
-                            </div>
-                        </div>
-                    </div>
+                    
                     <div className="list-recent mt-8">
                         <div className="heading6">Recently viewed products</div>
                         <div className="list-product pb-5 hide-product-sold grid xl:grid-cols-4 sm:grid-cols-2 gap-7 mt-4">
-                            {productData.slice(0, 4).map((product) => (
-                                <Product key={product.id} data={product} type='grid' />
-                            ))}
+                            {recentProducts.length > 0 ? (
+                                recentProducts.map((product: any) => (
+                                    <Product key={product.id} data={product} type='grid' />
+                                ))
+                            ) : (
+                                <p className="text-secondary">No products found.</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -86,4 +83,4 @@ const ModalSearch = () => {
     )
 }
 
-export default ModalSearch
+export default ModalSearch;

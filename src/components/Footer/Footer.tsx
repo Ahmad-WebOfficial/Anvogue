@@ -95,7 +95,7 @@ const Footer = () => {
                     </div>
                   </div>
                   <div className="item flex flex-col basis-1/3 gap-2 ">
-                    <div className="text-button-uppercase pb-3 gap-2">
+                    <div className="text-button-uppercase pb-3 gap-3">
                       Quick Shop
                     </div>
 
@@ -212,7 +212,7 @@ const Footer = () => {
             </div>
             <div className="footer-bottom py-6 flex items-center justify-center border-t border-line">
               <div className="copyright caption1 text-secondary">
-                © {new Date().getFullYear()} TheLink. All Rights Reserved.
+                © {new Date().getFullYear()} Anvogue.All Rights Reserved.
               </div>
             </div>
           </div>

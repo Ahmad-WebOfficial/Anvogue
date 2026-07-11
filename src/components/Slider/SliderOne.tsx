@@ -8,8 +8,7 @@ import { Autoplay, Pagination } from "swiper/modules";
 import "swiper/css/bundle";
 import "swiper/css/effect-fade";
 import {
-  fetchTenantBannersData,
-  getAllPlatformBanners,
+  fetchTenantBanners,
   getBannerLink,
   isBannerClickable,
   TenantBanner,
@@ -73,8 +72,9 @@ const SliderOne = () => {
   useEffect(() => {
     const loadBanners = async () => {
       try {
-        const data = await fetchTenantBannersData();
-        setBanners(getAllPlatformBanners(data));
+        setLoading(true);
+        const data = await fetchTenantBanners();
+        setBanners(data);
       } catch (error) {
         console.error("Failed to fetch banners:", error);
       } finally {
@@ -88,7 +88,7 @@ const SliderOne = () => {
   if (loading) {
     return (
       <div
-        className={`slider-block style-one bg-linear flex w-full items-center justify-center pt-[3rem] ${sliderHeightClass}`}
+        className={`slider-block style-one bg-linear flex w-full items-center justify-center pt-[3.5rem] ${sliderHeightClass}`}
       >
         <p className="text-secondary">Loading banners...</p>
       </div>
@@ -99,7 +99,7 @@ const SliderOne = () => {
 
   return (
     <div
-      className={`slider-block style-one bg-linear w-full pt-[3rem] ${sliderHeightClass}`}
+      className={`slider-block style-one bg-linear w-full pt-[4rem] md:pt-[3rem] ${sliderHeightClass}`}
     >
       <div className={`slider-main h-full w-full ${sliderHeightClass}`}>
         <Swiper

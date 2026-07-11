@@ -53,7 +53,7 @@ const DynamicCategoryMegaMenu = () => {
   }
 
   return (
-    <div className="mega-menu absolute top-[74px] left-0 w-screen bg-white shadow-lg z-50">
+    <div className="mega-menu absolute top-[48.5px] left-0 w-screen bg-white shadow-lg z-50">
       <div className="container">
         <div className="py-8 md:py-10">
           <div className="nav-link grid w-full grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

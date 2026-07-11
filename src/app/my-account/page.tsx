@@ -153,6 +153,7 @@ const MyAccount = () => {
     setLoadingProfile(true);
     try {
       const res = await api.get("/api/v1/Customer/GetProfile");
+      // console.log("get profile:", res);
       if (res.data?.Data) {
         const p = res.data.Data;
 
@@ -417,13 +418,12 @@ const MyAccount = () => {
                             <td className="py-3 text-right">
                               <span
                                 className={`tag px-4 py-1.5 rounded-full bg-opacity-10 caption1 font-semibold 
-                  ${
-                    order.OrderStatus === "Pending"
-                      ? "bg-yellow text-yellow"
-                      : order.OrderStatus === "Completed"
-                        ? "bg-success text-success"
-                        : "bg-purple text-purple"
-                  }`}
+                  ${order.OrderStatus === "Pending"
+                                    ? "bg-yellow text-yellow"
+                                    : order.OrderStatus === "Completed"
+                                      ? "bg-success text-success"
+                                      : "bg-purple text-purple"
+                                  }`}
                               >
                                 {order.OrderStatus}
                               </span>
@@ -499,13 +499,12 @@ const MyAccount = () => {
                             <strong className="text-title">Status:</strong>
                             <span
                               className={`tag px-4 py-1.5 rounded-full bg-opacity-10 caption1 font-semibold
-                ${
-                  order.OrderStatus === "Pending"
-                    ? "bg-yellow text-yellow"
-                    : order.OrderStatus === "Completed"
-                      ? "bg-success text-success"
-                      : "bg-purple text-purple"
-                }`}
+                ${order.OrderStatus === "Pending"
+                                  ? "bg-yellow text-yellow"
+                                  : order.OrderStatus === "Completed"
+                                    ? "bg-success text-success"
+                                    : "bg-purple text-purple"
+                                }`}
                             >
                               {order.OrderStatus}
                             </span>

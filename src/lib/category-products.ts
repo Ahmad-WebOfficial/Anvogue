@@ -200,15 +200,18 @@ export function filterProductsForHomeTab(
       return products.filter((product) => product.IsFeaturedProduct);
     case "new arrivals":
       return products.filter((product) => product.IsNewProduct);
-    case "on sale":
-      return products.filter(
-        (product) =>
-          product.IsPromotionalProduct ||
-          product.IsCampaignApplied ||
-          (product.Discount ?? 0) > 0 ||
-          (product.MinDiscountedPrice ?? 0) > 0 ||
-          (product.MaxDiscountedPrice ?? 0) > 0,
+    case "on sale": {
+      const remaining = products.filter(
+        (product) => !product.IsNewProduct && !product.IsFeaturedProduct,
       );
+
+      if (remaining.length > 0) {
+        return remaining;
+      }
+
+      // Agar sab products new/featured hon, to jo featured nahi wo on sale me
+      return products.filter((product) => !product.IsFeaturedProduct);
+    }
     default:
       return products;
   }

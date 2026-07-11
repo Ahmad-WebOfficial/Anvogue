@@ -159,8 +159,8 @@ export async function fetchTenantBanners(): Promise<TenantBanner[]> {
 }
 export async function subscribeNewsletter(email: string): Promise<string> {
   try {
-    const response = await api.post("/api/v1/TenantLanding/subscribe", { 
-      Email: email.trim() 
+    const response = await api.post("/api/v1/TenantLanding/subscribe", {
+      Email: email.trim()
     });
     return response.data?.Message?.trim() || "Subscribed successfully.";
 
@@ -168,7 +168,30 @@ export async function subscribeNewsletter(email: string): Promise<string> {
     if (error.response?.status === 409) {
       throw new Error("You are already subscribed!");
     }
-    // Baaki sab errors ke liye
     throw new Error("Failed to subscribe. Please try again.");
   }
+}
+
+export interface ContactUsPayload {
+  Name: string;
+  Phone: string;
+  Email: string;
+  Message: string;
+  Type: number;
+}
+
+export async function submitContactUs(
+  payload: ContactUsPayload,
+): Promise<string> {
+  const response = await api.post("/api/v1/TenantLanding/contact-us", {
+    Name: payload.Name.trim(),
+    Phone: payload.Phone.trim(),
+    Email: payload.Email.trim(),
+    Message: payload.Message.trim(),
+    Type: payload.Type,
+  });
+
+  return (
+    response.data?.Message?.trim() || "Your message has been sent successfully."
+  );
 }

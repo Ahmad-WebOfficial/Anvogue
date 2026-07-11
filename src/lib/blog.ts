@@ -58,6 +58,11 @@ function extractNewsEvent(data: BlogDetailResponse["Data"]): NewsEvent | null {
   return null;
 }
 
+export function resolveBlogSlug(slug?: string | null): string {
+  const trimmed = slug?.trim();
+  return trimmed || "0";
+}
+
 const DEFAULT_BLOG_IMAGE = "/images/blog/1.png";
 
 export function isBlogActive(item: NewsEvent): boolean {
@@ -73,9 +78,7 @@ export function getBlogSlug(item: NewsEvent): string {
     return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
   }
 
-  return item.Title.toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
+  return "0";
 }
 
 export function getBlogDetailUrl(item: NewsEvent): string {
@@ -142,14 +145,14 @@ export async function fetchNewsEvents(
 
 export async function fetchBlogDetail(
   newsEventsId: number,
-  slug: string,
+  slug?: string | null,
 ): Promise<NewsEvent | null> {
   const response = await api.get<BlogDetailResponse>(
     "/api/v1/TenantLanding/blogdetail",
     {
       params: {
         NewsEventsId: newsEventsId,
-        Slug: slug,
+        Slug: resolveBlogSlug(slug),
       },
     },
   );

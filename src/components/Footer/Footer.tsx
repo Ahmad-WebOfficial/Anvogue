@@ -9,7 +9,7 @@ import LandingFooterImage from "@/components/Home1/LandingFooterImage";
 import TenantLogo from "@/components/Common/TenantLogo";
 import { subscribeNewsletter } from "@/lib/tenant-landing";
 import { getApiErrorMessage } from "@/lib/api";
-import { usePathname } from "next/navigation"; // Import yahan rakhein
+import { usePathname } from "next/navigation";
 const Footer = () => {
   const pathname = usePathname();
   const [email, setEmail] = useState("");
@@ -68,12 +68,7 @@ const Footer = () => {
                     <div className="text-button-uppercase pb-3">Support</div>
 
                     <div className="flex flex-col gap-2">
-                      <Link
-                        href="/pages/about"
-                        className="caption1 has-line-before duration-300 w-fit"
-                      >
-                        About Us
-                      </Link>
+
                       <Link
                         href="/pages/contact"
                         className="caption1 has-line-before duration-300 w-fit"
@@ -87,10 +82,16 @@ const Footer = () => {
                         My Account
                       </Link>
                       <Link
-                        href="blog/list"
+                        href="/blog/list"
                         className="caption1 has-line-before duration-300 w-fit"
                       >
                         Blog
+                      </Link>
+                      <Link
+                        href="/pages/store-list"
+                        className="caption1 has-line-before duration-300 w-fit"
+                      >
+                        Store List
                       </Link>
                     </div>
                   </div>
@@ -119,13 +120,15 @@ const Footer = () => {
                     >
                       Wishlist
                     </Link>
-
                     <Link
-                      href="/pages/store-list"
+                      href="/cart"
                       className="caption1 has-line-before duration-300 w-fit"
+
                     >
-                      Store List
+                      Shopping Cart
                     </Link>
+
+
                   </div>
 
                   <div className="item flex flex-col basis-1/3 gap-2">

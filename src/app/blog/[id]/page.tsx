@@ -90,7 +90,7 @@ const BlogDetailContent = () => {
     return (
       <div className="container md:py-20 py-10 text-center">
         <p className="text-red">{error || "Blog not found."}</p>
-        <Link href="/blog/default" className="button-main inline-block mt-6">
+        <Link href="/blog/list" className="button-main inline-block mt-6">
           Back to Blog
         </Link>
       </div>

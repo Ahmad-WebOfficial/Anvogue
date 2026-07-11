@@ -1,67 +1,88 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay } from "swiper/modules";
-import "swiper/css/bundle";
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import api from "@/lib/api";
+
+interface BrandItem {
+  Text: string;
+  Value: string;
+}
+
+interface BrandsResponse {
+  Data?: BrandItem[];
+}
+
+function hasLogo(value: string): boolean {
+  if (!value?.trim()) return false;
+  return (
+    value.startsWith("http") ||
+    value.startsWith("/") ||
+    /\.(png|jpe?g|webp|svg|gif)$/i.test(value)
+  );
+}
+
 const Brand = () => {
-  const [brands, setBrands] = useState<any[]>([]);
+  const [brands, setBrands] = useState<BrandItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const getBrands = async () => {
       try {
-        const response = await api.get("/api/v1/Common/brands");
-
-        if (response.data && response.data.Data) {
-          const filteredData = response.data.Data.filter(
-            (item: any) => item.Value !== "",
-          );
-          setBrands(filteredData);
-        }
+        const response = await api.get<BrandsResponse>("/api/v1/Common/brands");
+        const data = (response.data?.Data ?? []).filter(
+          (item) => item.Text?.trim() && item.Value?.trim() !== "",
+        );
+        setBrands(data);
       } catch (error) {
         console.error("Error fetching brands:", error);
+        setBrands([]);
+      } finally {
+        setLoading(false);
       }
     };
-    getBrands();
+
+    void getBrands();
   }, []);
 
+  if (!loading && brands.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="brand-block md:py-[60px] py-[32px]">
-      <div className="container">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Our Top Brands
-          </h2>
-          <p className="text-gray-500">
+    <section className="brand-block bg-white md:py-20 py-12">
+      <div className="container px-4 sm:px-6">
+        <div className="text-center">
+          <h2 className="heading3">Our Top Brands</h2>
+          <p className="caption1 text-secondary mt-3">
             Explore the wide range of brands we feature
           </p>
         </div>
 
-        <div className="list-brand">
-          <Swiper
-            spaceBetween={20}
-            slidesPerView={2}
-            loop={true}
-            modules={[Autoplay]}
-            autoplay={{ delay: 3000 }}
-            breakpoints={{
-              500: { slidesPerView: 3 },
-              992: { slidesPerView: 5 },
-              1200: { slidesPerView: 6 },
-            }}
-          >
-            {brands.map((brand, index) => (
-              <SwiperSlide key={index}>
-                <div className="brand-item flex items-center justify-center p-4 border rounded-xl hover:border-blue-500 transition-all cursor-pointer">
-                  <span className="font-bold text-gray-700">{brand.Text}</span>
+        <div className="brand-grid md:mt-10 mt-8">
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="brand-card brand-card-skeleton" />
+              ))
+            : brands.map((brand) => (
+                <div key={`${brand.Value}-${brand.Text}`} className="brand-card">
+                  {hasLogo(brand.Value) ? (
+                    <Image
+                      src={brand.Value}
+                      alt={brand.Text}
+                      width={120}
+                      height={48}
+                      unoptimized
+                      className="brand-card-logo"
+                    />
+                  ) : (
+                    <span className="brand-card-name">{brand.Text}</span>
+                  )}
                 </div>
-              </SwiperSlide>
-            ))}
-          </Swiper>
+              ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 

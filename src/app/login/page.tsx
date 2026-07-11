@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,6 +11,24 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import toast from "react-hot-toast";
 import { getApiErrorMessage } from "@/lib/api";
 import { loginWithCredentials } from "@/lib/auth";
+
+const REGISTER_BENEFITS = [
+  {
+    icon: Icon.Gift,
+    title: "Exclusive offers",
+    description: "Get access to member-only deals and promotions.",
+  },
+  {
+    icon: Icon.Package,
+    title: "Faster checkout",
+    description: "Save your details for a smoother shopping experience.",
+  },
+  {
+    icon: Icon.Star,
+    title: "Personalized picks",
+    description: "Enjoy recommendations tailored to your preferences.",
+  },
+] as const;
 
 const Login = () => {
   const router = useRouter();
@@ -89,91 +108,137 @@ const Login = () => {
         <MenuOne props="bg-transparent" />
         <Breadcrumb heading="Login" subHeading="Login" />
       </div>
-      <div className="login-block md:py-20 py-10">
-        <div className="container">
-          <div className="content-main flex gap-y-8 max-md:flex-col">
-            <div className="left md:w-1/2 w-full lg:pr-[60px] md:pr-[40px] md:border-r border-line">
-              <div className="heading4">Login</div>
-              <form className="md:mt-7 mt-4" onSubmit={handleSubmit}>
-                {error && (
-                  <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm">
-                    {error}
+
+      <section className="login-block auth-page md:py-20 py-10">
+        <div className="container px-4 sm:px-6">
+          <div className="auth-page-card">
+            <div className="auth-page-grid">
+              <div className="auth-page-form">
+                <span className="auth-page-badge">Welcome Back</span>
+                <h1 className="auth-page-title heading3">Sign in to your account</h1>
+                <p className="auth-page-subtitle caption1 text-secondary">
+                  Enter your credentials to access your orders, wishlist, and
+                  account settings.
+                </p>
+
+                <form className="auth-form" onSubmit={handleSubmit}>
+                  {error && (
+                    <div className="auth-alert is-error" role="alert">
+                      <Icon.WarningCircle size={18} weight="fill" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+                  {success && (
+                    <div className="auth-alert is-success" role="status">
+                      <Icon.CheckCircle size={18} weight="fill" />
+                      <span>{success}</span>
+                    </div>
+                  )}
+
+                  <div className="auth-field">
+                    <label htmlFor="username" className="auth-label">
+                      Username
+                    </label>
+                    <div className="auth-input-wrap">
+                      <Icon.User size={18} className="auth-input-icon" />
+                      <input
+                        className="auth-input"
+                        id="username"
+                        type="text"
+                        placeholder="Enter your username"
+                        required
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                      />
+                    </div>
                   </div>
-                )}
-                {success && (
-                  <div className="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-600 text-sm">
-                    {success}
+
+                  <div className="auth-field">
+                    <label htmlFor="password" className="auth-label">
+                      Password
+                    </label>
+                    <div className="auth-input-wrap">
+                      <Icon.Lock size={18} className="auth-input-icon" />
+                      <input
+                        className="auth-input"
+                        id="password"
+                        type="password"
+                        placeholder="Enter your password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
                   </div>
-                )}
-                <div className="email ">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="username"
-                    type="text"
-                    placeholder="Username *"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-                <div className="pass mt-5">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="password"
-                    type="password"
-                    placeholder="Password *"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center justify-end mt-5">
-                  <button
-                    title="Forgot Your Password?"
-                    type="button"
-                    onClick={() => {
-                      router.push("/forgot-password");
-                    }}
-                    className="font-semibold hover:underline bg-transparent border-none cursor-pointer p-0"
-                  >
-                    Forgot Your Password?
-                  </button>
-                </div>
-                <div className="block-button md:mt-7 mt-4">
-                  <button
-                    title="Login Your Account"
-                    type="submit"
-                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
-                    disabled={loading}
-                  >
-                    {loading ? "Logging in..." : "Login"}
-                  </button>
-                </div>
-              </form>
-            </div>
-            <div className="right md:w-1/2 w-full lg:pl-[60px] md:pl-[40px] flex items-center">
-              <div className="text-content">
-                <div className="heading4">New Customer</div>
-                <div className="mt-2 text-secondary">
-                  Be part of our growing family of new customers! Join us today
-                  and unlock a world of exclusive benefits, offers, and
-                  personalized experiences.
-                </div>
-                <div className="block-button md:mt-7 mt-4">
-                  <button
-                    title="Go to Registration Page"
-                    type="button"
-                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
-                    onClick={() => router.push("/register")}
-                  >
-                    Register
-                  </button>
-                </div>
+
+                  <div className="auth-forgot">
+                    <button
+                      title="Forgot Your Password?"
+                      type="button"
+                      onClick={() => router.push("/forgot-password")}
+                      className="auth-forgot-link"
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+
+                  <div className="auth-submit">
+                    <button
+                      title="Login Your Account"
+                      type="submit"
+                      className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
+                      disabled={loading}
+                    >
+                      {loading ? "Signing in..." : "Sign In"}
+                    </button>
+                  </div>
+                </form>
               </div>
+
+              <aside className="auth-page-aside">
+                <div className="auth-aside-content">
+                  <h2 className="auth-aside-title">New customer?</h2>
+                  <p className="auth-aside-text">
+                    Join us today and unlock exclusive benefits, offers, and a
+                    personalized shopping experience.
+                  </p>
+
+                  <ul className="auth-benefits">
+                    {REGISTER_BENEFITS.map((item) => {
+                      const BenefitIcon = item.icon;
+                      return (
+                        <li key={item.title} className="auth-benefit-item">
+                          <span className="auth-benefit-icon">
+                            <BenefitIcon size={18} weight="duotone" />
+                          </span>
+                          <div>
+                            <p className="auth-benefit-title">{item.title}</p>
+                            <p className="auth-benefit-desc">
+                              {item.description}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div className="auth-aside-action">
+                    <button
+                      type="button"
+                      title="Go to Registration Page"
+                      onClick={() => router.push("/register")}
+                      className="button-main cursor-pointer transition-all duration-300"
+                    >
+                      Create Account
+                    </button>
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
       <Footer />
     </>
   );

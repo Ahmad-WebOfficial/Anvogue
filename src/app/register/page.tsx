@@ -1,9 +1,10 @@
 "use client";
+
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
-import PhoneInput, { CountryData } from "react-phone-input-2";
+import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import toast from "react-hot-toast";
 import TopNavOne from "@/components/Header/TopNav/TopNavOne";
@@ -39,6 +40,24 @@ type RegisterPayload = {
   ConfirmPassword: string;
 };
 
+const AUTH_BENEFITS = [
+  {
+    icon: Icon.ShoppingBag,
+    title: "Track your orders",
+    description: "View order history and delivery updates anytime.",
+  },
+  {
+    icon: Icon.Heart,
+    title: "Save your wishlist",
+    description: "Keep favorite products in one place.",
+  },
+  {
+    icon: Icon.ShieldCheck,
+    title: "Secure checkout",
+    description: "Your account details stay protected.",
+  },
+] as const;
+
 const validateEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
@@ -66,6 +85,7 @@ const Register = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
     if (signUpData.password !== signUpData.confirmPassword) {
       const msg = "Passwords do not match.";
       setError(msg);
@@ -132,7 +152,7 @@ const Register = () => {
       Password: signUpData.password,
       ConfirmPassword: signUpData.confirmPassword,
     };
-    console.log("SENDING THIS PAYLOAD:", JSON.stringify(payload, null, 2));
+
     setLoading(true);
     try {
       await api.post("/api/v1/Account/Register", payload);
@@ -206,218 +226,292 @@ const Register = () => {
           subHeading="Create An Account"
         />
       </div>
-      <div className="register-block md:py-20 py-10">
-        <div className="container">
-          <div className="content-main flex gap-y-8 max-md:flex-col">
-            <div className="left md:w-1/2 w-full lg:pr-[60px] md:pr-[40px] md:border-r border-line">
-              <div className="heading4">Register</div>
-              <form className="md:mt-7 mt-4" onSubmit={handleSubmit}>
-                {error && (
-                  <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm">
-                    {error}
+
+      <section className="register-block auth-page md:py-20 py-10">
+        <div className="container px-4 sm:px-6">
+          <div className="auth-page-card">
+            <div className="auth-page-grid">
+              <div className="auth-page-form">
+                <span className="auth-page-badge">Get Started</span>
+                <h1 className="auth-page-title heading3">Create your account</h1>
+                <p className="auth-page-subtitle caption1 text-secondary">
+                  Register with your details. We&apos;ll send an OTP to verify
+                  your email.
+                </p>
+
+                <form className="auth-form" onSubmit={handleSubmit}>
+                  {error && (
+                    <div className="auth-alert is-error" role="alert">
+                      <Icon.WarningCircle size={18} weight="fill" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+                  {success && (
+                    <div className="auth-alert is-success" role="status">
+                      <Icon.CheckCircle size={18} weight="fill" />
+                      <span>{success}</span>
+                    </div>
+                  )}
+
+                  <div className="auth-field">
+                    <label htmlFor="userName" className="auth-label">
+                      Username
+                    </label>
+                    <div className="auth-input-wrap">
+                      <Icon.User size={18} className="auth-input-icon" />
+                      <input
+                        className="auth-input"
+                        id="userName"
+                        type="text"
+                        placeholder="Choose a username"
+                        required
+                        value={signUpData.userName}
+                        onChange={(e) => {
+                          setSignUpData((prev) => ({
+                            ...prev,
+                            userName: e.target.value,
+                          }));
+                        }}
+                      />
+                    </div>
                   </div>
-                )}
-                {success && (
-                  <div className="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-600 text-sm">
-                    {success}
+
+                  <div className="auth-field-row">
+                    <div className="auth-field">
+                      <label htmlFor="firstName" className="auth-label">
+                        First Name
+                      </label>
+                      <div className="auth-input-wrap">
+                        <Icon.UserCircle size={18} className="auth-input-icon" />
+                        <input
+                          className="auth-input"
+                          id="firstName"
+                          type="text"
+                          placeholder="First name"
+                          required
+                          value={signUpData.firstName}
+                          onChange={(e) => {
+                            setSignUpData((prev) => ({
+                              ...prev,
+                              firstName: e.target.value,
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label htmlFor="lastName" className="auth-label">
+                        Last Name
+                      </label>
+                      <div className="auth-input-wrap">
+                        <Icon.UserCircle size={18} className="auth-input-icon" />
+                        <input
+                          className="auth-input"
+                          id="lastName"
+                          type="text"
+                          placeholder="Last name"
+                          required
+                          value={signUpData.lastName}
+                          onChange={(e) => {
+                            setSignUpData((prev) => ({
+                              ...prev,
+                              lastName: e.target.value,
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
 
-                <div className="username mb-5">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="userName"
-                    type="text"
-                    placeholder="Username *"
-                    required
-                    value={signUpData.userName}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        userName: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
+                  <div className="auth-field">
+                    <label htmlFor="email" className="auth-label">
+                      Email Address
+                    </label>
+                    <div className="auth-input-wrap">
+                      <Icon.EnvelopeSimple size={18} className="auth-input-icon" />
+                      <input
+                        className="auth-input"
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        required
+                        value={signUpData.email}
+                        onChange={(e) => {
+                          setSignUpData((prev) => ({
+                            ...prev,
+                            email: e.target.value,
+                          }));
+                        }}
+                      />
+                    </div>
+                  </div>
 
-                {/* History */}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="firstName"
-                    type="text"
-                    placeholder="First Name *"
-                    required
-                    value={signUpData.firstName}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        firstName: e.target.value,
-                      }));
-                    }}
-                  />
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="lastName"
-                    type="text"
-                    placeholder="Last Name *"
-                    required
-                    value={signUpData.lastName}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        lastName: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-
-                <div className="email mt-5">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="email"
-                    type="email"
-                    placeholder="Email address *"
-                    required
-                    value={signUpData.email}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-
-                <div className="phone mt-5">
-                  <label className="text-secondary2 text-sm mb-2 block">
-                    Phone Number *
-                  </label>
-                  <PhoneInput
-                    country={signUpData.isoCode.toLowerCase()}
-                    value={signUpData.phoneNumber}
-                    onChange={(value, country) => {
-                      if (!("dialCode" in country)) return;
-                      const data = country as CountryData;
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        phoneCode: data.dialCode,
-                        isoCode: data.countryCode.toUpperCase(),
-                        phoneNumber: value || "",
-                      }));
-                    }}
-                    inputProps={{
-                      name: "phoneNumber",
-                      required: true,
-                    }}
-                    containerClass="w-full"
-                    inputClass="!w-full !border !border-line !px-13 !pt-3 !pb-3 !rounded-lg !h-[48px] !text-base"
-                    buttonClass="!border !border-line !rounded-l-lg !bg-white"
-                    dropdownClass="!rounded-lg !shadow-lg"
-                    enableSearch
-                    disableSearchIcon
-                    searchPlaceholder="Search country"
-                  />
-                </div>
-
-                <div className="pass mt-5">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="password"
-                    type="password"
-                    placeholder="Password *"
-                    required
-                    value={signUpData.password}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-
-                <div className="confirm-pass mt-5">
-                  <input
-                    className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="Confirm Password *"
-                    required
-                    value={signUpData.confirmPassword}
-                    onChange={(e) => {
-                      setSignUpData((prev) => ({
-                        ...prev,
-                        confirmPassword: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-
-                <div className="flex items-center mt-5">
-                  <div className="block-input">
-                    <input
-                      type="checkbox"
-                      name="remember"
-                      id="remember"
-                      checked={agreedToTerms}
-                      onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    />
-                    <Icon.CheckSquare
-                      size={20}
-                      weight="fill"
-                      className="icon-checkbox"
+                  <div className="auth-field auth-phone-field">
+                    <label htmlFor="phoneNumber" className="auth-label">
+                      Phone Number
+                    </label>
+                    <PhoneInput
+                      country={signUpData.isoCode.toLowerCase()}
+                      value={signUpData.phoneNumber}
+                      onChange={(value: string, country: object) => {
+                        if (
+                          !("dialCode" in country) ||
+                          !("countryCode" in country)
+                        ) {
+                          return;
+                        }
+                        const data = country as {
+                          dialCode: string;
+                          countryCode: string;
+                        };
+                        setSignUpData((prev) => ({
+                          ...prev,
+                          phoneCode: data.dialCode,
+                          isoCode: data.countryCode.toUpperCase(),
+                          phoneNumber: value || "",
+                        }));
+                      }}
+                      inputProps={{
+                        id: "phoneNumber",
+                        name: "phoneNumber",
+                        required: true,
+                      }}
+                      containerClass="w-full"
+                      enableSearch
+                      disableSearchIcon
+                      searchPlaceholder="Search country"
                     />
                   </div>
-                  <label
-                    htmlFor="remember"
-                    className="pl-2 cursor-pointer text-secondary2"
-                  >
-                    I agree to the
-                    <Link
-                      href={"#!"}
-                      className="text-black hover:underline pl-1"
+
+                  <div className="auth-field-row">
+                    <div className="auth-field">
+                      <label htmlFor="password" className="auth-label">
+                        Password
+                      </label>
+                      <div className="auth-input-wrap">
+                        <Icon.Lock size={18} className="auth-input-icon" />
+                        <input
+                          className="auth-input"
+                          id="password"
+                          type="password"
+                          placeholder="Min. 6 characters"
+                          required
+                          value={signUpData.password}
+                          onChange={(e) => {
+                            setSignUpData((prev) => ({
+                              ...prev,
+                              password: e.target.value,
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label htmlFor="confirmPassword" className="auth-label">
+                        Confirm Password
+                      </label>
+                      <div className="auth-input-wrap">
+                        <Icon.LockKey size={18} className="auth-input-icon" />
+                        <input
+                          className="auth-input"
+                          id="confirmPassword"
+                          type="password"
+                          placeholder="Re-enter password"
+                          required
+                          value={signUpData.confirmPassword}
+                          onChange={(e) => {
+                            setSignUpData((prev) => ({
+                              ...prev,
+                              confirmPassword: e.target.value,
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="auth-terms">
+                    <div className="block-input">
+                      <input
+                        type="checkbox"
+                        name="remember"
+                        id="remember"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      />
+                      <Icon.CheckSquare
+                        size={20}
+                        weight="fill"
+                        className="icon-checkbox"
+                      />
+                    </div>
+                    <label htmlFor="remember" className="cursor-pointer">
+                      I agree to the{" "}
+                      <Link href="/pages/terms-and-conditions">
+                        Terms of Service
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="auth-submit">
+                    <button
+                      title="Register your Account"
+                      type="submit"
+                      className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
+                      disabled={loading}
                     >
-                      Terms of User
-                    </Link>
-                  </label>
-                </div>
-
-                <div className="block-button md:mt-7 mt-4">
-                  <button
-                    title="Register your Account"
-                    type="submit"
-                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
-                    disabled={loading}
-                  >
-                    {loading ? "Registering..." : "Register"}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div className="right md:w-1/2 w-full lg:pl-[60px] md:pl-[40px] flex items-center">
-              <div className="text-content">
-                <div className="heading4">Already have an account?</div>
-                <div className="mt-2 text-secondary">
-                  Welcome back. Sign in to access your personalized experience.
-                </div>
-                <div className="block-button cursor-pointer md:mt-7 mt-4">
-                  <button
-                    type="button"
-                    title="Go to Login Page"
-                    onClick={() => router.push("/login")}
-                    className="button-main bg-black text-white cursor-pointer hover:text-black transition-all duration-300"
-                  >
-                    Login
-                  </button>
-                </div>
+                      {loading ? "Creating account..." : "Create Account"}
+                    </button>
+                  </div>
+                </form>
               </div>
+
+              <aside className="auth-page-aside">
+                <div className="auth-aside-content">
+                  <h2 className="auth-aside-title">Already have an account?</h2>
+                  <p className="auth-aside-text">
+                    Welcome back. Sign in to access orders, wishlist, and your
+                    personalized shopping experience.
+                  </p>
+
+                  <ul className="auth-benefits">
+                    {AUTH_BENEFITS.map((item) => {
+                      const BenefitIcon = item.icon;
+                      return (
+                        <li key={item.title} className="auth-benefit-item">
+                          <span className="auth-benefit-icon">
+                            <BenefitIcon size={18} weight="duotone" />
+                          </span>
+                          <div>
+                            <p className="auth-benefit-title">{item.title}</p>
+                            <p className="auth-benefit-desc">
+                              {item.description}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div className="auth-aside-action">
+                    <button
+                      type="button"
+                      title="Go to Login Page"
+                      onClick={() => router.push("/login")}
+                      className="button-main cursor-pointer transition-all duration-300"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
       <Footer />
     </>
   );

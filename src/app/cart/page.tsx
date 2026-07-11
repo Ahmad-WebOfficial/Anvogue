@@ -10,7 +10,6 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
-import { countdownTime } from "@/store/countdownTime";
 import { formatRsPrice } from "@/lib/cart";
 import { fetchProductDetails, RelatedProduct } from "@/lib/product-details";
 import {
@@ -19,7 +18,6 @@ import {
 } from "@/lib/featured-products";
 
 const Cart = () => {
-  const [timeLeft, setTimeLeft] = useState(countdownTime());
   const [shipCart, setShipCart] = useState(0);
   const [addingRelatedId, setAddingRelatedId] = useState<number | null>(null);
   const router = useRouter();
@@ -32,13 +30,6 @@ const Cart = () => {
     fetchCart,
     addToCart,
   } = useCart();
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(countdownTime());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     void fetchCart();
@@ -108,6 +99,8 @@ const Cart = () => {
     );
   };
 
+  const shippingProgress = Math.min((subTotal / moneyForFreeship) * 100, 100);
+
   return (
     <>
       <TopNavOne
@@ -116,174 +109,141 @@ const Cart = () => {
       />
       <div id="header" className="relative w-full">
         <MenuOne props="bg-transparent" />
-        <Breadcrumb heading="Shopping cart" subHeading="Shopping cart" />
+        <Breadcrumb heading="Shopping Cart" subHeading="Shopping Cart" />
       </div>
 
-      <div className="cart-block md:py-20 py-10">
+      <div className="cart-page cart-block md:py-20 py-10">
         <div className="container">
+          <div className="cart-page-head">
+            <span className="cart-page-badge">Your Cart</span>
+            <h1 className="heading3 cart-page-title">Shopping Cart</h1>
+            <p className="text-secondary cart-page-subtitle">
+              {cartState.totalItems > 0
+                ? `${cartState.totalItems} item${cartState.totalItems > 1 ? "s" : ""} ready for checkout.`
+                : "Review items before proceeding to checkout."}
+            </p>
+          </div>
+
           {cartLoading ? (
-            <div className="text-center py-20 text-secondary">
-              Loading your cart...
+            <div className="cart-loading">
+              <div className="cart-loading-spinner" />
+              <p className="text-secondary">Loading your cart...</p>
             </div>
           ) : (
-            <div className="content-main flex justify-between max-xl:flex-col gap-y-10">
-              {/* Cart items */}
-              <div className="xl:w-2/3 xl:pr-3 w-full">
-                <div className="time bg-green py-3 px-5 flex items-center rounded-lg">
-                  <div className="heading5">🔥</div>
-                  <div className="caption1 pl-2">
-                    Your cart will expire in{" "}
-                    <span className="text-red font-semibold">
-                      {timeLeft.minutes}:
-                      {timeLeft.seconds < 10
-                        ? `0${timeLeft.seconds}`
-                        : timeLeft.seconds}
-                    </span>{" "}
-                    minutes! Please checkout before your items sell out!
-                  </div>
-                </div>
-
-                <div className="heading banner mt-5">
-                  <div className="text caption1">
-                    Buy{" "}
-                    <span className="text-button font-semibold">
-                      {formatRsPrice(freeShippingRemaining)}
-                    </span>{" "}
-                    more to get{" "}
-                    <span className="text-button font-semibold">free shipping</span>
-                  </div>
-                  <div className="tow-bar-block mt-4">
-                    <div
-                      className="progress-line"
-                      style={{
-                        width: `${Math.min((subTotal / moneyForFreeship) * 100, 100)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Desktop table header */}
-                <div className="hidden md:block heading bg-surface rounded-lg pt-4 pb-4 mt-7">
-                  <div className="flex px-2">
-                    <div className="w-[45%]">
-                      <div className="text-button text-center">Products</div>
-                    </div>
-                    <div className="w-[15%]">
-                      <div className="text-button text-center">Price</div>
-                    </div>
-                    <div className="w-[20%]">
-                      <div className="text-button text-center">Quantity</div>
-                    </div>
-                    <div className="w-[15%]">
-                      <div className="text-button text-center">Total</div>
-                    </div>
-                    <div className="w-[5%]" />
-                  </div>
-                </div>
-
-                <div className="list-product-main w-full mt-3">
-                  {cartState.cartArray.length === 0 ? (
-                    <div className="text-center py-16 border border-line rounded-2xl mt-5">
-                      <p className="text-button text-secondary mb-4">
-                        No products in your cart
+            <div className="cart-layout">
+              <div>
+                {cartState.cartArray.length > 0 && (
+                  <div className="cart-banners">
+                    <div className="cart-alert">
+                      <span className="cart-alert-icon">
+                        <Icon.ShieldCheck size={18} weight="bold" />
+                      </span>
+                      <p>
+                        Secure checkout — review your items below and complete your
+                        order when you&apos;re ready.
                       </p>
-                      <Link href="/" className="button-main inline-block">
+                    </div>
+
+                    <div className="cart-shipping-banner">
+                      <p className="cart-shipping-text">
+                        {qualifiesForFreeShipping ? (
+                          <>
+                            You&apos;ve unlocked{" "}
+                            <strong className="text-black">free shipping</strong>!
+                          </>
+                        ) : (
+                          <>
+                            Add{" "}
+                            <strong className="text-black">
+                              {formatRsPrice(freeShippingRemaining)}
+                            </strong>{" "}
+                            more for <strong className="text-black">free shipping</strong>
+                          </>
+                        )}
+                      </p>
+                      <div className="cart-shipping-bar">
+                        <div
+                          className="cart-shipping-progress"
+                          style={{ width: `${shippingProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="cart-items-card">
+                  {cartState.cartArray.length === 0 ? (
+                    <div className="cart-empty">
+                      <div className="cart-empty-icon">
+                        <Icon.ShoppingBag size={28} weight="duotone" />
+                      </div>
+                      <p className="text-button font-semibold">Your cart is empty</p>
+                      <p className="caption1 text-secondary mt-2">
+                        Browse products and add items to your cart.
+                      </p>
+                      <Link href="/" className="button-main bg-black inline-block mt-6">
                         Continue Shopping
                       </Link>
                     </div>
                   ) : (
-                    cartState.cartArray.map((product, index) => {
-                      const image =
-                        product.thumbImage?.[0] ||
-                        product.images?.[0] ||
-                        "/images/product/1000x1000.png";
-                      const variantsLabel = getVariantsLabel(product);
+                    <>
+                      <div className="cart-items-head">
+                        <span>Product</span>
+                        <span className="text-center">Price</span>
+                        <span className="text-center">Quantity</span>
+                        <span className="text-center">Total</span>
+                        <span />
+                      </div>
 
-                      return (
-                        <div
-                          key={product.cartId || `${product.id}-${index}`}
-                          className="item border-b border-line py-6 w-full"
-                        >
-                          {/* Mobile + Desktop row */}
-                          <div className="flex flex-col md:flex-row md:items-center gap-4">
-                            {/* Product info */}
-                            <div className="md:w-[45%] flex items-start gap-4 min-w-0">
-                              <Link
-                                href={getProductDetailUrl(
-                                  product.id,
-                                  product.productDetailId,
-                                )}
-                                className="w-24 h-28 md:w-[100px] md:h-[120px] flex-shrink-0 rounded-lg overflow-hidden relative bg-surface"
-                              >
+                      {cartState.cartArray.map((product, index) => {
+                        const image =
+                          product.thumbImage?.[0] ||
+                          product.images?.[0] ||
+                          "/images/product/1000x1000.png";
+                        const variantsLabel = getVariantsLabel(product);
+                        const productUrl = getProductDetailUrl(
+                          product.id,
+                          product.productDetailId,
+                        );
+
+                        return (
+                          <article
+                            key={product.cartId || `${product.id}-${index}`}
+                            className="cart-item"
+                          >
+                            <div className="cart-item-product">
+                              <Link href={productUrl} className="cart-item-image">
                                 <Image
                                   src={image}
                                   fill
-                                  sizes="100px"
+                                  sizes="88px"
                                   alt={product.name}
                                   className="object-cover"
                                 />
                               </Link>
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0">
                                 {product.category && (
-                                  <div className="caption2 text-secondary uppercase">
-                                    {product.category}
-                                  </div>
+                                  <div className="cart-item-category">{product.category}</div>
                                 )}
-                                <Link
-                                  href={getProductDetailUrl(
-                                    product.id,
-                                    product.productDetailId,
-                                  )}
-                                  className="text-title hover:underline line-clamp-2"
-                                >
+                                <Link href={productUrl} className="cart-item-name">
                                   {product.name}
                                 </Link>
                                 {variantsLabel && (
-                                  <div className="caption1 text-secondary mt-2">
-                                    Variant: {variantsLabel}
-                                  </div>
+                                  <span className="cart-item-variant">{variantsLabel}</span>
                                 )}
-                                {product.description &&
-                                  product.description !== variantsLabel && (
-                                    <p className="caption1 text-secondary mt-1 line-clamp-2">
-                                      {product.description}
-                                    </p>
-                                  )}
-                                {product.apiItem?.ProductDetailId && (
-                                  <div className="caption2 text-secondary mt-1">
-                                    SKU / Detail: {product.apiItem.ProductDetailId}
-                                  </div>
-                                )}
-                                {/* Mobile price + qty */}
-                                <div className="flex md:hidden items-center justify-between mt-3">
-                                  <span className="text-title font-semibold">
-                                    {formatRsPrice(product.lineTotal)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label="Remove item"
-                                    className="text-red caption1 underline"
-                                    onClick={() => removeFromCart(product.cartId)}
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
                               </div>
                             </div>
 
-                            {/* Unit price */}
-                            <div className="hidden md:flex md:w-[15%] items-center justify-center">
-                              <span className="text-title text-center">
-                                {formatRsPrice(product.price)}
-                              </span>
+                            <div className="cart-item-price-col">
+                              {formatRsPrice(product.price)}
                             </div>
 
-                            {/* Quantity */}
-                            <div className="md:w-[20%] flex items-center md:justify-center">
-                              <div className="quantity-block bg-surface p-2 md:p-3 flex items-center justify-between rounded-lg border border-line w-[120px]">
+                            <div className="cart-item-qty-col">
+                              <div className="cart-qty">
                                 <button
                                   type="button"
                                   aria-label="Decrease quantity"
+                                  className="cart-qty-btn"
                                   disabled={product.quantity <= 1}
                                   onClick={() =>
                                     handleQuantityChange(
@@ -291,62 +251,100 @@ const Cart = () => {
                                       product.quantity - 1,
                                     )
                                   }
-                                  className={`${product.quantity <= 1 ? "opacity-30" : "cursor-pointer"}`}
                                 >
-                                  <Icon.Minus size={16} />
+                                  <Icon.Minus size={14} weight="bold" />
                                 </button>
-                                <span className="text-button font-semibold w-8 text-center">
-                                  {product.quantity}
-                                </span>
+                                <span className="cart-qty-value">{product.quantity}</span>
                                 <button
                                   type="button"
                                   aria-label="Increase quantity"
+                                  className="cart-qty-btn"
                                   onClick={() =>
                                     handleQuantityChange(
                                       product.cartId,
                                       product.quantity + 1,
                                     )
                                   }
-                                  className="cursor-pointer"
                                 >
-                                  <Icon.Plus size={16} />
+                                  <Icon.Plus size={14} weight="bold" />
                                 </button>
                               </div>
                             </div>
 
-                            {/* Line total */}
-                            <div className="hidden md:flex md:w-[15%] items-center justify-center">
-                              <span className="text-title font-semibold text-center">
-                                {formatRsPrice(product.lineTotal)}
-                              </span>
+                            <div className="cart-item-total-col">
+                              {formatRsPrice(product.lineTotal)}
                             </div>
 
-                            {/* Remove */}
-                            <div className="hidden md:flex md:w-[5%] items-center justify-center">
+                            <div className="hidden md:flex items-center justify-center">
                               <button
                                 type="button"
                                 aria-label="Remove item"
-                                className="text-red hover:text-black duration-300"
+                                className="cart-item-remove"
                                 onClick={() => removeFromCart(product.cartId)}
                               >
-                                <Icon.XCircle size={24} />
+                                <Icon.Trash size={16} weight="bold" />
                               </button>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
+
+                            <div className="cart-item-actions-row">
+                              <div className="cart-qty">
+                                <button
+                                  type="button"
+                                  aria-label="Decrease quantity"
+                                  className="cart-qty-btn"
+                                  disabled={product.quantity <= 1}
+                                  onClick={() =>
+                                    handleQuantityChange(
+                                      product.cartId,
+                                      product.quantity - 1,
+                                    )
+                                  }
+                                >
+                                  <Icon.Minus size={14} weight="bold" />
+                                </button>
+                                <span className="cart-qty-value">{product.quantity}</span>
+                                <button
+                                  type="button"
+                                  aria-label="Increase quantity"
+                                  className="cart-qty-btn"
+                                  onClick={() =>
+                                    handleQuantityChange(
+                                      product.cartId,
+                                      product.quantity + 1,
+                                    )
+                                  }
+                                >
+                                  <Icon.Plus size={14} weight="bold" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-button font-semibold">
+                                  {formatRsPrice(product.lineTotal)}
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label="Remove item"
+                                  className="cart-item-remove"
+                                  onClick={() => removeFromCart(product.cartId)}
+                                >
+                                  <Icon.Trash size={16} weight="bold" />
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </>
                   )}
                 </div>
 
-                {/* Related Products */}
                 {relatedProducts.length > 0 && (
-                  <section className="mt-12 pt-8 border-t border-line">
-                    <h2 className="heading5 mb-2">You May Also Like</h2>
-                    <p className="caption1 text-secondary mb-6">
-                      Related products based on items in your cart
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <section className="cart-related-card">
+                    <div className="cart-related-head">
+                      <Icon.Sparkle size={18} weight="duotone" />
+                      <h2 className="heading6">You May Also Like</h2>
+                    </div>
+                    <div className="cart-related-grid">
                       {relatedProducts.map((related) => {
                         const image =
                           related.ThumbnailImagePath &&
@@ -355,61 +353,41 @@ const Cart = () => {
                             : "/images/product/1000x1000.png";
 
                         return (
-                          <div
-                            key={related.ProductId}
-                            className="border border-line rounded-2xl overflow-hidden hover:border-black transition-colors"
-                          >
+                          <div key={related.ProductId} className="cart-related-item">
                             <Link
                               href={getProductDetailUrl(related.ProductId)}
-                              className="block aspect-[4/5] relative bg-surface"
+                              className="cart-related-image"
                             >
                               <Image
                                 src={image}
                                 fill
-                                sizes="(max-width: 640px) 100vw, 33vw"
+                                sizes="72px"
                                 alt={related.ProductName}
                                 className="object-cover"
                               />
-                              {related.IsNewProduct && (
-                                <span className="absolute top-2 left-2 caption2 bg-green text-white px-2 py-0.5 rounded-full">
-                                  New
-                                </span>
-                              )}
                             </Link>
-                            <div className="p-4">
-                              <div className="caption2 text-secondary uppercase">
-                                {related.Category?.CategoryName}
-                              </div>
+                            <div className="min-w-0">
+                              {related.Category?.CategoryName && (
+                                <div className="caption2 text-secondary uppercase">
+                                  {related.Category.CategoryName}
+                                </div>
+                              )}
                               <Link
                                 href={getProductDetailUrl(related.ProductId)}
-                                className="text-button font-semibold mt-1 line-clamp-2 hover:underline"
+                                className="text-button font-semibold line-clamp-2 hover:underline"
                               >
                                 {related.ProductName}
                               </Link>
-                              {related.Category?.CategoryDescription && (
-                                <p className="caption1 text-secondary mt-2 line-clamp-2">
-                                  {related.Category.CategoryDescription}
-                                </p>
-                              )}
-                              <div className="flex flex-wrap gap-2 mt-4">
-                                <button
-                                  type="button"
-                                  disabled={addingRelatedId === related.ProductId}
-                                  className="button-main py-2 px-4 text-sm disabled:opacity-50"
-                                  onClick={() =>
-                                    void handleAddRelatedToCart(related)
-                                  }
-                                >
-                                  Add To Cart
-                                </button>
-                                <Link
-                                  href={getProductDetailUrl(related.ProductId)}
-                                  className="py-2 px-4 text-sm border border-line rounded-full hover:bg-black hover:text-white transition-colors inline-block"
-                                >
-                                  View Details
-                                </Link>
-                              </div>
                             </div>
+                            <button
+                              type="button"
+                              className="cart-related-add"
+                              disabled={addingRelatedId === related.ProductId}
+                              aria-label={`Add ${related.ProductName} to cart`}
+                              onClick={() => void handleAddRelatedToCart(related)}
+                            >
+                              <Icon.Plus size={16} weight="bold" />
+                            </button>
                           </div>
                         );
                       })}
@@ -418,88 +396,100 @@ const Cart = () => {
                 )}
               </div>
 
-              {/* Order summary */}
-              <div className="xl:w-1/3 xl:pl-8 w-full">
-                <div className="checkout-block bg-surface p-6 rounded-2xl sticky top-24">
-                  <div className="heading5">Order Summary</div>
+              <aside className="cart-summary-card">
+                <div className="cart-summary-title">
+                  <span className="cart-summary-icon">
+                    <Icon.Receipt size={18} weight="bold" />
+                  </span>
+                  Order Summary
+                </div>
 
-                  <div className="total-block py-5 flex justify-between border-b border-line mt-2">
-                    <span className="text-title">Subtotal</span>
-                    <span className="text-title">{formatRsPrice(subTotal)}</span>
+                <div className="cart-totals">
+                  <div className="cart-total-row">
+                    <span className="text-secondary">Subtotal</span>
+                    <span>{formatRsPrice(subTotal)}</span>
                   </div>
 
                   {totalDiscount > 0 && (
-                    <div className="discount-block py-5 flex justify-between border-b border-line">
-                      <span className="text-title">Discount</span>
-                      <span className="text-title text-green">
-                        -{formatRsPrice(totalDiscount)}
-                      </span>
+                    <div className="cart-total-row">
+                      <span className="text-secondary">Discount</span>
+                      <span className="text-green">-{formatRsPrice(totalDiscount)}</span>
                     </div>
                   )}
 
-                  <div className="ship-block py-5 flex justify-between border-b border-line gap-4">
-                    <span className="text-title flex-shrink-0">Shipping</span>
-                    <div className="text-right">
-                      <label className="flex items-center justify-end gap-2 caption1 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="ship"
-                          checked={qualifiesForFreeShipping || shipCart === 0}
-                          disabled={!qualifiesForFreeShipping}
-                          onChange={() => setShipCart(0)}
-                        />
-                        Free Shipping {qualifiesForFreeShipping ? "" : "(not eligible)"}
-                      </label>
-                      <label className="flex items-center justify-end gap-2 caption1 mt-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="ship"
-                          checked={!qualifiesForFreeShipping && shipCart === 30}
-                          onChange={() => setShipCart(30)}
-                        />
-                        Local — {formatRsPrice(30)}
-                      </label>
-                      <label className="flex items-center justify-end gap-2 caption1 mt-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="ship"
-                          checked={!qualifiesForFreeShipping && shipCart === 40}
-                          onChange={() => setShipCart(40)}
-                        />
-                        Flat Rate — {formatRsPrice(40)}
-                      </label>
-                    </div>
+                  <div className="cart-total-row">
+                    <span className="text-secondary">Shipping</span>
+                    <span>
+                      {qualifiesForFreeShipping || shipCart === 0
+                        ? "Free"
+                        : formatRsPrice(shipCart)}
+                    </span>
                   </div>
 
-                  <div className="total-cart-block pt-5 pb-2 flex justify-between">
-                    <span className="heading5">Total</span>
-                    <span className="heading5">{formatRsPrice(orderTotal)}</span>
-                  </div>
-
-                  {cartState.totalItems > 0 && (
-                    <p className="caption2 text-secondary text-center">
-                      {cartState.totalItems} item(s) in cart
-                    </p>
-                  )}
-
-                  <div className="block-button flex flex-col items-center gap-y-4 mt-5">
-                    <button
-                      type="button"
-                      className="checkout-btn button-main text-center w-full disabled:opacity-50"
-                      disabled={cartState.cartArray.length === 0}
-                      onClick={redirectToCheckout}
-                    >
-                      Proceed To Checkout
-                    </button>
-                    <Link
-                      className="text-button hover:underline"
-                      href="/"
-                    >
-                      Continue shopping
-                    </Link>
+                  <div className="cart-total-row is-grand">
+                    <span>Total</span>
+                    <span>{formatRsPrice(orderTotal)}</span>
                   </div>
                 </div>
-              </div>
+
+                {cartState.cartArray.length > 0 && (
+                  <div className="cart-shipping-options">
+                    <div className="cart-shipping-label">Delivery Method</div>
+                    <label className="cart-shipping-option">
+                      <input
+                        type="radio"
+                        name="ship"
+                        checked={qualifiesForFreeShipping || shipCart === 0}
+                        disabled={!qualifiesForFreeShipping}
+                        onChange={() => setShipCart(0)}
+                      />
+                      <span>
+                        Free Shipping{" "}
+                        {!qualifiesForFreeShipping && "(spend more to unlock)"}
+                      </span>
+                    </label>
+                    <label className="cart-shipping-option">
+                      <input
+                        type="radio"
+                        name="ship"
+                        checked={!qualifiesForFreeShipping && shipCart === 30}
+                        onChange={() => setShipCart(30)}
+                      />
+                      <span>Local — {formatRsPrice(30)}</span>
+                    </label>
+                    <label className="cart-shipping-option">
+                      <input
+                        type="radio"
+                        name="ship"
+                        checked={!qualifiesForFreeShipping && shipCart === 40}
+                        onChange={() => setShipCart(40)}
+                      />
+                      <span>Flat Rate — {formatRsPrice(40)}</span>
+                    </label>
+                  </div>
+                )}
+
+                {cartState.totalItems > 0 && (
+                  <p className="caption2 text-secondary text-center mt-3">
+                    {cartState.totalItems} item(s) · All prices in PKR (Rs.)
+                  </p>
+                )}
+
+                <div className="cart-checkout-btn">
+                  <button
+                    type="button"
+                    className="button-main bg-black"
+                    disabled={cartState.cartArray.length === 0}
+                    onClick={redirectToCheckout}
+                  >
+                    Proceed To Checkout
+                  </button>
+                </div>
+
+                <Link href="/" className="cart-continue-link">
+                  Continue shopping
+                </Link>
+              </aside>
             </div>
           )}
         </div>

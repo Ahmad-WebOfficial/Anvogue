@@ -189,6 +189,24 @@ export function getVariantPrice(variant: ProductVariantCombination): number {
   return variant.DiscountedPrice > 0 ? variant.DiscountedPrice : variant.Price;
 }
 
+export function getDetailSalePrice(detail: ProductDetailData): number {
+  const discount = detail.Discount ?? 0;
+  const discountValueType = detail.DiscountValueType ?? 0;
+
+  if (discount > 0 && detail.MinPrice > 0) {
+    const discounted =
+      discountValueType === 1
+        ? Math.max(0, detail.MinPrice - discount)
+        : Math.round(detail.MinPrice * (1 - discount / 100));
+
+    if (discounted > 0 && discounted < detail.MinPrice) {
+      return discounted;
+    }
+  }
+
+  return detail.MinPrice;
+}
+
 export function formatRsPrice(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-PK")}`;
 }
@@ -207,8 +225,9 @@ export function getComparePrice(
     return 0;
   }
 
-  if (detail.Discount > 0 && detail.MinPrice < detail.MaxPrice) {
-    return detail.MaxPrice;
+  const salePrice = getDetailSalePrice(detail);
+  if (salePrice < detail.MinPrice) {
+    return detail.MinPrice;
   }
 
   return 0;

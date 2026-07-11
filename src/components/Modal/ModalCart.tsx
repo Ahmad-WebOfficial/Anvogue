@@ -398,7 +398,6 @@ const ModalCart = ({
               )}
             </div>
 
-            {/* Footer */}
             <div className="footer-modal bg-white absolute bottom-0 left-0 w-full">
               <div className="flex items-center justify-center lg:gap-14 gap-8 px-6 py-4 border-b border-line">
                 <button
@@ -464,7 +463,6 @@ const ModalCart = ({
                 </button>
               </div>
 
-              {/* Shipping tab */}
               <div
                 className={`tab-item note-block ${activeTab === "shipping" ? "active" : ""}`}
               >
@@ -527,10 +525,10 @@ const ModalCart = ({
                     </div>
                   </div>
                 </div>
-                <div className="block-button text-center pt-4 px-6 pb-6">
+                <div className="block-button  text-center pt-4 px-6 pb-6">
                   <button
                     type="button"
-                    className="button-main w-full text-center"
+                    className="button-main bg-black w-full text-center"
                     onClick={() => setActiveTab("")}
                   >
                     Done
@@ -538,7 +536,6 @@ const ModalCart = ({
                 </div>
               </div>
 
-              {/* Coupon tab */}
               <div
                 className={`tab-item note-block ${activeTab === "coupon" ? "active" : ""}`}
               >
@@ -564,7 +561,7 @@ const ModalCart = ({
                 <div className="block-button text-center pt-4 px-6 pb-6">
                   <button
                     type="button"
-                    className="button-main w-full text-center"
+                    className="button-main bg-black w-full text-center"
                     onClick={() => {
                       if (!promoCode) {
                         toaster.error("Please enter a coupon code!");

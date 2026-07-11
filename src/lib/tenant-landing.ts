@@ -149,17 +149,19 @@ export async function fetchTenantLanding(): Promise<TenantLandingData | null> {
 }
 
 export async function fetchTenantBanners(): Promise<TenantBanner[]> {
-  const data = await fetchTenantBannersData();
-  return getActiveBanners(data?.WebPlateFormBanners);
+  try {
+    const data = await fetchTenantBannersData();
+    return getActiveBanners(data?.WebPlateFormBanners);
+  } catch (error) {
+    console.error("Failed to fetch web banners:", error);
+    return [];
+  }
 }
-
 export async function subscribeNewsletter(email: string): Promise<string> {
   try {
     const response = await api.post("/api/v1/TenantLanding/subscribe", { 
       Email: email.trim() 
     });
-
-   
     return response.data?.Message?.trim() || "Subscribed successfully.";
 
   } catch (error: any) {

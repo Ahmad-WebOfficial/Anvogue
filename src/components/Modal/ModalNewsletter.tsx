@@ -73,7 +73,7 @@ const ModalNewsletter = () => {
               {featuredProduct ? (
                 <>
                   <div className="text-2xl font-bold uppercase text-center">
-                    Angue
+                    Anvogue
                   </div>
                   <div className="lg:text-lg text-sm lg:leading-[40px] leading-[30px] font-semibold  text-center ">
                     Discover an elevated e-commerce experience enjoy seamless

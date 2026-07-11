@@ -16,11 +16,14 @@ import TenantLogo from "@/components/Common/TenantLogo";
 import DynamicCategoryMegaMenu from "@/components/Category/DynamicCategoryMegaMenu";
 import DynamicCategoryMobileNav from "@/components/Category/DynamicCategoryMobileNav";
 import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+
 interface Props {
   props: string;
 }
 
 const MenuOne: React.FC<Props> = ({ props }) => {
+  const router = useRouter();
   const pathname = usePathname();
   const { openLoginPopup, handleLoginPopup } = useLoginPopup();
   const { openMenuMobile, handleMenuMobile } = useMenuMobile();
@@ -41,32 +44,27 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
-      setIsLoggedIn(true);
       try {
         const decoded: any = jwtDecode(token);
-
-        // Email se naam extract karna (ahmadbilal71al@gmail.com -> ahmadbilal71al)
         const email = decoded.email || "";
-        const nameFromName = email.split("@")[0];
 
         setUser({
-          name: nameFromName || "User", // Agar email se bhi naam na mile
           email: email,
         });
+        setIsLoggedIn(true);
       } catch (error) {
         console.error("Token decode error:", error);
+        setIsLoggedIn(false);
       }
     } else {
       setIsLoggedIn(false);
     }
   }, []);
-
-  // 3. Logout function mein user ko bhi clear kar dein
   const handleLogout = async () => {
     logout();
     setIsLoggedIn(false);
-    setUser(null); // User ka data hata dein
-    localStorage.removeItem("user"); // Storage se bhi delete kar dein
+    setUser(null);
+    localStorage.removeItem("user");
     window.location.href = "/login";
   };
   useEffect(() => {
@@ -86,7 +84,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   return (
     <>
       <div
-        className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full  md:h-[60px] h-[56px] ${props}`}
+        className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full  md:h-[55px] h-[56px] ${props}`}
       >
         <div className="container mx-auto  h-full">
           <div className="header-main flex items-center justify-between h-full">
@@ -194,7 +192,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
             <div className=" flex items-center gap-5">
               <div
                 className="hidden md:flex cursor-pointer hover:scale-110 duration-300"
-                onClick={openModalSearch}
+                onClick={() => router.push("/search-result")}
                 title="Search"
               >
                 <Icon.MagnifyingGlass size={26} color="black" />
@@ -218,7 +216,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   onMouseLeave={() => setOpenSubNavMobile(0)}
                 >
                   <div
-                    className={`login-popup absolute top-[10px] -right-5 w-[220px] p-5 rounded-xl bg-white shadow-lg border border-line transition-all duration-300 ${
+                    className={`login-popup absolute top-[3px] -right-8 w-[220px] p-5 rounded-xl bg-white shadow-lg border border-line transition-all duration-300 ${
                       openSubNavMobile === 99
                         ? "opacity-100 visible"
                         : "opacity-0 invisible"
@@ -226,15 +224,6 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   >
                     {isLoggedIn ? (
                       <div className="flex flex-col gap-4">
-                        <div className="pb-3 border-b text-center border-line">
-                          <p className="font-bold text-gray-800">
-                            {user?.name || "User Name"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {user?.email || "email@example.com"}
-                          </p>
-                        </div>
-
                         <Link
                           href={"/my-account"}
                           className="flex items-center hover:scale-110 gap-3 font-medium hover:text-blue-600 transition-all"
@@ -253,6 +242,12 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                         >
                           <Icon.SignOut size={20} /> Logout
                         </button>
+                        <div className="pt-3 border-t text-center border-line mt-2">
+                          <p className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                            <Icon.Envelope size={14} />
+                            {user?.email || "email@example.com"}
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-4">
@@ -297,14 +292,13 @@ const MenuOne: React.FC<Props> = ({ props }) => {
           </div>
         </div>
       </div>
-
       <div id="menu-mobile" className={`${openMenuMobile ? "open" : ""}`}>
         <div className="menu-container bg-white h-full">
           <div className="container h-full">
             <div className="menu-main h-full overflow-hidden">
               <div className="heading py-2 relative flex items-center justify-center">
                 <div
-                  className="close-menu-mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-surface flex items-center justify-center"
+                  className="close-menu-mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-surface flex items-center justify-center cursor-pointer"
                   onClick={handleMenuMobile}
                 >
                   <Icon.X size={14} />
@@ -321,44 +315,40 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                   <li>
                     <Link
                       href="/"
-                      className={`text-xl font-semibold flex items-center justify-between mt-5 ${pathname === "/" ? "active" : ""}`}
+                      className="text-xl font-semibold flex items-center justify-between mt-5"
                     >
                       Home
                     </Link>
                   </li>
-                  <li
-                    className={`${openSubNavMobile === 2 ? "open" : ""}`}
-                    onClick={() => handleOpenSubNavMobile(2)}
-                  >
-                    <a
-                      href={"/categories"}
-                      className="text-xl font-semibold flex items-center justify-between mt-5"
+
+                  <li className={`${openSubNavMobile === 2 ? "open" : ""}`}>
+                    <div
+                      className="text-xl font-semibold flex items-center justify-between mt-5 cursor-pointer"
+                      onClick={() => handleOpenSubNavMobile(2)}
                     >
                       Categories
                       <span className="text-right">
                         <Icon.CaretRight size={20} />
                       </span>
-                    </a>
+                    </div>
                     <DynamicCategoryMobileNav
                       onBack={() => handleOpenSubNavMobile(2)}
                     />
                   </li>
-                  <li
-                    className={`${openSubNavMobile === 3 ? "open" : ""}`}
-                    onClick={() => handleOpenSubNavMobile(3)}
-                  >
-                    <a
-                      href={"#!"}
-                      className="text-xl font-semibold flex items-center justify-between mt-5"
+
+                  <li className={`${openSubNavMobile === 3 ? "open" : ""}`}>
+                    <div
+                      className="text-xl font-semibold flex items-center justify-between mt-5 cursor-pointer"
+                      onClick={() => handleOpenSubNavMobile(3)}
                     >
                       Shop
                       <span className="text-right">
                         <Icon.CaretRight size={20} />
                       </span>
-                    </a>
+                    </div>
                     <div className="sub-nav-mobile">
                       <div
-                        className="back-btn flex items-center gap-3"
+                        className="back-btn flex items-center gap-3 cursor-pointer"
                         onClick={() => handleOpenSubNavMobile(3)}
                       >
                         <Icon.CaretLeft />
@@ -369,39 +359,30 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                           <li>
                             <Link
                               href="/categories"
-                              className="nav-item-mobile link text-secondary duration-300"
+                              className="nav-item-mobile"
                             >
                               All Categories
                             </Link>
                           </li>
                           <li>
-                            <Link
-                              href="/cart"
-                              className="nav-item-mobile link text-secondary duration-300"
-                            >
+                            <Link href="/cart" className="nav-item-mobile">
                               Shopping Cart
                             </Link>
                           </li>
                           <li>
-                            <Link
-                              href="/checkout"
-                              className="nav-item-mobile link text-secondary duration-300"
-                            >
+                            <Link href="/checkout" className="nav-item-mobile">
                               Checkout
                             </Link>
                           </li>
                           <li>
-                            <Link
-                              href="/wishlist"
-                              className="nav-item-mobile link text-secondary duration-300"
-                            >
+                            <Link href="/wishlist" className="nav-item-mobile">
                               Wishlist
                             </Link>
                           </li>
                           <li>
                             <Link
                               href="/my-account"
-                              className="nav-item-mobile link text-secondary duration-300"
+                              className="nav-item-mobile"
                             >
                               My Account
                             </Link>
@@ -410,22 +391,20 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                       </div>
                     </div>
                   </li>
-                  <li
-                    className={`${openSubNavMobile === 5 ? "open" : ""}`}
-                    onClick={() => handleOpenSubNavMobile(5)}
-                  >
-                    <a
-                      href={"#!"}
-                      className="text-xl font-semibold flex items-center justify-between mt-5"
+
+                  <li className={`${openSubNavMobile === 5 ? "open" : ""}`}>
+                    <div
+                      className="text-xl font-semibold flex items-center justify-between mt-5 cursor-pointer"
+                      onClick={() => handleOpenSubNavMobile(5)}
                     >
                       Blog
                       <span className="text-right">
                         <Icon.CaretRight size={20} />
                       </span>
-                    </a>
+                    </div>
                     <div className="sub-nav-mobile">
                       <div
-                        className="back-btn flex items-center gap-3"
+                        className="back-btn flex items-center gap-3 cursor-pointer"
                         onClick={() => handleOpenSubNavMobile(5)}
                       >
                         <Icon.CaretLeft />
@@ -434,10 +413,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                       <div className="list-nav-item w-full pt-2 pb-6">
                         <ul className="w-full">
                           <li>
-                            <Link
-                              href="/blog/list"
-                              className={`link text-secondary duration-300 ${pathname === "/blog/list" ? "active" : ""}`}
-                            >
+                            <Link href="/blog/list" className="nav-item-mobile">
                               Blog List
                             </Link>
                           </li>
@@ -462,7 +438,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
             <span className="menu_bar-title caption2 font-semibold">Home</span>
           </Link>
           <Link
-            href={"/shop/filter-canvas"}
+            href={"/categories"}
             className="menu_bar-link flex flex-col items-center gap-1"
           >
             <Icon.List weight="bold" className="text-2xl" />

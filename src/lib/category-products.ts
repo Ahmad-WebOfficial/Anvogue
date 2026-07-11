@@ -12,16 +12,39 @@ export interface LandingPageProduct {
   Description?: string;
   MinPrice?: number;
   MaxPrice?: number;
+  MinDiscountedPrice?: number;
+  MaxDiscountedPrice?: number;
   ThumbnailImagePath?: string;
   IconImagePath?: string;
   LargeImagePath?: string;
   IsNewProduct?: boolean;
+  IsFeaturedProduct?: boolean;
+  IsProductInStock?: boolean;
   IsPromotionalProduct?: boolean;
+  IsCampaignApplied?: boolean;
   Discount?: number;
   Category?: {
     CategoryId: number;
     CategoryName: string;
   };
+}
+
+export type HomeProductTab = "best sellers" | "on sale" | "new arrivals";
+
+interface ByCategoryResponse {
+  Data?: {
+    productListViewModel?: LandingPageProduct[];
+    ProductListViewModel?: LandingPageProduct[];
+    TotalRecords?: number;
+  };
+  Message: string;
+  Type: string;
+  HttpStatusCode: number;
+}
+
+function getBrandId(): number {
+  const brandId = Number(process.env.NEXT_PUBLIC_BRAND_ID?.trim());
+  return Number.isFinite(brandId) && brandId > 0 ? brandId : 1;
 }
 
 export interface LandingPageCategoryGroup {
@@ -35,13 +58,6 @@ export interface LandingPageCategoryGroup {
 
 interface LandingPageResponse {
   Data: LandingPageCategoryGroup[];
-  Message: string;
-  Type: string;
-  HttpStatusCode: number;
-}
-
-interface CategoryProductResponse {
-  Data: LandingPageProduct[] | LandingPageProduct;
   Message: string;
   Type: string;
   HttpStatusCode: number;
@@ -61,8 +77,14 @@ export function mapLandingProductToProductType(
   categoryName = "",
 ): ProductType {
   const image = getProductImage(product);
-  const minPrice = product.MinPrice ?? 0;
-  const maxPrice = product.MaxPrice ?? minPrice;
+  const originPrice = product.MinPrice ?? 0;
+  const maxPrice = product.MaxPrice ?? originPrice;
+  const hasDiscount =
+    (product.MinDiscountedPrice ?? 0) > 0 ||
+    (product.MaxDiscountedPrice ?? 0) > 0;
+  const minPrice = hasDiscount
+    ? (product.MinDiscountedPrice ?? originPrice)
+    : originPrice;
 
   return {
     id: String(product.ProductId),
@@ -74,11 +96,12 @@ export function mapLandingProductToProductType(
     new: Boolean(product.IsNewProduct),
     sale:
       Boolean(product.IsPromotionalProduct) ||
+      Boolean(product.IsCampaignApplied) ||
       (product.Discount ?? 0) > 0 ||
-      (maxPrice > 0 && minPrice < maxPrice),
+      hasDiscount,
     rate: 5,
     price: minPrice,
-    originPrice: maxPrice > minPrice ? maxPrice : minPrice,
+    originPrice: maxPrice > minPrice ? maxPrice : originPrice,
     brand: "",
     sold: 0,
     quantity: 100,
@@ -136,19 +159,127 @@ async function fetchFromFeatured(categoryId: number): Promise<ProductType[]> {
     .map(mapFeaturedProductToProductType);
 }
 
+function extractProductListFromByCategory(
+  data: ByCategoryResponse["Data"] | LandingPageProduct[] | LandingPageProduct | null | undefined,
+): LandingPageProduct[] {
+  if (!data) return [];
+
+  if (Array.isArray(data)) {
+    return normalizeProductList(data);
+  }
+
+  return normalizeProductList(
+    data.productListViewModel ?? data.ProductListViewModel ?? [],
+  );
+}
+
+export async function fetchProductsByBrand(
+  pageNumber = 1,
+  pageSize = 50,
+): Promise<LandingPageProduct[]> {
+  const res = await api.get<ByCategoryResponse>("/api/v1/Product/by-category", {
+    params: {
+      BrandId: getBrandId(),
+      PageNumber: pageNumber,
+      PageSize: pageSize,
+      SortBy: "name",
+    },
+  });
+
+  return extractProductListFromByCategory(res.data?.Data).filter((product) =>
+    Boolean(product?.ProductId),
+  );
+}
+
+export function filterProductsForHomeTab(
+  products: LandingPageProduct[],
+  tab: HomeProductTab,
+): LandingPageProduct[] {
+  switch (tab) {
+    case "best sellers":
+      return products.filter((product) => product.IsFeaturedProduct);
+    case "new arrivals":
+      return products.filter((product) => product.IsNewProduct);
+    case "on sale":
+      return products.filter(
+        (product) =>
+          product.IsPromotionalProduct ||
+          product.IsCampaignApplied ||
+          (product.Discount ?? 0) > 0 ||
+          (product.MinDiscountedPrice ?? 0) > 0 ||
+          (product.MaxDiscountedPrice ?? 0) > 0,
+      );
+    default:
+      return products;
+  }
+}
+
+export async function fetchHomeTabProducts(
+  tab: HomeProductTab,
+  pageSize = 50,
+): Promise<ProductType[]> {
+  const products = await fetchProductsByBrand(1, pageSize);
+  return filterProductsForHomeTab(products, tab).map((product) =>
+    mapLandingProductToProductType(product),
+  );
+}
+
 async function fetchFromCategoryProductApi(
   categoryId: number,
 ): Promise<ProductType[]> {
-  const res = await api.get<CategoryProductResponse>(
-    "/api/v1/Product/current",
-    {
-      params: { CategoryId: categoryId },
+  const res = await api.get<ByCategoryResponse>("/api/v1/Product/by-category", {
+    params: {
+      CategoryId: categoryId,
+      BrandId: getBrandId(),
+      PageNumber: 1,
+      PageSize: 50,
+      SortBy: "name",
     },
-  );
+  });
 
-  return normalizeProductList(res.data?.Data)
+  return extractProductListFromByCategory(res.data?.Data)
     .filter((product) => Boolean(product?.ProductId))
     .map((product) => mapLandingProductToProductType(product));
+}
+
+export async function fetchAllLandingProducts(): Promise<ProductType[]> {
+  const res = await api.get<LandingPageResponse>("/api/v1/Product/landing-page");
+  const products: ProductType[] = [];
+  const seen = new Set<number>();
+
+  for (const group of res.data?.Data ?? []) {
+    const categoryName =
+      group.Category?.CategoryName || "";
+
+    for (const product of group.ProductList ?? []) {
+      if (!product?.ProductId || seen.has(product.ProductId)) continue;
+
+      seen.add(product.ProductId);
+      products.push(
+        mapLandingProductToProductType(
+          product,
+          product.Category?.CategoryName || categoryName,
+        ),
+      );
+    }
+  }
+
+  return products;
+}
+
+export function filterProductsByQuery(
+  products: ProductType[],
+  query: string,
+): ProductType[] {
+  const keyword = query.trim().toLowerCase();
+  if (!keyword) return products;
+
+  return products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(keyword) ||
+      product.category.toLowerCase().includes(keyword) ||
+      product.description.toLowerCase().includes(keyword),
+  );
 }
 
 export async function fetchProductsByCategoryId(

@@ -1,83 +1,110 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation } from "swiper/modules";
 import "swiper/css/bundle";
 import Product from "../Product/Product";
-import { ProductType } from "@/type/ProductType";
 import { motion } from "framer-motion";
+import {
+  fetchProductsByBrand,
+  filterProductsForHomeTab,
+  HomeProductTab,
+  LandingPageProduct,
+  mapLandingProductToProductType,
+} from "@/lib/category-products";
 
-interface Props {
-  data: Array<ProductType>;
-  start: number;
-  limit: number;
-}
+const TABS: HomeProductTab[] = ["best sellers", "on sale", "new arrivals"];
 
-const TabFeatures: React.FC<Props> = ({ data, start, limit }) => {
-  const [activeTab, setActiveTab] = useState<string>("on sale");
+const TabFeatures: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<HomeProductTab>("on sale");
+  const [products, setProducts] = useState<LandingPageProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const handleTabClick = (item: string) => {
-    setActiveTab(item);
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const getFilterData = () => {
-    if (activeTab === "on sale") {
-      return data.filter(
-        (product) => product.sale && product.category === "fashion",
-      );
-    }
+    const loadProducts = async () => {
+      setLoading(true);
+      setError("");
 
-    if (activeTab === "new arrivals") {
-      return data.filter(
-        (product) => product.new && product.category === "fashion",
-      );
-    }
+      try {
+        const apiProducts = await fetchProductsByBrand(1, 50);
+        if (cancelled) return;
+        setProducts(apiProducts);
+      } catch {
+        if (!cancelled) {
+          setProducts([]);
+          setError("Unable to load products. Please try again later.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
 
-    if (activeTab === "best sellers") {
-      return data
-        .filter((product) => product.category === "fashion")
-        .slice()
-        .sort((a, b) => b.sold - a.sold);
-    }
+    loadProducts();
 
-    return data;
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filteredProducts = getFilterData();
+  const filteredProducts = useMemo(
+    () =>
+      filterProductsForHomeTab(products, activeTab).map((product) =>
+        mapLandingProductToProductType(product),
+      ),
+    [products, activeTab],
+  );
 
   return (
-    <>
-      <div className="tab-features-block md:pt-20 pt-10">
-        <div className="container">
-          <div className="heading flex flex-col items-center text-center">
-            <div className="menu-tab flex items-center gap-2 p-1 bg-surface rounded-2xl">
-              {["best sellers", "on sale", "new arrivals"].map(
-                (item, index) => (
-                  <div
-                    key={index}
-                    className={`tab-item relative text-secondary heading5 py-2 px-5 cursor-pointer duration-500 hover:text-black ${activeTab === item ? "active" : ""}`}
-                    onClick={() => handleTabClick(item)}
-                  >
-                    {activeTab === item && (
-                      <motion.div
-                        layoutId="active-pill"
-                        className="absolute inset-0 rounded-2xl bg-white"
-                      ></motion.div>
-                    )}
-                    <span className="relative heading5 z-[1]">{item}</span>
-                  </div>
-                ),
-              )}
-            </div>
+    <div className="tab-features-block md:pt-20 pt-10">
+      <div className="container">
+        <div className="heading flex flex-col items-center text-center">
+          <div className="menu-tab flex items-center gap-2 p-1 bg-surface rounded-2xl">
+            {TABS.map((item) => (
+              <div
+                key={item}
+                className={`tab-item relative text-secondary heading5 py-2 px-5 cursor-pointer duration-500 hover:text-black ${activeTab === item ? "active" : ""}`}
+                onClick={() => setActiveTab(item)}
+              >
+                {activeTab === item && (
+                  <motion.div
+                    layoutId="active-pill"
+                    className="absolute inset-0 rounded-2xl bg-white"
+                  ></motion.div>
+                )}
+                <span className="relative heading5 z-[1]">{item}</span>
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div className="list-product hide-product-sold section-swiper-navigation style-outline style-border md:mt-10 mt-6">
+        <div className="list-product hide-product-sold section-swiper-navigation style-outline style-border md:mt-10 mt-6">
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="aspect-[3/4] rounded-2xl bg-surface animate-pulse"
+                />
+              ))}
+            </div>
+          ) : error ? (
+            <p className="text-center py-10 text-secondary">{error}</p>
+          ) : filteredProducts.length === 0 ? (
+            <p className="text-center py-10 text-secondary">
+              No products found for this tab.
+            </p>
+          ) : (
             <Swiper
               spaceBetween={12}
               slidesPerView={2}
               navigation
-              loop={true}
+              loop={filteredProducts.length > 4}
               modules={[Navigation, Autoplay]}
               breakpoints={{
                 576: {
@@ -94,16 +121,16 @@ const TabFeatures: React.FC<Props> = ({ data, start, limit }) => {
                 },
               }}
             >
-              {filteredProducts.slice(start, limit).map((prd, index) => (
-                <SwiperSlide key={index}>
-                  <Product data={prd} type="grid" />
+              {filteredProducts.map((product) => (
+                <SwiperSlide key={product.id}>
+                  <Product data={product} type="grid" style="style-1" />
                 </SwiperSlide>
               ))}
             </Swiper>
-          </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

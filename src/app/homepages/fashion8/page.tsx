@@ -26,7 +26,7 @@ export default function HomeEight() {
             <Collection />
             <Deal data={productData} start={0} limit={4} />
             <Banner />
-            <TabFeatures data={productData} start={0} limit={4} />
+            <TabFeatures />
             <NewsInsight data={blogData} start={0} limit={3} />
             <Brand />
             <Footer />

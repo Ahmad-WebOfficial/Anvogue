@@ -1,7 +1,7 @@
 ﻿"use client";
 import { getAuthToken, logout } from "@/lib/auth";
 import { jwtDecode } from "jwt-decode"; // Import add karein
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -22,6 +22,92 @@ interface Props {
   props: string;
 }
 
+function isInvalidDisplayName(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+
+  const lower = trimmed.toLowerCase();
+  if (/deleted/i.test(lower)) return true;
+  if (/^deleted_\d+/i.test(trimmed)) return true;
+  if (trimmed.includes("_DELETED_") || trimmed.includes("_deleted_")) return true;
+  if (/^user_\d+/i.test(trimmed)) return true;
+  if (/^\d+$/.test(trimmed)) return true;
+  if (trimmed.length > 18 && /[_\d]{4,}/.test(trimmed)) return true;
+
+  return false;
+}
+
+function sanitizeDisplayName(value: string): string | null {
+  const trimmed = value.trim();
+  if (isInvalidDisplayName(trimmed)) return null;
+
+  if (trimmed.includes("@")) {
+    const localPart = trimmed.split("@")[0];
+    if (isInvalidDisplayName(localPart)) return null;
+
+    const cleanPart = localPart
+      .split(/[._+-]/)
+      .find((part) => part.length >= 2 && !/^\d+$/.test(part));
+
+    if (!cleanPart || isInvalidDisplayName(cleanPart)) return null;
+
+    return cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase();
+  }
+
+  const firstWord = trimmed.split(/\s+/)[0];
+  if (isInvalidDisplayName(firstWord)) return null;
+
+  return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+}
+
+function getWelcomeName(decoded: Record<string, unknown>): string | null {
+  const primaryFields = [decoded.FullName, decoded.fullName, decoded.name];
+
+  for (const value of primaryFields) {
+    if (typeof value === "string") {
+      const sanitized = sanitizeDisplayName(value);
+      if (sanitized) return sanitized;
+    }
+  }
+
+  if (typeof decoded.email === "string") {
+    const sanitized = sanitizeDisplayName(decoded.email);
+    if (sanitized) return sanitized;
+  }
+
+  const fallbackFields = [
+    decoded.UserName,
+    decoded.username,
+    decoded.unique_name,
+    decoded.sub,
+  ];
+
+  for (const value of fallbackFields) {
+    if (typeof value === "string") {
+      const sanitized = sanitizeDisplayName(value);
+      if (sanitized) return sanitized;
+    }
+  }
+
+  return null;
+}
+
+function getUserInitials(name: string | null, email: string): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  if (email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+
+  return "U";
+}
+
 const MenuOne: React.FC<Props> = ({ props }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,27 +123,33 @@ const MenuOne: React.FC<Props> = ({ props }) => {
     setOpenSubNavMobile(openSubNavMobile === index ? null : index);
   };
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fixedHeader, setFixedHeader] = useState(false);
   const [lastScrollPosition, setLastScrollPosition] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState<any>(null); // State add ki
+  const [user, setUser] = useState<{ email: string; welcomeName: string | null } | null>(null);
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
       try {
-        const decoded: any = jwtDecode(token);
-        const email = decoded.email || "";
+        const decoded = jwtDecode<Record<string, unknown>>(token);
+        const email = typeof decoded.email === "string" ? decoded.email : "";
+        const welcomeName = getWelcomeName(decoded);
 
         setUser({
-          email: email,
+          email,
+          welcomeName,
         });
         setIsLoggedIn(true);
       } catch (error) {
         console.error("Token decode error:", error);
         setIsLoggedIn(false);
+        setUser(null);
       }
     } else {
       setIsLoggedIn(false);
+      setUser(null);
     }
   }, []);
   const handleLogout = async () => {
@@ -81,33 +173,137 @@ const MenuOne: React.FC<Props> = ({ props }) => {
     };
   }, [lastScrollPosition]);
 
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [pathname]);
+
+  const closeAccountMenu = () => {
+    if (accountCloseTimer.current) {
+      clearTimeout(accountCloseTimer.current);
+      accountCloseTimer.current = null;
+    }
+    setAccountMenuOpen(false);
+  };
+
+  const openAccountMenuDesktop = () => {
+    if (window.innerWidth < 1024) return;
+    if (accountCloseTimer.current) {
+      clearTimeout(accountCloseTimer.current);
+      accountCloseTimer.current = null;
+    }
+    setAccountMenuOpen(true);
+  };
+
+  const scheduleCloseAccountMenuDesktop = () => {
+    if (window.innerWidth < 1024) return;
+    if (accountCloseTimer.current) {
+      clearTimeout(accountCloseTimer.current);
+    }
+    accountCloseTimer.current = setTimeout(() => {
+      setAccountMenuOpen(false);
+      accountCloseTimer.current = null;
+    }, 120);
+  };
+
+  const displayName = user?.welcomeName ?? null;
+  const userInitials = getUserInitials(displayName, user?.email ?? "");
+
+  const renderAccountMenuContent = (onClose: () => void) =>
+    isLoggedIn ? (
+      <>
+        <div className="account-dropdown-header">
+          <div className="account-dropdown-avatar">{userInitials}</div>
+          <div className="account-dropdown-meta">
+            <p className="account-dropdown-name">
+              {displayName ? `Hi, ${displayName}` : "Welcome Back!"}
+            </p>
+            {user?.email && (
+              <p className="account-dropdown-email">{user.email}</p>
+            )}
+          </div>
+        </div>
+        <div className="account-dropdown-body">
+          <Link href="/my-account" className="account-dropdown-item" onClick={onClose}>
+            <span className="account-dropdown-item-icon">
+              <Icon.SquaresFour size={18} weight="duotone" />
+            </span>
+            <span>My Account</span>
+          </Link>
+          <Link href="/wishlist" className="account-dropdown-item" onClick={onClose}>
+            <span className="account-dropdown-item-icon">
+              <Icon.Heart size={18} weight="duotone" />
+            </span>
+            <span>Wishlist</span>
+          </Link>
+          <div className="account-dropdown-divider" />
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              setShowLogoutModal(true);
+            }}
+            className="account-dropdown-item account-dropdown-item-danger"
+          >
+            <span className="account-dropdown-item-icon">
+              <Icon.SignOut size={18} weight="duotone" />
+            </span>
+            <span>Logout</span>
+          </button>
+        </div>
+      </>
+    ) : (
+      <div className="account-dropdown-body account-dropdown-body-guest">
+        <p className="account-dropdown-guest-title text-center">Your Account</p>
+        <p className="account-dropdown-guest-text">
+          Sign in to manage orders, wishlist and profile.
+        </p>
+        <Link href="/login" className="account-dropdown-primary-btn" onClick={onClose}>
+          Sign In
+        </Link>
+        <Link href="/register" className="account-dropdown-secondary-btn" onClick={onClose}>
+          Create Account
+        </Link>
+       
+      </div>
+    );
+
   return (
     <>
       <div
-        className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full  md:h-[55px] h-[56px] ${props}`}
+        className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full md:h-[78px] h-[60px] border-b border-transparent ${props}`}
       >
-        <div className="container mx-auto  h-full">
-          <div className="header-main flex items-center justify-between h-full">
-            <div className="left flex items-center gap-4">
-              <div
-                className="menu-mobile-icon lg:hidden flex items-center"
+        <div className="container mx-auto h-full px-4 lg:px-6">
+          <div className="header-main grid grid-cols-[1fr_auto_1fr] items-center h-full gap-3">
+            {/* Left: hamburger (mobile) + logo (desktop) */}
+            <div className="header-left flex items-center justify-start min-w-0">
+              <button
+                type="button"
+                className="menu-mobile-icon lg:hidden flex items-center justify-center w-10 h-10 -ml-1"
                 onClick={handleMenuMobile}
+                aria-label="Open menu"
               >
                 <i className="icon-category text-2xl"></i>
-              </div>
-              <div className="flex items-center">
-                {isLoggedIn ? (
-                  <Link href={"/"} className="flex items-center">
-                    <div className="heading4 text-xl">Welcome Back!</div>
-                  </Link>
-                ) : (
-                  <TenantLogo />
-                )}
+              </button>
+              <div className="hidden lg:flex items-center min-w-0">
+                <TenantLogo
+                  imageClassName="h-9 w-9 object-contain"
+                  textClassName="heading4 text-xl font-semibold tracking-tight"
+                  welcomeName={isLoggedIn ? user?.welcomeName ?? null : undefined}
+                />
               </div>
             </div>
-            <div className="left flex items-center gap-16">
-              <div className="menu-main h-full max-lg:hidden">
-                <ul className="flex items-center gap-8 h-full">
+
+            <div className="header-center flex items-center justify-center min-w-0">
+              <div className="lg:hidden flex justify-center max-w-[220px]">
+                <TenantLogo
+                  className="justify-center"
+                  imageClassName="h-9 w-9 object-contain"
+                  textClassName="heading4 text-base font-semibold tracking-tight"
+                  welcomeName={isLoggedIn ? user?.welcomeName ?? null : undefined}
+                />
+              </div>
+              <div className="menu-main h-full hidden lg:block">
+                <ul className="flex items-center gap-7 xl:gap-9 h-full">
                   <li className="h-full">
                     <Link
                       href="/"
@@ -116,10 +312,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                       Home
                     </Link>
                   </li>
-                  <li className="h-full">
+                  <li className="h-full relative">
                     <Link
                       href="/categories"
-                      className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname.includes("/category") ? "active" : ""}`}
+                      className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname.includes("/category") || pathname.includes("/categories") ? "active" : ""}`}
                     >
                       Categories
                     </Link>
@@ -132,13 +328,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                     >
                       Shop
                     </Link>
-                    <div className="sub-menu py-3 px-5 -left-10 absolute bg-white rounded-b-xl">
+                    <div className="sub-menu absolute top-full left-1/2 -translate-x-1/2 min-w-[210px] py-3 px-5 bg-white rounded-b-xl border border-line/60">
                       <ul className="w-full">
                         <li>
-                          <Link
-                            href="/categories"
-                            className="link text-secondary duration-300"
-                          >
+                          <Link href="/categories" className="link text-secondary duration-300">
                             All Categories
                           </Link>
                         </li>
@@ -185,109 +378,109 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                       Blog
                     </Link>
                   </li>
+                  <li className="h-full relative">
+                    <Link
+                      href="#!"
+                      className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname.includes("/pages/") ? "active" : ""}`}
+                    >
+                      Pages
+                    </Link>
+                    <div className="sub-menu absolute top-full left-1/2 -translate-x-1/2 min-w-[220px] py-3 px-5 bg-white rounded-b-xl border border-line/60">
+                      <ul className="w-full">
+                        <li>
+                          <Link href="/pages/about" className={`link text-secondary duration-300 ${pathname === "/pages/about" ? "active" : ""}`}>
+                            About Us
+                          </Link>
+                        </li>
+                        <li>
+                          <Link href="/pages/contact" className={`link text-secondary duration-300 ${pathname === "/pages/contact" ? "active" : ""}`}>
+                            Contact Us
+                          </Link>
+                        </li>
+                        <li>
+                          <Link href="/pages/store-list" className={`link text-secondary duration-300 ${pathname === "/pages/store-list" ? "active" : ""}`}>
+                            Store List
+                          </Link>
+                        </li>
+                        <li>
+                          <Link href="/pages/faqs" className={`link text-secondary duration-300 ${pathname === "/pages/faqs" ? "active" : ""}`}>
+                            FAQs
+                          </Link>
+                        </li>
+                       
+                      </ul>
+                    </div>
+                  </li>
                 </ul>
               </div>
             </div>
 
-            <div className=" flex items-center gap-5">
-              <div
-                className="hidden md:flex cursor-pointer hover:scale-110 duration-300"
+            {/* Right: action icons */}
+            <div className="header-right flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
+              <button
+                type="button"
+                className="header-action-btn header-search-desktop"
                 onClick={() => router.push("/search-result")}
                 title="Search"
+                aria-label="Search"
               >
-                <Icon.MagnifyingGlass size={26} color="black" />
-              </div>
+                <Icon.MagnifyingGlass size={24} />
+              </button>
 
-              <div
-                className="relative user-icon cursor-pointer hover:scale-110 duration-300"
-                title="Account"
-              >
-                <Icon.User
-                  size={26}
-                  color="black"
-                  onClick={() =>
-                    setOpenSubNavMobile((prev) => (prev === 99 ? null : 99))
-                  }
-                />
+              <div className="relative user-icon header-action-btn" title="Account">
+                {accountMenuOpen && (
+                  <div
+                    className="account-dropdown-backdrop lg:hidden"
+                    onClick={closeAccountMenu}
+                    aria-hidden="true"
+                  />
+                )}
+
+                <button
+                  type="button"
+                  className="flex items-center justify-center w-full h-full relative z-[1]"
+                  aria-label="Account menu"
+                  aria-expanded={accountMenuOpen}
+                  onMouseEnter={openAccountMenuDesktop}
+                  onMouseLeave={scheduleCloseAccountMenuDesktop}
+                  onClick={() => {
+                    if (window.innerWidth < 1024) {
+                      setAccountMenuOpen((prev) => !prev);
+                    }
+                  }}
+                >
+                  <Icon.User size={24} />
+                </button>
 
                 <div
-                  className="relative"
-                  onMouseEnter={() => setOpenSubNavMobile(99)}
-                  onMouseLeave={() => setOpenSubNavMobile(0)}
+                  className={`account-dropdown-panel ${accountMenuOpen ? "is-open" : ""}`}
+                  onMouseEnter={openAccountMenuDesktop}
+                  onMouseLeave={scheduleCloseAccountMenuDesktop}
                 >
                   <div
-                    className={`login-popup absolute top-[3px] -right-8 w-[220px] p-5 rounded-xl bg-white shadow-lg border border-line transition-all duration-300 ${
-                      openSubNavMobile === 99
-                        ? "opacity-100 visible"
-                        : "opacity-0 invisible"
+                    className={`account-dropdown transition-all duration-300 ${
+                      accountMenuOpen
+                        ? "opacity-100 visible translate-y-0"
+                        : "opacity-0 invisible -translate-y-1 pointer-events-none"
                     }`}
                   >
-                    {isLoggedIn ? (
-                      <div className="flex flex-col gap-4">
-                        <Link
-                          href={"/my-account"}
-                          className="flex items-center hover:scale-110 gap-3 font-medium hover:text-blue-600 transition-all"
-                        >
-                          <Icon.User size={20} /> Dashboard
-                        </Link>
-                        <Link
-                          href={"/wishlist"}
-                          className="flex items-center hover:scale-110 gap-3 font-medium hover:text-blue-600 transition-all"
-                        >
-                          <Icon.Heart size={20} /> Wishlist
-                        </Link>
-                        <button
-                          onClick={() => setShowLogoutModal(true)}
-                          className="flex items-center gap-3 font-medium hover:scale-110 text-red-600 hover:text-red-800 transition-all"
-                        >
-                          <Icon.SignOut size={20} /> Logout
-                        </button>
-                        <div className="pt-3 border-t text-center border-line mt-2">
-                          <p className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                            <Icon.Envelope size={14} />
-                            {user?.email || "email@example.com"}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        <Link
-                          href={"/login"}
-                          title="Login Account"
-                          className="flex items-center gap-3 font-medium hover:text-blue-600 transition-transform duration-200 hover:scale-105"
-                        >
-                          <Icon.SignIn size={20} /> Login
-                        </Link>
-                        <Link
-                          href={"/register"}
-                          title="Register Account"
-                          className="flex items-center gap-3 font-medium hover:text-blue-600 transition-transform duration-200 hover:scale-105"
-                        >
-                          <Icon.UserPlus size={20} /> Register
-                        </Link>
-                        <Link
-                          href={"/wishlist"}
-                          title="Add to Wishlist"
-                          className="flex items-center gap-3 font-medium hover:text-blue-600 transition-transform duration-200 hover:scale-105"
-                        >
-                          <Icon.Heart size={20} /> Wishlist
-                        </Link>
-                      </div>
-                    )}
+                    {renderAccountMenuContent(closeAccountMenu)}
                   </div>
                 </div>
               </div>
 
-              <div
-                className="cart-icon flex items-center relative cursor-pointer hover:scale-110 duration-300"
+              <button
+                type="button"
+                className="cart-icon header-action-btn relative"
                 onClick={openModalCart}
                 title="Cart"
+                aria-label="Cart"
               >
-                <Icon.Handbag size={26} color="black" />
-                <span className="quantity cart-quantity absolute -right-1.5 -top-1.5 text-xs text-white bg-black w-4 h-4 flex items-center justify-center rounded-full">
+                <Icon.Handbag size={24} />
+                <span className="quantity cart-quantity absolute -right-1 -top-1 text-[10px] text-white bg-black min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-medium">
                   {cartState.cartArray.length}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -392,12 +585,21 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                     </div>
                   </li>
 
-                  <li className={`${openSubNavMobile === 5 ? "open" : ""}`}>
-                    <div
-                      className="text-xl font-semibold flex items-center justify-between mt-5 cursor-pointer"
-                      onClick={() => handleOpenSubNavMobile(5)}
+                  <li>
+                    <Link
+                      href="/blog/list"
+                      className="text-xl font-semibold flex items-center justify-between mt-5"
                     >
                       Blog
+                    </Link>
+                  </li>
+
+                  <li className={`${openSubNavMobile === 6 ? "open" : ""}`}>
+                    <div
+                      className="text-xl font-semibold flex items-center justify-between mt-5 cursor-pointer"
+                      onClick={() => handleOpenSubNavMobile(6)}
+                    >
+                      Pages
                       <span className="text-right">
                         <Icon.CaretRight size={20} />
                       </span>
@@ -405,7 +607,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                     <div className="sub-nav-mobile">
                       <div
                         className="back-btn flex items-center gap-3 cursor-pointer"
-                        onClick={() => handleOpenSubNavMobile(5)}
+                        onClick={() => handleOpenSubNavMobile(6)}
                       >
                         <Icon.CaretLeft />
                         Back
@@ -413,8 +615,28 @@ const MenuOne: React.FC<Props> = ({ props }) => {
                       <div className="list-nav-item w-full pt-2 pb-6">
                         <ul className="w-full">
                           <li>
-                            <Link href="/blog/list" className="nav-item-mobile">
-                              Blog List
+                            <Link href="/pages/terms-and-conditions" className="nav-item-mobile">
+                              Terms & Conditions
+                            </Link>
+                          </li>
+                          <li>
+                            <Link href="/pages/privacy-policy" className="nav-item-mobile">
+                              Privacy Policy
+                            </Link>
+                          </li>
+                          <li>
+                            <Link href="/pages/contact" className="nav-item-mobile">
+                              Contact Us
+                            </Link>
+                          </li>
+                          <li>
+                            <Link href="/pages/faqs" className="nav-item-mobile">
+                              FAQs
+                            </Link>
+                          </li>
+                          <li>
+                            <Link href="/pages/store-list" className="nav-item-mobile">
+                              Store List
                             </Link>
                           </li>
                         </ul>
@@ -429,7 +651,7 @@ const MenuOne: React.FC<Props> = ({ props }) => {
       </div>
 
       <div className="menu_bar fixed bg-white bottom-0 left-0 w-full h-[70px] sm:hidden z-[101]">
-        <div className="menu_bar-inner grid grid-cols-4 items-center h-full">
+        <div className="menu_bar-inner grid grid-cols-3 items-center h-full">
           <Link
             href={"/"}
             className="menu_bar-link flex flex-col items-center gap-1"
@@ -447,15 +669,6 @@ const MenuOne: React.FC<Props> = ({ props }) => {
             </span>
           </Link>
           <Link
-            href={"/search-result"}
-            className="menu_bar-link flex flex-col items-center gap-1"
-          >
-            <Icon.MagnifyingGlass weight="bold" className="text-2xl" />
-            <span className="menu_bar-title caption2 font-semibold">
-              Search
-            </span>
-          </Link>
-          <Link
             href={"/cart"}
             className="menu_bar-link flex flex-col items-center gap-1"
           >
@@ -469,29 +682,43 @@ const MenuOne: React.FC<Props> = ({ props }) => {
           </Link>
         </div>
       </div>
+
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30  backdrop-blur-[2px]">
-          <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-xl w-[350px] text-center border border-white/50">
-            <h3 className="text-xl font-semibold mb-2 text-gray-800">
-              Are you sure?
+        <div
+          className="logout-modal-overlay"
+          onClick={() => setShowLogoutModal(false)}
+          role="presentation"
+        >
+          <div
+            className="logout-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-modal-title"
+          >
+            <div className="logout-modal-icon">
+              <Icon.SignOut size={28} weight="duotone" />
+            </div>
+            <h3 id="logout-modal-title" className="logout-modal-title">
+              Log out of your account?
             </h3>
-            <p className="mb-8 text-sm text-gray-600">
-              You want to logout of your account?
+            <p className="logout-modal-text">
+              You will need to sign in again to access your dashboard and orders.
             </p>
-
-            <div className="flex gap-4 justify-center mt-6">
+            <div className="logout-modal-actions">
               <button
+                type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="px-6 py-2 border border-black text-black rounded-lg font-medium  hover:scale-105 transition-all duration-300 shadow-md"
+                className="logout-modal-btn logout-modal-btn-cancel"
               >
-                Cancel
+                Stay Signed In
               </button>
-
               <button
+                type="button"
                 onClick={handleLogout}
-                className="px-6 py-2 bg-black text-white rounded-lg font-semibold h hover:scale-105 transition-all duration-300 shadow-md"
+                className="logout-modal-btn bg-black logout-modal-btn-confirm"
               >
-                Logout
+                Yes, Logout
               </button>
             </div>
           </div>

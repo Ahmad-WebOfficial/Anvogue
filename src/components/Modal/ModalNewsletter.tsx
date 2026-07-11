@@ -6,6 +6,7 @@ import Link from "next/link";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useModalQuickviewContext } from "@/context/ModalQuickviewContext";
 import Image from "next/image";
+import TenantLogo from "@/components/Common/TenantLogo";
 import {
   FeaturedProduct,
   fetchFeaturedProducts,
@@ -48,11 +49,11 @@ const ModalNewsletter = () => {
     return () => window.clearTimeout(timer);
   }, [loading, products.length]);
 
-  const handleDetailProduct = (productId: number) => {
-    setOpen(false);
-    router.push(
-      getProductDetailUrl(productId, featuredProduct?.ProductDetailId),
-    );
+  const handleClose = () => setOpen(false);
+
+  const handleDetailProduct = (product: FeaturedProduct) => {
+    handleClose();
+    router.push(getProductDetailUrl(product.ProductId, product.ProductDetailId));
   };
 
   if (!loading && !products.length) {
@@ -60,101 +61,132 @@ const ModalNewsletter = () => {
   }
 
   return (
-    <div className="modal-newsletter" onClick={() => setOpen(false)}>
-      <div className="container h-full flex items-center justify-center w-full">
+    <div className="modal-newsletter" onClick={handleClose} role="presentation">
+      <div className="container h-full flex items-center justify-center w-full px-4 sm:px-6">
         <div
           className={`modal-newsletter-main ${open ? "open" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Featured products"
         >
-          <div className="main-content flex rounded-[20px] overflow-hidden w-full">
-            <div className="left lg:w-1/2 sm:w-2/5 max-sm:hidden bg-green flex flex-col items-center justify-center gap-5 py-14 px-6">
-              {featuredProduct ? (
-                <>
-                  <div className="text-2xl font-bold uppercase text-center">
-                    Anvogue
-                  </div>
-                  <div className="lg:text-lg text-sm lg:leading-[40px] leading-[30px] font-semibold  text-center ">
-                    Discover an elevated e-commerce experience enjoy seamless
-                    navigation, exclusive seasonal discounts, and a streamlined
-                    checkout process designed for modern shoppers who value both
-                    style and efficiency.
-                  </div>
-
+          <div className="newsletter-modal-card">
+            <aside className="newsletter-modal-promo max-sm:hidden">
+              <div className="newsletter-modal-promo-inner">
+                <span className="newsletter-modal-badge">Featured Collection</span>
+                <TenantLogo
+                  className="newsletter-modal-logo"
+                  textClassName="heading4 text-2xl font-semibold"
+                  imageClassName="h-11 w-11 object-contain"
+                />
+                <h2 className="newsletter-modal-headline">
+                  Style meets simplicity in every order.
+                </h2>
+                <p className="newsletter-modal-description">
+                  Explore hand-picked products, seasonal offers, and a checkout
+                  experience built for modern shoppers.
+                </p>
+                {featuredProduct && (
                   <Link
                     href={getProductDetailUrl(
                       featuredProduct.ProductId,
                       featuredProduct.ProductDetailId,
                     )}
-                    className="button-main w-fit bg-black text-white hover:bg-white uppercase"
-                    onClick={() => setOpen(false)}
+                    className="newsletter-modal-cta"
+                    onClick={handleClose}
                   >
-                    Shop Now
+                    Shop Featured
+                    <Icon.ArrowRight size={18} weight="bold" />
                   </Link>
-                </>
-              ) : (
-                <p className="text-button-uppercase">
-                  Loading featured products...
-                </p>
-              )}
-            </div>
-            <div className="right lg:w-1/2 sm:w-3/5 w-full bg-white sm:pt-10 sm:pl-10 max-sm:p-6 relative">
-              <div
-                className="close-newsletter-btn w-10 h-10 flex items-center justify-center border border-line rounded-full absolute right-5 top-5 cursor-pointer"
-                onClick={() => setOpen(false)}
-              >
-                <Icon.X weight="bold" className="text-xl" />
+                )}
               </div>
-              <div className="heading5 pb-5">You May Also Like</div>
+            </aside>
 
-              <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
+            <section className="newsletter-modal-content">
+              <button
+                type="button"
+                className="newsletter-modal-close"
+                onClick={handleClose}
+                aria-label="Close"
+              >
+                <Icon.X size={18} weight="bold" />
+              </button>
+
+              <div className="newsletter-modal-mobile-hero sm:hidden">
+                <span className="newsletter-modal-badge newsletter-modal-badge-light">
+                  Featured For You
+                </span>
+                <p className="newsletter-modal-mobile-text">
+                  Curated products selected just for you.
+                </p>
+              </div>
+
+              <div className="newsletter-modal-header">
+                <div>
+                  <p className="newsletter-modal-eyebrow">Recommended</p>
+                  <h3 className="newsletter-modal-title">You May Also Like</h3>
+                </div>
+                <span className="newsletter-modal-count">
+                  {loading ? "..." : `${Math.min(products.length, 5)} items`}
+                </span>
+              </div>
+
+              <div className="newsletter-modal-list">
                 {loading ? (
-                  <p className="text-secondary">Loading products...</p>
+                  <div className="newsletter-modal-loading">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="newsletter-modal-skeleton" />
+                    ))}
+                  </div>
                 ) : (
                   products.slice(0, 5).map((product) => (
-                    <div
-                      className="product-item item pb-5 flex items-center justify-between gap-3 border-b border-line"
+                    <article
                       key={product.ProductId}
+                      className="newsletter-product-card"
                     >
-                      <div
-                        className="infor flex items-center gap-5 cursor-pointer"
-                        onClick={() => handleDetailProduct(product.ProductId)}
+                      <button
+                        type="button"
+                        className="newsletter-product-main"
+                        onClick={() => handleDetailProduct(product)}
                       >
-                        <div className="bg-img flex-shrink-0 relative w-[100px] h-[100px]">
+                        <div className="newsletter-product-image">
                           <Image
                             fill
                             src={getProductImage(product)}
                             alt={product.ProductName}
-                            className="aspect-square flex-shrink-0 rounded-lg object-cover"
+                            className="object-cover"
+                            sizes="88px"
                           />
                         </div>
-                        <div>
-                          <div className="name text-button line-clamp-2">
+                        <div className="newsletter-product-info">
+                          {product.Category?.CategoryName && (
+                            <span className="newsletter-product-category">
+                              {product.Category.CategoryName}
+                            </span>
+                          )}
+                          <h4 className="newsletter-product-name">
                             {product.ProductName}
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="product-price text-title">
-                              Rs. {product.Price}
-                            </div>
-                          </div>
+                          </h4>
+                          <p className="newsletter-product-price">
+                            Rs. {product.Price.toLocaleString()}
+                          </p>
                         </div>
-                      </div>
+                      </button>
                       <button
-                        className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
+                        type="button"
+                        className="newsletter-product-quickview"
                         onClick={() =>
-                          openQuickview(
-                            mapFeaturedProductToProductType(product),
-                          )
+                          openQuickview(mapFeaturedProductToProductType(product))
                         }
                       >
-                        QUICK VIEW
+                        <Icon.Eye size={18} weight="duotone" />
+                        <span className="max-sm:hidden">Quick View</span>
                       </button>
-                    </div>
+                    </article>
                   ))
                 )}
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>

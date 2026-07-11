@@ -23,6 +23,7 @@ export interface LandingPageProduct {
   IsPromotionalProduct?: boolean;
   IsCampaignApplied?: boolean;
   Discount?: number;
+  DiscountValueType?: number;
   Category?: {
     CategoryId: number;
     CategoryName: string;
@@ -72,19 +73,58 @@ function getProductImage(product: LandingPageProduct): string {
   );
 }
 
+export interface ResolvedProductPricing {
+  price: number;
+  originPrice: number;
+  hasDiscount: boolean;
+  discountPercent: number;
+}
+
+export function resolveLandingProductPricing(
+  product: LandingPageProduct,
+): ResolvedProductPricing {
+  const basePrice = product.MinPrice ?? 0;
+  const minDiscounted = product.MinDiscountedPrice ?? 0;
+  const discountValue = product.Discount ?? 0;
+  const discountValueType = product.DiscountValueType ?? 0;
+
+  let price = basePrice;
+  let originPrice = basePrice;
+
+  // API sends MinDiscountedPrice when a real discount exists.
+  if (minDiscounted > 0 && basePrice > 0 && minDiscounted < basePrice) {
+    price = minDiscounted;
+    originPrice = basePrice;
+  } else if (minDiscounted > 0 && basePrice <= 0) {
+    price = minDiscounted;
+    originPrice = product.MaxPrice ?? minDiscounted;
+  } else if (discountValue > 0 && basePrice > 0) {
+    originPrice = basePrice;
+    price =
+      discountValueType === 1
+        ? Math.max(0, basePrice - discountValue)
+        : Math.round(basePrice * (1 - discountValue / 100));
+
+    if (price <= 0 || price >= originPrice) {
+      price = basePrice;
+      originPrice = basePrice;
+    }
+  }
+
+  const hasDiscount = originPrice > price && price > 0 && originPrice > 0;
+  const discountPercent = hasDiscount
+    ? Math.round(((originPrice - price) / originPrice) * 100)
+    : 0;
+
+  return { price, originPrice, hasDiscount, discountPercent };
+}
+
 export function mapLandingProductToProductType(
   product: LandingPageProduct,
   categoryName = "",
 ): ProductType {
   const image = getProductImage(product);
-  const originPrice = product.MinPrice ?? 0;
-  const maxPrice = product.MaxPrice ?? originPrice;
-  const hasDiscount =
-    (product.MinDiscountedPrice ?? 0) > 0 ||
-    (product.MaxDiscountedPrice ?? 0) > 0;
-  const minPrice = hasDiscount
-    ? (product.MinDiscountedPrice ?? originPrice)
-    : originPrice;
+  const pricing = resolveLandingProductPricing(product);
 
   return {
     id: String(product.ProductId),
@@ -94,14 +134,10 @@ export function mapLandingProductToProductType(
     name: product.ProductName,
     gender: "",
     new: Boolean(product.IsNewProduct),
-    sale:
-      Boolean(product.IsPromotionalProduct) ||
-      Boolean(product.IsCampaignApplied) ||
-      (product.Discount ?? 0) > 0 ||
-      hasDiscount,
+    sale: pricing.hasDiscount,
     rate: 5,
-    price: minPrice,
-    originPrice: maxPrice > minPrice ? maxPrice : originPrice,
+    price: pricing.price,
+    originPrice: pricing.originPrice,
     brand: "",
     sold: 0,
     quantity: 100,

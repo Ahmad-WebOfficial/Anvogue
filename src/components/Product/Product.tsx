@@ -42,8 +42,12 @@ const Product: React.FC<ProductProps> = ({
         ? data.images
         : [imageSrc];
   const displayPrice = data.price > 0 ? data.price : data.originPrice;
-  const showOriginPrice = !hideOriginPrice && data.originPrice > displayPrice;
+  const showOriginPrice =
+    !hideOriginPrice && data.originPrice > displayPrice && data.originPrice > 0;
   const showSaleBadge = showOriginPrice;
+  const discountPercent = showOriginPrice
+    ? Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)
+    : 0;
   const { addToCart, updateCart, cartState } = useCart();
   const { openModalCart } = useModalCartContext();
   const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist();
@@ -104,8 +108,10 @@ const Product: React.FC<ProductProps> = ({
     );
   };
 
-  let percentSale = Math.floor(100 - (data.price / data.originPrice) * 100);
   let percentSold = Math.floor((data.sold / data.quantity) * 100);
+
+  const formatProductPrice = (amount: number) =>
+    `₨${amount.toLocaleString("en-PK")}`;
 
   return (
     <>
@@ -116,16 +122,11 @@ const Product: React.FC<ProductProps> = ({
             className="product-main cursor-pointer block"
           >
             <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
-              {/* {data.new && (
-                <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                  New
+              {showSaleBadge && discountPercent > 0 && (
+                <div className="product-tag text-button-uppercase text-black bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
+                  -{discountPercent}%
                 </div>
-              )} */}
-              {/* {data.sale && (
-                <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                  Sale
-                </div>
-              )} */}
+              )}
               {style === "style-1" ||
                 style === "style-3" ||
                 style === "style-4" ? (
@@ -467,24 +468,21 @@ const Product: React.FC<ProductProps> = ({
               )}
 
               <div className="product-price-block flex items-center gap-2 flex-wrap mt-1">
-                <div className="product-price text-title">₨: {displayPrice}</div>
+                <div className="product-price text-title">
+                  {formatProductPrice(displayPrice)}
+                </div>
 
-                {/* {showOriginPrice && (
+                {showOriginPrice && (
                   <div className="product-origin-price caption1 text-secondary2">
-                    <del>₨{data.originPrice}</del>
+                    <del>{formatProductPrice(data.originPrice)}</del>
                   </div>
-                )} */}
+                )}
 
-                {/* {showSaleBadge && (
+                {showSaleBadge && discountPercent > 0 && (
                   <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 rounded-full">
-                    -
-                    {Math.round(
-                      ((data.originPrice - data.price) / data.originPrice) *
-                        100,
-                    )}
-                    %
+                    -{discountPercent}%
                   </div>
-                )} */}
+                )}
               </div>
               {style === "style-5" && (
                 <>
@@ -587,16 +585,16 @@ const Product: React.FC<ProductProps> = ({
                       </div>
                       <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
                         <div className="product-price text-title">
-                          ₨{displayPrice}
+                          {formatProductPrice(displayPrice)}
                         </div>
                         {showOriginPrice && (
                           <div className="product-origin-price caption1 text-secondary2">
-                            <del>₨{data.originPrice}</del>
+                            <del>{formatProductPrice(data.originPrice)}</del>
                           </div>
                         )}
-                        {showSaleBadge && (
+                        {showSaleBadge && discountPercent > 0 && (
                           <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
-                            -{percentSale}%
+                            -{discountPercent}%
                           </div>
                         )}
                       </div>
@@ -807,8 +805,18 @@ const Product: React.FC<ProductProps> = ({
               <Rate currentRate={data.rate} size={16} />
             </div>
             <span className="text-title inline-block mt-1">
-              ₨{displayPrice}
+              {formatProductPrice(displayPrice)}
             </span>
+            {showOriginPrice && (
+              <span className="caption1 text-secondary2 line-through ml-2">
+                {formatProductPrice(data.originPrice)}
+              </span>
+            )}
+            {showSaleBadge && discountPercent > 0 && (
+              <span className="caption2 font-semibold bg-green text-black px-2 py-0.5 rounded-full inline-block mt-1">
+                -{discountPercent}%
+              </span>
+            )}
           </div>
         </div>
       ) : (

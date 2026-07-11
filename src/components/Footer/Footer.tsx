@@ -2,19 +2,18 @@
 
 import React, { FormEvent, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { toast } from "react-hot-toast";
 import LandingFooterImage from "@/components/Home1/LandingFooterImage";
 import TenantLogo from "@/components/Common/TenantLogo";
 import { subscribeNewsletter } from "@/lib/tenant-landing";
 import { getApiErrorMessage } from "@/lib/api";
-import { usePathname } from "next/navigation";
+
+const FOOTER_LINK_CLASS = "caption1 has-line-before duration-300 w-fit";
+
 const Footer = () => {
-  const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubscribe = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -23,7 +22,6 @@ const Footer = () => {
     if (!trimmedEmail) return;
 
     setSubmitting(true);
-    setSuccessMessage(null);
 
     try {
       const message = await subscribeNewsletter(trimmedEmail);
@@ -39,189 +37,163 @@ const Footer = () => {
   };
 
   return (
-    <>
-      <div id="footer" className="footer">
-        <div className="footer-main bg-surface">
-          <div className="container">
-            <LandingFooterImage />
-            <div className="content-footer py-[60px] flex justify-between flex-wrap gap-y-8">
-              <div className="company-infor basis-1/4 max-lg:basis-full pr-7">
+    <div id="footer" className="footer">
+      <div className="footer-main bg-surface">
+        <div className="container px-4 sm:px-6">
+          <LandingFooterImage />
+
+          <div className="content-footer">
+            <div className="footer-layout">
+              <div className="footer-brand">
                 <TenantLogo className="logo" />
-                <div className="flex gap-3 mt-3">
-                  <div className="flex flex-col ">
-                    <span className="text-button">Mail:</span>
-                    <span className="text-button mt-3">Phone:</span>
-                    <span className="text-button mt-3">Address:</span>
+                <div className="footer-contact-list">
+                  <div className="footer-contact-item">
+                    <span className="footer-contact-label caption1">Mail:</span>
+                    <a
+                      href="mailto:hi.avitex@gmail.com"
+                      className="footer-contact-value caption1 hover:text-black duration-300"
+                    >
+                      hi.avitex@gmail.com
+                    </a>
                   </div>
-                  <div className="flex flex-col ">
-                    <span className="">hi.avitex@gmail.com</span>
-                    <span className="mt-3">1-333-345-6868</span>
-                    <span className="mt-3 pt-px">
-                      549 Oak St.Crystal Lake, IL 60014
+                  <div className="footer-contact-item">
+                    <span className="footer-contact-label caption1">Phone:</span>
+                    <a
+                      href="tel:+13333456868"
+                      className="footer-contact-value caption1 hover:text-black duration-300"
+                    >
+                      1-333-345-6868
+                    </a>
+                  </div>
+                  <div className="footer-contact-item">
+                    <span className="footer-contact-label caption1">Address:</span>
+                    <span className="footer-contact-value caption1">
+                      549 Oak St. Crystal Lake, IL 60014
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="right-content flex flex-wrap gap-y-8 basis-3/4 max-lg:basis-full">
-                <div className="list-nav flex justify-between basis-2/3 max-md:basis-full gap-4">
-                  <div className="item flex flex-col basis-1/3">
-                    <div className="text-button-uppercase pb-3">Support</div>
 
-                    <div className="flex flex-col gap-2">
-
-                      <Link
-                        href="/pages/contact"
-                        className="caption1 has-line-before duration-300 w-fit"
-                      >
-                        Contact Us
-                      </Link>
-                      <Link
-                        href="/my-account"
-                        className="caption1 has-line-before duration-300 w-fit"
-                      >
-                        My Account
-                      </Link>
-                      <Link
-                        href="/blog/list"
-                        className="caption1 has-line-before duration-300 w-fit"
-                      >
-                        Blog
-                      </Link>
-                      <Link
-                        href="/pages/store-list"
-                        className="caption1 has-line-before duration-300 w-fit"
-                      >
-                        Store List
-                      </Link>
-                    </div>
+              <div className="footer-nav-grid">
+                <div className="footer-nav-column">
+                  <div className="footer-nav-title text-button-uppercase">
+                    Support
                   </div>
-                  <div className="item flex flex-col basis-1/3 gap-2 ">
-                    <div className="text-button-uppercase pb-3 gap-3">
-                      Quick Shop
-                    </div>
-
-                    <Link
-                      href="/cart"
-                      className="caption1 has-line-before duration-300 w-fit"
-                    >
-                      Cart
+                  <div className="footer-nav-links">
+                    <Link href="/pages/contact" className={FOOTER_LINK_CLASS}>
+                      Contact Us
                     </Link>
-
-                    <Link
-                      href="/checkout"
-                      className="caption1 has-line-before duration-300 w-fit"
-                    >
-                      Checkout
+                    <Link href="/my-account" className={FOOTER_LINK_CLASS}>
+                      My Account
                     </Link>
-
-                    <Link
-                      href="/wishlist"
-                      className="caption1 has-line-before duration-300 w-fit"
-                    >
-                      Wishlist
+                    <Link href="/blog/list" className={FOOTER_LINK_CLASS}>
+                      Blog
                     </Link>
-                    <Link
-                      href="/cart"
-                      className="caption1 has-line-before duration-300 w-fit"
-
-                    >
-                      Shopping Cart
+                    <Link href="/pages/store-list" className={FOOTER_LINK_CLASS}>
+                      Store List
                     </Link>
-
-
-                  </div>
-
-                  <div className="item flex flex-col basis-1/3 gap-2">
-                    <div className="text-button-uppercase pb-3">Legal</div>
-                    <ul className="flex flex-col gap-2">
-                      <li>
-                        <Link
-                          href="/pages/faqs"
-                          className="caption1 has-line-before duration-300 w-fit"
-                        >
-                          FAQs
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          href="/pages/terms-and-conditions"
-                          className="caption1 has-line-before duration-300 w-fit"
-                        >
-                          Terms & Conditions
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          href="/pages/privacy-policy"
-                          className="caption1 has-line-before duration-300 w-fit"
-                        >
-                          Privacy Policy
-                        </Link>
-                      </li>
-                    </ul>
                   </div>
                 </div>
-                <div className="newsletter basis-1/3 pl-7 max-md:basis-full max-md:pl-0">
-                  <div className="text-button-uppercase">Newletter</div>
-                  <div className="caption1 mt-3">
-                    Sign up for our newsletter and get 10% off your first
-                    purchase
+
+                <div className="footer-nav-column">
+                  <div className="footer-nav-title text-button-uppercase">
+                    Quick Shop
                   </div>
-                  <div className="input-block w-full h-[52px] mt-4">
-                    <form
-                      className="w-full h-full relative"
-                      onSubmit={handleSubscribe}
+                  <div className="footer-nav-links">
+                    <Link href="/cart" className={FOOTER_LINK_CLASS}>
+                      Cart
+                    </Link>
+                    <Link href="/checkout" className={FOOTER_LINK_CLASS}>
+                      Checkout
+                    </Link>
+                    <Link href="/wishlist" className={FOOTER_LINK_CLASS}>
+                      Wishlist
+                    </Link>
+                    <Link href="/categories" className={FOOTER_LINK_CLASS}>
+                      Categories
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="footer-nav-column">
+                  <div className="footer-nav-title text-button-uppercase">Legal</div>
+                  <div className="footer-nav-links">
+                    <Link href="/pages/faqs" className={FOOTER_LINK_CLASS}>
+                      FAQs
+                    </Link>
+                    <Link
+                      href="/pages/terms-and-conditions"
+                      className={FOOTER_LINK_CLASS}
                     >
-                      <input
-                        type="email"
-                        placeholder="Enter your e-mail"
-                        className="caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        disabled={submitting}
-                        required
-                      />
-                      <button
-                        type="submit"
-                        disabled={submitting}
-                        className="w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1 disabled:opacity-60"
-                      >
-                        <Icon.ArrowRight size={24} color="#fff" />
-                      </button>
-                    </form>
-                  </div>
-                  {successMessage && (
-                    <p className="caption1 text-blue mt-3">{successMessage}</p>
-                  )}{" "}
-                  <div className="list-social flex items-center gap-6 mt-4">
-                    <Link href={"https://www.facebook.com/"} target="_blank">
-                      <div className="icon-facebook text-2xl text-black"></div>
+                      Terms & Conditions
                     </Link>
-                    <Link href={"https://www.instagram.com/"} target="_blank">
-                      <div className="icon-instagram text-2xl text-black"></div>
-                    </Link>
-                    <Link href={"https://www.twitter.com/"} target="_blank">
-                      <div className="icon-twitter text-2xl text-black"></div>
-                    </Link>
-                    <Link href={"https://www.youtube.com/"} target="_blank">
-                      <div className="icon-youtube text-2xl text-black"></div>
-                    </Link>
-                    <Link href={"https://www.pinterest.com/"} target="_blank">
-                      <div className="icon-pinterest text-2xl text-black"></div>
+                    <Link href="/pages/privacy-policy" className={FOOTER_LINK_CLASS}>
+                      Privacy Policy
                     </Link>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="footer-bottom py-6 flex items-center justify-center border-t border-line">
-              <div className="copyright caption1 text-secondary">
-                © {new Date().getFullYear()} Anvogue.All Rights Reserved.
+
+              <div className="footer-newsletter">
+                <div className="footer-nav-title text-button-uppercase">
+                  Newsletter
+                </div>
+                <p className="footer-newsletter-text caption1">
+                  Sign up for our newsletter and get 10% off your first purchase.
+                </p>
+                <div className="input-block w-full h-[52px] mt-4 max-w-full">
+                  <form
+                    className="w-full h-full relative"
+                    onSubmit={handleSubscribe}
+                  >
+                    <input
+                      type="email"
+                      placeholder="Enter your e-mail"
+                      className="caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line bg-white"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      disabled={submitting}
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1 disabled:opacity-60"
+                      aria-label="Subscribe to newsletter"
+                    >
+                      <Icon.ArrowRight size={24} color="#fff" />
+                    </button>
+                  </form>
+                </div>
+                <div className="footer-social">
+                  <Link href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+                    <div className="icon-facebook text-2xl text-black" />
+                  </Link>
+                  <Link href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                    <div className="icon-instagram text-2xl text-black" />
+                  </Link>
+                  <Link href="https://www.twitter.com/" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+                    <div className="icon-twitter text-2xl text-black" />
+                  </Link>
+                  <Link href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+                    <div className="icon-youtube text-2xl text-black" />
+                  </Link>
+                  <Link href="https://www.pinterest.com/" target="_blank" rel="noopener noreferrer" aria-label="Pinterest">
+                    <div className="icon-pinterest text-2xl text-black" />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
+
+          <div className="footer-bottom border-t border-line">
+            <p className="footer-copyright caption1 text-secondary">
+              © {new Date().getFullYear()} Anvogue. All Rights Reserved.
+            </p>
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

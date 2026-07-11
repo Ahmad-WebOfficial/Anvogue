@@ -4,20 +4,26 @@ import React, { useState, useEffect } from "react";
 import Product from "../Product/Product";
 import { motion } from "framer-motion";
 import api from "@/lib/api";
+import {
+  LandingPageCategoryGroup,
+  LandingPageProduct,
+  mapLandingProductToProductType,
+} from "@/lib/category-products";
 
 const WhatNewOne = () => {
   const [activeTab, setActiveTab] = useState<string>("");
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<LandingPageCategoryGroup[]>([]);
 
   useEffect(() => {
     const fetchLandingData = async () => {
       try {
-        const res = await api.get("/api/v1/Product/landing-page");
+        const res = await api.get<{ Data: LandingPageCategoryGroup[] }>(
+          "/api/v1/Product/landing-page",
+        );
         if (res.data?.Data) {
           setCategories(res.data.Data);
-          console.log("Fetched categories:", res.data.Data);
           if (res.data.Data.length > 0) {
-            setActiveTab(res.data.Data[0].Category?.CategoryName);
+            setActiveTab(res.data.Data[0].Category?.CategoryName ?? "");
           }
         }
       } catch (error) {
@@ -30,8 +36,7 @@ const WhatNewOne = () => {
   const activeCategory = categories.find(
     (item) => item.Category?.CategoryName === activeTab,
   );
-  const products = activeCategory ? activeCategory.ProductList : [];
-
+  const products = activeCategory?.ProductList ?? [];
   return (
     <div className="whate-new-block md:pt-20 pt-10">
       <div className="container">
@@ -42,7 +47,7 @@ const WhatNewOne = () => {
               <div
                 key={index}
                 className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-500 hover:text-black ${activeTab === item.Category?.CategoryName ? "active" : ""}`}
-                onClick={() => setActiveTab(item.Category?.CategoryName)}
+                onClick={() => setActiveTab(item.Category?.CategoryName ?? "")}
               >
                 {activeTab === item.Category?.CategoryName && (
                   <motion.div
@@ -59,48 +64,18 @@ const WhatNewOne = () => {
         </div>
         <div className="list-product grid lg:grid-cols-4 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
           {products.length > 0 ? (
-            products.map((prd: any) => {
-              console.log("Single Product =>", prd);
-
-              const image =
-                prd.ThumbnailImagePath ||
-                prd.IconImagePath ||
-                "/placeholder.jpg";
-
-              return (
-                <Product
-                  key={prd.ProductId}
-                  type="grid"
-                  style="style-1"
-                  data={{
-                    id: prd.ProductId,
-                    productDetailId: prd.ProductDetailId,
-                    name: prd.ProductName,
-
-                    price: prd.MinPrice ?? 0,
-                    originPrice: prd.MaxPrice ?? 0,
-
-                    description: prd.Description,
-
-                    thumbImage: [image],
-
-                    new: prd.IsNewProduct,
-
-                    sale: prd.Discount > 0 || prd.MinPrice < prd.MaxPrice,
-
-                    variation: [],
-                    sizes: [],
-                    quantity: 100,
-                    sold: 0,
-                    action: "add to cart",
-                    rate: 5,
-                    quantityPurchase: 1,
-                  }}
-                />
-              );
-            })
-          ) : (
-            <p className="col-span-full text-center py-10">
+            products.map((prd: LandingPageProduct) => (
+              <Product
+                key={prd.ProductId}
+                type="grid"
+                style="style-1"
+                data={mapLandingProductToProductType(
+                  prd,
+                  activeCategory?.Category?.CategoryName ?? "",
+                )}
+              />
+            ))
+          ) : (            <p className="col-span-full text-center py-10">
               No products found.
             </p>
           )}

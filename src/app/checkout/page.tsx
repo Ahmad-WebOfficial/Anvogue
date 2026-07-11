@@ -234,52 +234,102 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
         <Breadcrumb heading="Checkout" subHeading="Checkout" />
       </div>
 
-      <div className="cart-block md:py-20 py-10">
+      <div className="checkout-page md:py-20 py-10">
         <div className="container">
-          <div className="content-main flex flex-col xl:flex-row gap-10 xl:gap-12">
-            {/* Checkout form */}
-            <div className="w-full xl:w-3/5">
-              <div className="information">
-                <div className="heading5">Shipping Information</div>
-                <div className="form-checkout mt-5">
-                  <form onSubmit={handleCreateOrder}>
-                    <div className="grid sm:grid-cols-2 gap-4 gap-y-5">
+          <div className="checkout-layout">
+            <div className="checkout-form-card">
+              <div className="checkout-form-head">
+                <span className="checkout-badge">Secure Checkout</span>
+                <h1 className="heading3 checkout-form-title">Shipping Information</h1>
+                <p className="text-secondary checkout-form-subtitle">
+                  Complete your details below. Required fields are marked with *.
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateOrder}>
+                <div className="checkout-section">
+                  <h2 className="checkout-section-title">
+                    <span className="checkout-section-icon">
+                      <Icon.User size={18} weight="bold" />
+                    </span>
+                    Contact Information
+                  </h2>
+                  <div className="checkout-field-grid cols-2">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="firstName">
+                        First Name *
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="firstName"
+                        className="checkout-input"
                         type="text"
-                        placeholder="First Name *"
+                        placeholder="John"
                         value={form.firstName}
                         onChange={(e) => updateForm("firstName", e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="lastName">
+                        Last Name *
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="lastName"
+                        className="checkout-input"
                         type="text"
-                        placeholder="Last Name *"
+                        placeholder="Doe"
                         value={form.lastName}
                         onChange={(e) => updateForm("lastName", e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="email">
+                        Email Address *
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="email"
+                        className="checkout-input"
                         type="email"
-                        placeholder="Email Address *"
+                        placeholder="you@example.com"
                         value={form.email}
                         onChange={(e) => updateForm("email", e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="phone">
+                        Phone Number *
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="phone"
+                        className="checkout-input"
                         type="tel"
-                        placeholder="Phone Number *"
+                        placeholder="0300 1234567"
                         value={form.phone}
                         onChange={(e) => updateForm("phone", e.target.value)}
                         required
                       />
+                    </div>
+                  </div>
+                </div>
 
-                      <div className="col-span-full select-block relative">
+                <div className="checkout-section">
+                  <h2 className="checkout-section-title">
+                    <span className="checkout-section-icon">
+                      <Icon.MapPin size={18} weight="bold" />
+                    </span>
+                    Shipping Address
+                  </h2>
+                  <div className="checkout-field-grid cols-2">
+                    <div className="checkout-field full-width">
+                      <label className="checkout-label" htmlFor="countryId">
+                        Country *
+                      </label>
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="countryId"
+                          className="checkout-select"
                           value={form.countryId}
                           onChange={(e) => {
                             const countryId = e.target.value;
@@ -295,22 +345,25 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           }}
                           required
                         >
-                          <option value="">Choose Country *</option>
+                          <option value="">Choose Country</option>
                           {countries.map((country) => (
                             <option key={country.Value} value={country.Value}>
                               {country.Text}
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
+                    </div>
 
-                      <div className="select-block relative">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="stateId">
+                        State *
+                      </label>
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="stateId"
+                          className="checkout-select"
                           value={form.stateId}
                           onChange={(e) => {
                             const stateId = e.target.value;
@@ -324,22 +377,25 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           }}
                           required
                         >
-                          <option value="">Choose State *</option>
+                          <option value="">Choose State</option>
                           {states.map((state) => (
                             <option key={state.Value} value={state.Value}>
                               {state.Text}
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
+                    </div>
 
-                      <div className="select-block relative">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="cityId">
+                        City *
+                      </label>
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="cityId"
+                          className="checkout-select"
                           value={form.cityId}
                           onChange={(e) => {
                             const cityId = e.target.value;
@@ -353,22 +409,25 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           }}
                           required
                         >
-                          <option value="">Choose City *</option>
+                          <option value="">Choose City</option>
                           {cities.map((city) => (
                             <option key={city.Value} value={city.Value}>
                               {city.Text}
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
+                    </div>
 
-                      <div className="select-block relative">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="areaId">
+                        Area
+                      </label>
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="areaId"
+                          className="checkout-select"
                           value={form.areaId}
                           onChange={(e) => updateForm("areaId", e.target.value)}
                         >
@@ -379,15 +438,18 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
+                    </div>
 
-                      <div className="select-block relative">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="branchId">
+                        Branch
+                      </label>
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="branchId"
+                          className="checkout-select"
                           value={form.branchId}
                           onChange={(e) => updateForm("branchId", e.target.value)}
                         >
@@ -398,69 +460,70 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
+                    </div>
 
+                    <div className="checkout-field full-width">
+                      <label className="checkout-label" htmlFor="address">
+                        Street Address *
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg sm:col-span-2"
+                        id="address"
+                        className="checkout-input"
                         type="text"
-                        placeholder="Street Address *"
+                        placeholder="House no, street, landmark"
                         value={form.address}
                         onChange={(e) => updateForm("address", e.target.value)}
                         required
                       />
+                    </div>
+
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="postalCode">
+                        Postal Code
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="postalCode"
+                        className="checkout-input"
                         type="text"
-                        placeholder="Postal Code"
+                        placeholder="54000"
                         value={form.postalCode}
                         onChange={(e) => updateForm("postalCode", e.target.value)}
                       />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="checkout-section">
+                  <h2 className="checkout-section-title">
+                    <span className="checkout-section-icon">
+                      <Icon.Truck size={18} weight="bold" />
+                    </span>
+                    Delivery Details
+                  </h2>
+                  <div className="checkout-field-grid cols-2">
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="deliveryDate">
+                        Preferred Delivery Date
+                      </label>
                       <input
-                        className="border border-line px-4 py-3 w-full rounded-lg"
+                        id="deliveryDate"
+                        className="checkout-input"
                         type="datetime-local"
                         value={form.deliveryDate}
-                        onChange={(e) =>
-                          updateForm("deliveryDate", e.target.value)
-                        }
+                        onChange={(e) => updateForm("deliveryDate", e.target.value)}
                       />
+                    </div>
 
-                      <textarea
-                        className="border border-line px-4 py-3 w-full rounded-lg sm:col-span-2"
-                        placeholder="Special instructions for your order..."
-                        rows={3}
-                        value={form.specialInstructions}
-                        onChange={(e) =>
-                          updateForm("specialInstructions", e.target.value)
-                        }
-                      />
-                      <textarea
-                        className="border border-line px-4 py-3 w-full rounded-lg sm:col-span-2"
-                        placeholder="Delivery instructions..."
-                        rows={2}
-                        value={form.deliveryInstructions}
-                        onChange={(e) =>
-                          updateForm("deliveryInstructions", e.target.value)
-                        }
-                      />
-
-                      <label className="flex items-center gap-2 sm:col-span-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={form.isGiftOrder}
-                          onChange={(e) =>
-                            updateForm("isGiftOrder", e.target.checked)
-                          }
-                        />
-                        <span className="text-button">This is a gift order</span>
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="deliveryOption">
+                        Delivery Option
                       </label>
-
-                      <div className="select-block relative sm:col-span-2">
+                      <div className="checkout-select-wrap">
                         <select
-                          className="border border-line px-4 py-3 w-full rounded-lg appearance-none bg-white"
+                          id="deliveryOption"
+                          className="checkout-select"
                           value={form.deliveryOption}
                           onChange={(e) =>
                             updateForm("deliveryOption", Number(e.target.value))
@@ -469,135 +532,168 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           <option value={1}>Home Delivery</option>
                           <option value={2}>Store Pickup</option>
                         </select>
-                        <Icon.CaretDown
-                          size={14}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                        />
+                        <Icon.CaretDown size={14} className="checkout-select-icon" />
                       </div>
                     </div>
 
-                    <div className="block-button md:mt-10 mt-6">
-                      <button
-                      title="Create Your Order"
-                        type="submit"
-                        className="button-main bg-black w-full disabled:opacity-50"
-                        disabled={submitting || cartState.cartArray.length === 0}
-                      >
-                        {submitting ? "Creating Order..." : "Create Order"}
-                      </button>
+                    <div className="checkout-field full-width">
+                      <label className="checkout-label" htmlFor="specialInstructions">
+                        Special Instructions
+                      </label>
+                      <textarea
+                        id="specialInstructions"
+                        className="checkout-textarea"
+                        placeholder="Any special instructions for your order..."
+                        rows={3}
+                        value={form.specialInstructions}
+                        onChange={(e) =>
+                          updateForm("specialInstructions", e.target.value)
+                        }
+                      />
                     </div>
-                  </form>
+
+                    <div className="checkout-field full-width">
+                      <label className="checkout-label" htmlFor="deliveryInstructions">
+                        Delivery Instructions
+                      </label>
+                      <textarea
+                        id="deliveryInstructions"
+                        className="checkout-textarea"
+                        placeholder="Gate code, call before delivery, etc."
+                        rows={2}
+                        value={form.deliveryInstructions}
+                        onChange={(e) =>
+                          updateForm("deliveryInstructions", e.target.value)
+                        }
+                      />
+                    </div>
+
+                    <label className="checkout-checkbox-row full-width">
+                      <input
+                        type="checkbox"
+                        checked={form.isGiftOrder}
+                        onChange={(e) => updateForm("isGiftOrder", e.target.checked)}
+                      />
+                      <span>This is a gift order</span>
+                    </label>
+                  </div>
                 </div>
-              </div>
+
+                <div className="checkout-submit">
+                  <button
+                    title="Create Your Order"
+                    type="submit"
+                    className="button-main bg-black"
+                    disabled={submitting || cartState.cartArray.length === 0}
+                  >
+                    {submitting ? "Creating Order..." : "Place Order"}
+                  </button>
+                </div>
+              </form>
             </div>
 
-            {/* Order summary */}
-            <div className="w-full xl:w-2/5">
-              <div className="checkout-block bg-surface p-6 rounded-2xl sticky top-24">
-                <div className="heading5 pb-3">Your Order</div>
+            <aside className="checkout-summary-card">
+              <div className="checkout-summary-title">
+                <span className="heading5">Your Order</span>
+                {cartState.totalItems > 0 && (
+                  <span className="checkout-summary-count">{cartState.totalItems}</span>
+                )}
+              </div>
 
-                <div className="list-product-checkout max-h-[420px] overflow-y-auto">
-                  {cartState.cartArray.length === 0 ? (
-                    <p className="text-button text-secondary pt-3">
-                      No products in cart.{" "}
-                      <Link href="/" className="underline">
-                        Continue shopping
-                      </Link>
-                    </p>
-                  ) : (
-                    cartState.cartArray.map((product, index) => {
-                      const image =
-                        product.thumbImage?.[0] ||
-                        product.images?.[0] ||
-                        "/images/product/1000x1000.png";
-                      const variantsLabel = getVariantsLabel(product);
+              <div className="checkout-items">
+                {cartState.cartArray.length === 0 ? (
+                  <div className="checkout-empty">
+                    <p className="text-secondary text-button">No products in cart.</p>
+                    <Link href="/" className="text-button underline mt-2 inline-block">
+                      Continue shopping
+                    </Link>
+                  </div>
+                ) : (
+                  cartState.cartArray.map((product, index) => {
+                    const image =
+                      product.thumbImage?.[0] ||
+                      product.images?.[0] ||
+                      "/images/product/1000x1000.png";
+                    const variantsLabel = getVariantsLabel(product);
 
-                      return (
-                        <div
-                          key={product.cartId || `${product.id}-${index}`}
-                          className="item flex items-start gap-4 w-full pb-5 border-b border-line mt-5 first:mt-0"
-                        >
-                          <div className="w-[80px] h-[96px] flex-shrink-0 rounded-lg overflow-hidden relative bg-white">
-                            <Image
-                              src={image}
-                              fill
-                              sizes="80px"
-                              alt={product.name}
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            {product.category && (
-                              <div className="caption2 text-secondary uppercase">
-                                {product.category}
-                              </div>
-                            )}
-                            <div className="name text-button font-semibold line-clamp-2">
-                              {product.name}
-                            </div>
-                            {variantsLabel && (
-                              <div className="caption1 text-secondary mt-1">
-                                {variantsLabel}
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="caption1 text-secondary">
-                                Qty: {product.quantity}
-                              </span>
-                              <span className="text-button font-semibold">
-                                {formatRsPrice(product.lineTotal)}
-                              </span>
-                            </div>
-                            {product.quantity > 1 && (
-                              <div className="caption2 text-secondary">
-                                {formatRsPrice(product.price)} each
-                              </div>
-                            )}
-                          </div>
+                    return (
+                      <div
+                        key={product.cartId || `${product.id}-${index}`}
+                        className="checkout-item"
+                      >
+                        <div className="checkout-item-image">
+                          <Image
+                            src={image}
+                            fill
+                            sizes="72px"
+                            alt={product.name}
+                            className="object-cover"
+                          />
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                        <div className="min-w-0">
+                          {product.category && (
+                            <div className="caption2 text-secondary uppercase">
+                              {product.category}
+                            </div>
+                          )}
+                          <div className="text-button font-semibold line-clamp-2 mt-0.5">
+                            {product.name}
+                          </div>
+                          {variantsLabel && (
+                            <span className="checkout-item-variant">{variantsLabel}</span>
+                          )}
+                          <div className="checkout-item-foot">
+                            <span className="caption1 text-secondary">
+                              Qty: {product.quantity}
+                            </span>
+                            <span className="text-button font-semibold">
+                              {formatRsPrice(product.lineTotal)}
+                            </span>
+                          </div>
+                          {product.quantity > 1 && (
+                            <div className="caption2 text-secondary mt-1">
+                              {formatRsPrice(product.price)} each
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
 
-                <div className="subtotal-block py-4 flex justify-between border-b border-line mt-4">
-                  <span className="text-title">Subtotal</span>
-                  <span className="text-title">{formatRsPrice(subTotal)}</span>
+              <div className="checkout-totals">
+                <div className="checkout-total-row">
+                  <span>Subtotal</span>
+                  <span>{formatRsPrice(subTotal)}</span>
                 </div>
 
                 {discount > 0 && (
-                  <div className="discount-block py-4 flex justify-between border-b border-line">
-                    <span className="text-title">Discount</span>
-                    <span className="text-title text-green">
-                      -{formatRsPrice(discount)}
-                    </span>
+                  <div className="checkout-total-row">
+                    <span>Discount</span>
+                    <span className="text-green">-{formatRsPrice(discount)}</span>
                   </div>
                 )}
 
-                <div className="ship-block py-4 flex justify-between border-b border-line">
-                  <span className="text-title">Shipping</span>
-                  <span className="text-title">
-                    {ship === 0 ? "Free" : formatRsPrice(ship)}
-                  </span>
+                <div className="checkout-total-row">
+                  <span>Shipping</span>
+                  <span>{ship === 0 ? "Free" : formatRsPrice(ship)}</span>
                 </div>
 
-                <div className="total-cart-block pt-5 flex justify-between">
-                  <span className="heading5">Total</span>
-                  <span className="heading5">{formatRsPrice(orderTotal)}</span>
+                <div className="checkout-total-row is-grand">
+                  <span>Total</span>
+                  <span>{formatRsPrice(orderTotal)}</span>
                 </div>
-
-                <p className="caption2 text-secondary text-center mt-3">
-                  {cartState.totalItems} item(s) · All prices in PKR (Rs.)
-                </p>
-
-                <Link
-                  href="/cart"
-                  className="text-button hover:underline block text-center mt-4"
-                >
-                  ← Back to cart
-                </Link>
               </div>
-            </div>
+
+              <p className="checkout-summary-note">
+                {cartState.totalItems} item(s) · All prices in PKR (Rs.)
+              </p>
+
+              <Link href="/cart" className="checkout-back-cart">
+                ← Back to cart
+              </Link>
+            </aside>
           </div>
         </div>
       </div>

@@ -22,6 +22,7 @@ import {
   getVariantDisplayImage,
   getVariantPrice,
   getComparePrice,
+  getDetailSalePrice,
   formatRsPrice,
   parseVariantGroupOptions,
   findVariantByGroupSelection,
@@ -174,7 +175,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   const relatedProducts = productDetail.relatedProductList ?? [];
   const unitPrice = selectedVariant
     ? getVariantPrice(selectedVariant)
-    : productDetail.MinPrice;
+    : getDetailSalePrice(productDetail);
   const compareUnitPrice = getComparePrice(productDetail, selectedVariant);
   const totalPrice = unitPrice * quantity;
   const totalComparePrice =

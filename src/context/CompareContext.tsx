@@ -15,11 +15,13 @@ type CompareAction =
     | { type: 'ADD_TO_WISHLIST'; payload: ProductType }
     | { type: 'REMOVE_FROM_WISHLIST'; payload: string }
     | { type: 'LOAD_WISHLIST'; payload: CompareItem[] }
+    | { type: 'CLEAR_COMPARE' }
 
 interface CompareContextProps {
     compareState: CompareState;
     addToCompare: (item: ProductType) => void;
     removeFromCompare: (itemId: string) => void;
+    clearCompare: () => void;
 }
 
 const CompareContext = createContext<CompareContextProps | undefined>(undefined);
@@ -42,6 +44,11 @@ const CompareReducer = (state: CompareState, action: CompareAction): CompareStat
                 ...state,
                 compareArray: action.payload,
             };
+        case 'CLEAR_COMPARE':
+            return {
+                ...state,
+                compareArray: [],
+            };
         default:
             return state;
     }
@@ -58,8 +65,12 @@ export const CompareProvider: React.FC<{ children: React.ReactNode }> = ({ child
         dispatch({ type: 'REMOVE_FROM_WISHLIST', payload: itemId });
     };
 
+    const clearCompare = () => {
+        dispatch({ type: 'CLEAR_COMPARE' });
+    };
+
     return (
-        <CompareContext.Provider value={{ compareState, addToCompare, removeFromCompare }}>
+        <CompareContext.Provider value={{ compareState, addToCompare, removeFromCompare, clearCompare }}>
             {children}
         </CompareContext.Provider>
     );

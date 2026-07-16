@@ -186,8 +186,26 @@ declare module 'axios' {
   }
 }
 
+/**
+ * On HTTPS sites (e.g. Vercel), browsers block requests to http:// APIs (mixed content).
+ * Use the Next.js rewrite proxy (/api-backend) so the browser only talks HTTPS same-origin.
+ */
+function getApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_KEY?.trim() || "";
+
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    configured.startsWith("http://")
+  ) {
+    return "/api-backend";
+  }
+
+  return configured;
+}
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_KEY?.trim(),
+  baseURL: getApiBaseUrl(),
   headers: {
     "Content-Type": "application/json",
     "api-security-key": process.env.NEXT_PUBLIC_SECURITY_KEY?.trim() ?? "",
@@ -195,7 +213,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Ensure baseURL stays correct if the client hydrated on HTTPS
   if (typeof window !== "undefined") {
+    config.baseURL = getApiBaseUrl();
+
     const token = Cookies.get(ACCESS_TOKEN_KEY);
     const expiresAt = Cookies.get(AUTH_EXPIRES_KEY);
 

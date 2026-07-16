@@ -270,11 +270,10 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   return (
     <>
       <div
-        className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full md:h-[78px] h-[60px] border-b border-transparent ${props}`}
-      >
+  className={`header-menu style-one ${fixedHeader ? "fixed" : "absolute"} top-0 left-0 right-0 w-full md:h-[78px] h-[60px] border-b border-white ${props}`}
+>
         <div className="container mx-auto h-full px-4 lg:px-6">
           <div className="header-main grid grid-cols-[1fr_auto_1fr] items-center h-full gap-3">
-            {/* Left: hamburger (mobile) + logo (desktop) */}
             <div className="header-left flex items-center justify-start min-w-0">
               <button
                 type="button"

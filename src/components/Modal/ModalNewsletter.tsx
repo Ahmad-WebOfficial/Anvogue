@@ -39,16 +39,20 @@ const ModalNewsletter = () => {
     void loadProducts();
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
     if (loading || !products.length) return;
 
-    const timer = window.setTimeout(() => {
-      setOpen(true);
-    }, 3000);
+    const hasShown = sessionStorage.getItem("newsletter_shown");
 
-    return () => window.clearTimeout(timer);
+    if (!hasShown) {
+      const timer = window.setTimeout(() => {
+        setOpen(true);
+        sessionStorage.setItem("newsletter_shown", "true");
+      }, 3000);
+
+      return () => window.clearTimeout(timer);
+    }
   }, [loading, products.length]);
-
   const handleClose = () => setOpen(false);
 
   const handleDetailProduct = (product: FeaturedProduct) => {

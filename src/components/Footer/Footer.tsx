@@ -38,9 +38,9 @@ const Footer = () => {
 
   return (
     <div id="footer" className="footer">
-      <div className="footer-main bg-surface">
-        <div className="container px-4 sm:px-6">
           <LandingFooterImage />
+      <div className="footer-main bg-[#d4f1a6]">
+        <div className="container px-4 sm:px-6">
 
           <div className="content-footer">
             <div className="footer-layout">

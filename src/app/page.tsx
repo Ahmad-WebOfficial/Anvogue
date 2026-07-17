@@ -21,13 +21,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
   if (!landing?.Seo) {
     return {
-      title: "Anvogue",
+      title: "TopSaver",
       description: "Multipurpose eCommerce Template",
     };
   }
 
   return {
-    title: landing.Seo.MetaTitle || "Anvogue",
+    title: landing.Seo.MetaTitle || "TopSaver",
     description: landing.Seo.MetaDescription || undefined,
     keywords: landing.Seo.MetaKeywords || undefined,
   };

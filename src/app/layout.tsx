@@ -21,7 +21,7 @@ const instrument = Instrument_Sans({
   adjustFontFallback: false,
 });
 export const metadata: Metadata = {
-  title: "Anvogue",
+  title: "TopSaver",
   description: "Multipurpose eCommerce Template",
 };
 

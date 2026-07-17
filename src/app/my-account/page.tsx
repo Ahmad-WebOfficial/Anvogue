@@ -20,12 +20,118 @@ import {
 } from "@/lib/reviews";
 import { getProductDetailUrl } from "@/lib/featured-products";
 import Rate from "@/components/Other/Rate";
+import { formatRsPrice } from "@/lib/cart";
+import {
+  cancelCustomerOrder,
+  fetchCustomerOrderDetails,
+  formatOrderDate,
+  getDeliveryOptionLabel,
+  OrderDetailData,
+} from "@/lib/order";
+
+const DASHBOARD_ORDERS_LIMIT = 5;
+
+type OrderStatTone = "pending" | "canceled" | "total";
+
+const OrderDonutChart = ({
+  value,
+  total,
+  tone,
+}: {
+  value: number;
+  total: number;
+  tone: OrderStatTone;
+}) => {
+  const size = 72;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const percent = total > 0 ? Math.min((value / total) * 100, 100) : 0;
+  const offset = circumference - (percent / 100) * circumference;
+  const color =
+    tone === "pending" ? "#f59e0b" : tone === "canceled" ? "#dc2626" : "#1f1f1f";
+
+  return (
+    <svg className="account-donut" viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      <circle
+        className="account-donut-track"
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        strokeWidth={stroke}
+      />
+      <circle
+        className="account-donut-progress"
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={total > 0 ? offset : circumference}
+      />
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        fontSize="12"
+        fontWeight="700"
+        fill="currentColor"
+      >
+        {Math.round(percent)}%
+      </text>
+    </svg>
+  );
+};
+
+const getOrderStatusClass = (status?: string) => {
+  const normalized = String(status || "").toLowerCase();
+  if (
+    normalized.includes("pending") ||
+    normalized.includes("await") ||
+    normalized.includes("process")
+  ) {
+    return "is-pending";
+  }
+  if (normalized.includes("complete") || normalized.includes("deliver")) {
+    return "is-completed";
+  }
+  if (normalized.includes("cancel")) {
+    return "is-canceled";
+  }
+  return "is-default";
+};
+
+const formatOrderStatusLabel = (status?: string) => {
+  const raw = String(status || "").trim();
+  const normalized = raw.toLowerCase();
+
+  if (normalized.includes("cancel")) return "Cancelled";
+  if (normalized.includes("process")) return "In Progress";
+  if (normalized.includes("pending") || normalized.includes("await")) {
+    return "In Progress";
+  }
+  if (normalized.includes("complete")) return "Completed";
+  if (normalized.includes("deliver")) return "Delivered";
+
+  return raw || "—";
+};
+
 const MyAccount = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string | undefined>("dashboard");
   const [activeAddress, setActiveAddress] = useState<string | null>("billing");
   const [activeOrders, setActiveOrders] = useState<string | undefined>("all");
-  const [openDetail, setOpenDetail] = useState<boolean | undefined>(false);
+  const [openDetail, setOpenDetail] = useState(false);
+  const [showAllOrdersModal, setShowAllOrdersModal] = useState(false);
+  const [selectedOrderDetail, setSelectedOrderDetail] =
+    useState<OrderDetailData | null>(null);
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -186,7 +292,7 @@ const MyAccount = () => {
     try {
       const res = await api.get("/api/v1/Customer/orders", {
         params: {
-          PageSize: 10,
+          PageSize: 100,
           PageNumber: 1,
         },
       });
@@ -239,13 +345,76 @@ const MyAccount = () => {
   const handleActiveOrders = (order: string) => {
     setActiveOrders(order);
   };
+
+  const closeOrderDetailModal = () => {
+    setOpenDetail(false);
+    setSelectedOrderDetail(null);
+  };
+
+  const handleOpenOrderDetail = async (orderId: number) => {
+    if (!orderId) {
+      toast.error("Invalid order.");
+      return;
+    }
+
+    setOpenDetail(true);
+    setOrderDetailLoading(true);
+    setSelectedOrderDetail(null);
+
+    try {
+      const details = await fetchCustomerOrderDetails(orderId);
+      setSelectedOrderDetail(details);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to load order details."));
+      setOpenDetail(false);
+    } finally {
+      setOrderDetailLoading(false);
+    }
+  };
+
+  const handleCancelHistoryOrder = async (orderId: number, status?: string) => {
+    if (!orderId || cancellingOrderId) return;
+
+    const label = formatOrderStatusLabel(status);
+    if (label === "Cancelled" || label === "Completed" || label === "Delivered") {
+      toast.error("This order cannot be cancelled.");
+      return;
+    }
+
+    const confirmed = window.confirm("Are you sure you want to cancel this order?");
+    if (!confirmed) return;
+
+    setCancellingOrderId(orderId);
+    try {
+      const message = await cancelCustomerOrder(orderId);
+      toast.success(message);
+      await getOrders();
+      if (selectedOrderDetail?.OrderId === orderId) {
+        closeOrderDetailModal();
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to cancel order."));
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+
   const totalOrders = orders.length;
-  const cancelledOrders = orders.filter(
-    (o) => o.OrderStatus === "Canceled",
+  const cancelledOrders = orders.filter((o) =>
+    String(o.OrderStatus || "")
+      .toLowerCase()
+      .includes("cancel"),
   ).length;
-  const awaitingOrders = orders.filter(
-    (o) => o.OrderStatus === "Pending",
-  ).length;
+  const awaitingOrders = orders.filter((o) => {
+    const status = String(o.OrderStatus || "").toLowerCase();
+    return status.includes("pending") || status.includes("await");
+  }).length;
+  const completedOrders = orders.filter((o) => {
+    const status = String(o.OrderStatus || "").toLowerCase();
+    return status.includes("complete") || status.includes("deliver");
+  }).length;
+  const dashboardOrders = orders.slice(0, DASHBOARD_ORDERS_LIMIT);
+  const hasMoreOrders = orders.length > DASHBOARD_ORDERS_LIMIT;
   return (
     <>
       <TopNavOne
@@ -334,114 +503,143 @@ const MyAccount = () => {
                 className={`tab text-content w-full ${activeTab === "dashboard" ? "block" : "hidden"}`}
               >
                 <div className="overview grid sm:grid-cols-3 gap-5">
-                  <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                    <div className="counter">
-                      <span className="text-secondary">Awaiting Pickup</span>
-                      <h5 className="heading5 mt-1">
-                        {
-                          orders.filter((o) => o.OrderStatus === "Pending")
-                            .length
-                        }
-                      </h5>
+                  <div className="account-stat-card">
+                    <div className="min-w-0">
+                      <span className="account-stat-label">Awaiting Pickup</span>
+                      <h5 className="account-stat-value">{awaitingOrders}</h5>
+                      <p className="account-stat-meta">
+                        {totalOrders > 0
+                          ? `${Math.round((awaitingOrders / totalOrders) * 100)}% of all orders`
+                          : "No orders yet"}
+                      </p>
                     </div>
-                    <Icon.HourglassMedium className="text-4xl" />
+                    <OrderDonutChart
+                      value={awaitingOrders}
+                      total={totalOrders || 1}
+                      tone="pending"
+                    />
                   </div>
 
-                  <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                    <div className="counter">
-                      <span className="text-secondary">Cancelled Orders</span>
-                      <h5 className="heading5 mt-1">
-                        {
-                          orders.filter((o) => o.OrderStatus === "Canceled")
-                            .length
-                        }
-                      </h5>
+                  <div className="account-stat-card">
+                    <div className="min-w-0">
+                      <span className="account-stat-label">Cancelled Orders</span>
+                      <h5 className="account-stat-value">{cancelledOrders}</h5>
+                      <p className="account-stat-meta">
+                        {totalOrders > 0
+                          ? `${Math.round((cancelledOrders / totalOrders) * 100)}% of all orders`
+                          : "No cancellations"}
+                      </p>
                     </div>
-                    <Icon.ReceiptX className="text-4xl" />
+                    <OrderDonutChart
+                      value={cancelledOrders}
+                      total={totalOrders || 1}
+                      tone="canceled"
+                    />
                   </div>
 
-                  <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                    <div className="counter">
-                      <span className="text-secondary">
-                        Total Number of Orders
-                      </span>
-                      <h5 className="heading5 mt-1">{orders.length}</h5>
+                  <div className="account-stat-card">
+                    <div className="min-w-0">
+                      <span className="account-stat-label">Total Orders</span>
+                      <h5 className="account-stat-value">{totalOrders}</h5>
+                      <p className="account-stat-meta">
+                        {completedOrders} completed · {awaitingOrders} pending
+                      </p>
                     </div>
-                    <Icon.Package className="text-4xl" />
+                    <OrderDonutChart
+                      value={completedOrders + awaitingOrders}
+                      total={totalOrders || 1}
+                      tone="total"
+                    />
                   </div>
                 </div>
 
-                <div className="list overflow-x-auto w-full mt-5">
-                  <table className="w-full">
-                    <thead className="border-b border-line">
-                      <tr>
-                        <th className="pb-3 text-left text-sm font-bold uppercase text-secondary">
-                          Order
-                        </th>
-                        <th className="pb-3 text-left text-sm font-bold uppercase text-secondary">
-                          Details
-                        </th>
-                        <th className="pb-3 text-left text-sm font-bold uppercase text-secondary">
-                          Pricing
-                        </th>
-                        <th className="pb-3 text-right text-sm font-bold uppercase text-secondary">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
+                <div className="account-orders-table-wrap">
+                  <div className="account-orders-table-head">
+                    <div>
+                      <h6 className="heading6">Recent Orders</h6>
+                      <p className="caption1 text-secondary mt-1">
+                        Showing {dashboardOrders.length} of {totalOrders} orders
+                      </p>
+                    </div>
+                    {hasMoreOrders && (
+                      <button
+                        type="button"
+                        className="account-see-more-btn"
+                        onClick={() => setShowAllOrdersModal(true)}
+                      >
+                        See More
+                        <Icon.ArrowRight size={14} weight="bold" />
+                      </button>
+                    )}
+                  </div>
 
-                    <tbody>
-                      {orders.length > 0 ? (
-                        orders.map((order) => (
-                          <tr
-                            key={order.OrderId}
-                            className="item duration-300 border-b border-line"
-                          >
-                            <th scope="row" className="py-3 text-left">
-                              <strong className="text-title">
-                                {order.OrderNumber}
-                              </strong>
-                            </th>
-                            <td className="py-3">
-                              <div className="info flex flex-col">
-                                <strong className="product_name text-button">
-                                  Order ID: {order.OrderId}
+                  <div className="list overflow-x-auto w-full">
+                    <table className="account-orders-table">
+                      <thead>
+                        <tr>
+                          <th>Order</th>
+                          <th>Details</th>
+                          <th>Pricing</th>
+                          <th className="account-status-col">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboardOrders.length > 0 ? (
+                          dashboardOrders.map((order) => (
+                            <tr key={order.OrderId}>
+                              <th scope="row">
+                                <strong className="text-title">
+                                  {order.OrderNumber}
                                 </strong>
-                                <span className="product_tag caption1 text-secondary">
-                                  {order.PaymentMethod}
+                              </th>
+                              <td>
+                                <div className="info flex flex-col">
+                                  <strong className="product_name text-button">
+                                    Order ID: {order.OrderId}
+                                  </strong>
+                                  <span className="product_tag caption1 text-secondary">
+                                    {order.PaymentMethod || "—"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="price">
+                                {formatRsPrice(Number(order.Total || 0))}
+                              </td>
+                              <td className="account-status-col">
+                                <span
+                                  className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
+                                >
+                                  {formatOrderStatusLabel(order.OrderStatus)}
                                 </span>
-                              </div>
-                            </td>
-                            <td className="py-3 price">
-                              ${order.Total?.toFixed(2) || "0.00"}
-                            </td>
-                            <td className="py-3 text-right">
-                              <span
-                                className={`tag px-4 py-1.5 rounded-full bg-opacity-10 caption1 font-semibold 
-                  ${order.OrderStatus === "Pending"
-                                    ? "bg-yellow text-yellow"
-                                    : order.OrderStatus === "Completed"
-                                      ? "bg-success text-success"
-                                      : "bg-purple text-purple"
-                                  }`}
-                              >
-                                {order.OrderStatus}
-                              </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="py-10 text-center text-secondary"
+                            >
+                              No orders found.
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="py-10 text-center text-secondary"
-                          >
-                            No orders found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {hasMoreOrders && (
+                    <div className="p-4 border-t border-line text-center">
+                      <button
+                        type="button"
+                        className="account-see-more-btn"
+                        onClick={() => setShowAllOrdersModal(true)}
+                      >
+                        See More Orders
+                        <Icon.ArrowRight size={14} weight="bold" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -498,34 +696,51 @@ const MyAccount = () => {
                           <div className="flex items-center gap-2">
                             <strong className="text-title">Status:</strong>
                             <span
-                              className={`tag px-4 py-1.5 rounded-full bg-opacity-10 caption1 font-semibold
-                ${order.OrderStatus === "Pending"
-                                  ? "bg-yellow text-yellow"
-                                  : order.OrderStatus === "Completed"
-                                    ? "bg-success text-success"
-                                    : "bg-purple text-purple"
-                                }`}
+                              className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
                             >
-                              {order.OrderStatus}
+                              {formatOrderStatusLabel(order.OrderStatus)}
                             </span>
                           </div>
                         </div>
 
                         <div className="list_prd px-5">
                           <div className="py-5 text-secondary">
-                            Total: ${order.Total.toFixed(2)}
+                            Total: {formatRsPrice(Number(order.Total || 0))}
                           </div>
                         </div>
 
                         <div className="flex flex-wrap gap-4 p-5">
                           <button
+                            type="button"
                             className="button-main"
-                            onClick={() => setOpenDetail(true)}
+                            onClick={() =>
+                              void handleOpenOrderDetail(Number(order.OrderId))
+                            }
                           >
                             Order Details
                           </button>
-                          <button className="button-main bg-surface border border-line text-black">
-                            Cancel Order
+                          <button
+                            type="button"
+                            className="button-main bg-surface border border-line text-black disabled:opacity-50"
+                            disabled={
+                              cancellingOrderId === Number(order.OrderId) ||
+                              formatOrderStatusLabel(order.OrderStatus) ===
+                                "Cancelled" ||
+                              formatOrderStatusLabel(order.OrderStatus) ===
+                                "Completed" ||
+                              formatOrderStatusLabel(order.OrderStatus) ===
+                                "Delivered"
+                            }
+                            onClick={() =>
+                              void handleCancelHistoryOrder(
+                                Number(order.OrderId),
+                                order.OrderStatus,
+                              )
+                            }
+                          >
+                            {cancellingOrderId === Number(order.OrderId)
+                              ? "Cancelling..."
+                              : "Cancel Order"}
                           </button>
                         </div>
                       </div>
@@ -814,143 +1029,336 @@ const MyAccount = () => {
           </div>
         </div>
       </div>
-      <Footer />
-      <div
-        className={`modal-order-detail-block flex items-center justify-center`}
-        onClick={() => setOpenDetail(false)}
-      >
+
+      {showAllOrdersModal && (
         <div
-          className={`modal-order-detail-main grid grid-cols-2 w-[1160px] bg-white rounded-2xl ${openDetail ? "open" : ""}`}
-          onClick={(e) => e.stopPropagation()}
+          className="account-orders-modal"
+          onClick={() => setShowAllOrdersModal(false)}
+          role="presentation"
         >
-          <div className="info p-10 border-r border-line">
-            <h5 className="heading5">Order Details</h5>
-            <div className="list_info grid grid-cols-2 gap-10 gap-y-8 mt-5">
-              <div className="info_item">
-                <strong className="text-button-uppercase text-secondary">
-                  Contact Information
-                </strong>
-                <h6 className="heading6 order_name mt-2">Tony nguyen</h6>
-                <h6 className="heading6 order_phone mt-2">
-                  (+12) 345 - 678910
-                </h6>
-                <h6 className="heading6 normal-case order_email mt-2">
-                  hi.avitex@gmail.com
-                </h6>
+          <div
+            className="account-orders-modal-main"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-orders-title"
+          >
+            <div className="account-orders-modal-header">
+              <div>
+                <h2 id="all-orders-title" className="heading5">
+                  All Orders
+                </h2>
+                <p className="caption1 text-secondary mt-1">
+                  {totalOrders} order{totalOrders === 1 ? "" : "s"} in your account
+                </p>
               </div>
-              <div className="info_item">
-                <strong className="text-button-uppercase text-secondary">
-                  Payment method
-                </strong>
-                <h6 className="heading6 order_payment mt-2">cash delivery</h6>
-              </div>
-              <div className="info_item">
-                <strong className="text-button-uppercase text-secondary">
-                  Shipping address
-                </strong>
-                <h6 className="heading6 order_shipping_address mt-2">
-                  2163 Phillips Gap Rd, West Jefferson, North Carolina, US
-                </h6>
-              </div>
-              <div className="info_item">
-                <strong className="text-button-uppercase text-secondary">
-                  Billing address
-                </strong>
-                <h6 className="heading6 order_billing_address mt-2">
-                  2163 Phillips Gap Rd, West Jefferson, North Carolina, US
-                </h6>
-              </div>
-              <div className="info_item">
-                <strong className="text-button-uppercase text-secondary">
-                  Company
-                </strong>
-                <h6 className="heading6 order_company mt-2">
-                  Avitex Technology
-                </h6>
-              </div>
+              <button
+                type="button"
+                className="account-orders-modal-close"
+                onClick={() => setShowAllOrdersModal(false)}
+                aria-label="Close"
+              >
+                <Icon.X size={18} />
+              </button>
             </div>
-          </div>
-          <div className="list p-10">
-            <h5 className="heading5">Items</h5>
-            <div className="list_prd">
-              <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                <Link
-                  href={"/product/default"}
-                  className="flex items-center gap-5"
-                >
-                  <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                    <Image
-                      src={"/images/product/1000x1000.png"}
-                      width={1000}
-                      height={1000}
-                      alt={"Contrasting sheepskin sweatshirt"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <div className="prd_name text-title">
-                      Contrasting sheepskin sweatshirt
+
+            <div className="account-orders-modal-body">
+              {orders.length > 0 ? (
+                orders.map((order) => (
+                  <div key={order.OrderId} className="account-orders-modal-item">
+                    <div className="min-w-0">
+                      <strong className="text-button block truncate">
+                        {order.OrderNumber}
+                      </strong>
+                      <span className="caption2 text-secondary">
+                        ID: {order.OrderId}
+                      </span>
                     </div>
-                    <div className="caption1 text-secondary mt-2">
-                      <span className="prd_size uppercase">XL</span>
-                      <span>/</span>
-                      <span className="prd_color capitalize">Yellow</span>
+                    <div className="account-orders-modal-meta min-w-0">
+                      <div className="caption1 text-secondary truncate">
+                        {order.PaymentMethod || "—"}
+                      </div>
+                      <div className="text-button font-semibold mt-1">
+                        {formatRsPrice(Number(order.Total || 0))}
+                      </div>
                     </div>
+                    <span
+                      className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
+                    >
+                      {formatOrderStatusLabel(order.OrderStatus)}
+                    </span>
                   </div>
-                </Link>
-                <div className="text-title">
-                  <span className="prd_quantity">1</span>
-                  <span> X </span>
-                  <span className="prd_price">$45.00</span>
-                </div>
-              </div>
-              <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                <Link
-                  href={"/product/default"}
-                  className="flex items-center gap-5"
-                >
-                  <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                    <Image
-                      src={"/images/product/1000x1000.png"}
-                      width={1000}
-                      height={1000}
-                      alt={"Contrasting sheepskin sweatshirt"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <div className="prd_name text-title">
-                      Contrasting sheepskin sweatshirt
-                    </div>
-                    <div className="caption1 text-secondary mt-2">
-                      <span className="prd_size uppercase">XL</span>
-                      <span>/</span>
-                      <span className="prd_color capitalize">White</span>
-                    </div>
-                  </div>
-                </Link>
-                <div className="text-title">
-                  <span className="prd_quantity">2</span>
-                  <span> X </span>
-                  <span className="prd_price">$70.00</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-5">
-              <strong className="text-title">Shipping</strong>
-              <strong className="order_ship text-title">Free</strong>
-            </div>
-            <div className="flex items-center justify-between mt-4">
-              <strong className="text-title">Discounts</strong>
-              <strong className="order_discounts text-title">-$80.00</strong>
-            </div>
-            <div className="flex items-center justify-between mt-5 pt-5 border-t border-line">
-              <h5 className="heading5">Subtotal</h5>
-              <h5 className="order_total heading5">$105.00</h5>
+                ))
+              ) : (
+                <p className="text-center text-secondary py-10">No orders found.</p>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <Footer />
+
+      {openDetail && (
+        <div
+          className="account-order-detail-modal"
+          onClick={closeOrderDetailModal}
+          role="presentation"
+        >
+          <div
+            className="account-order-detail-main"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-detail-title"
+          >
+            <div className="account-order-detail-header">
+              <div className="min-w-0">
+                <span className="account-detail-badge">Order Details</span>
+                <h2 id="order-detail-title" className="heading5 mt-2">
+                  {orderDetailLoading
+                    ? "Loading..."
+                    : selectedOrderDetail?.OrderNumber || "Order"}
+                </h2>
+                {selectedOrderDetail && (
+                  <p className="caption1 text-secondary mt-1">
+                    ID: {selectedOrderDetail.OrderId} ·{" "}
+                    {formatOrderStatusLabel(
+                      selectedOrderDetail.OrderStatusDisplayName,
+                    )}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="account-orders-modal-close"
+                onClick={closeOrderDetailModal}
+                aria-label="Close"
+              >
+                <Icon.X size={18} />
+              </button>
+            </div>
+
+            <div className="account-order-detail-body">
+              {orderDetailLoading ? (
+                <div className="account-order-detail-loading">
+                  <div className="account-order-detail-spinner" />
+                  <p className="text-secondary">Loading order details...</p>
+                </div>
+              ) : selectedOrderDetail ? (
+                <>
+                  <div className="account-order-detail-grid">
+                    <div className="account-order-detail-card">
+                      <h3 className="account-order-detail-section-title">
+                        <Icon.User size={16} weight="bold" />
+                        Contact
+                      </h3>
+                      <p className="text-button font-semibold">
+                        {selectedOrderDetail.CustomerFullName ||
+                          selectedOrderDetail.OrderShippingDetails?.FullName ||
+                          "—"}
+                      </p>
+                      <p className="caption1 text-secondary mt-1">
+                        {selectedOrderDetail.OrderBillingDetails?.Phone ||
+                          selectedOrderDetail.OrderShippingDetails?.Phone ||
+                          "—"}
+                      </p>
+                      <p className="caption1 text-secondary mt-1 break-all">
+                        {selectedOrderDetail.OrderBillingDetails?.EmailAddress ||
+                          "—"}
+                      </p>
+                    </div>
+
+                    <div className="account-order-detail-card">
+                      <h3 className="account-order-detail-section-title">
+                        <Icon.CreditCard size={16} weight="bold" />
+                        Payment
+                      </h3>
+                      <p className="text-button font-semibold">
+                        {selectedOrderDetail.PaymentMethodName || "—"}
+                      </p>
+                      <p className="caption1 text-secondary mt-1">
+                        {selectedOrderDetail.PaymentStatusDisplayName || "—"}
+                      </p>
+                      <span
+                        className={`account-status-tag mt-3 ${getOrderStatusClass(selectedOrderDetail.OrderStatusDisplayName)}`}
+                      >
+                        {formatOrderStatusLabel(
+                          selectedOrderDetail.OrderStatusDisplayName,
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="account-order-detail-card">
+                      <h3 className="account-order-detail-section-title">
+                        <Icon.MapPin size={16} weight="bold" />
+                        Shipping Address
+                      </h3>
+                      <p className="text-button font-semibold">
+                        {selectedOrderDetail.OrderShippingDetails?.FullName ||
+                          "—"}
+                      </p>
+                      <p className="caption1 text-secondary mt-1">
+                        {selectedOrderDetail.OrderShippingDetails?.Address ||
+                          "—"}
+                      </p>
+                      <p className="caption1 text-secondary mt-1">
+                        {[
+                          selectedOrderDetail.OrderShippingDetails?.City,
+                          selectedOrderDetail.OrderShippingDetails?.Country,
+                        ]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </p>
+                    </div>
+
+                    <div className="account-order-detail-card">
+                      <h3 className="account-order-detail-section-title">
+                        <Icon.Truck size={16} weight="bold" />
+                        Delivery
+                      </h3>
+                      <p className="caption1 text-secondary">Option</p>
+                      <p className="text-button font-semibold">
+                        {getDeliveryOptionLabel(
+                          selectedOrderDetail.DeliveryOption,
+                        )}
+                      </p>
+                      <p className="caption1 text-secondary mt-3">Date</p>
+                      <p className="text-button font-semibold">
+                        {formatOrderDate(selectedOrderDetail.DeliveryDate)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="account-order-detail-items">
+                    <h3 className="account-order-detail-section-title mb-3">
+                      <Icon.ShoppingBag size={16} weight="bold" />
+                      Items ({selectedOrderDetail.TotalItems})
+                    </h3>
+
+                    {(selectedOrderDetail.OrderDetails?.OrderItemList || [])
+                      .length === 0 ? (
+                      <p className="caption1 text-secondary">No items found.</p>
+                    ) : (
+                      selectedOrderDetail.OrderDetails.OrderItemList.map(
+                        (item) => {
+                          const image =
+                            item.ProductImageURL &&
+                            !item.ProductImageURL.includes("noImage")
+                              ? item.ProductImageURL
+                              : "/images/product/1000x1000.png";
+
+                          return (
+                            <div
+                              key={item.OrderDetailId}
+                              className="account-order-detail-item"
+                            >
+                              <Link
+                                href={getProductDetailUrl(
+                                  item.ProductId,
+                                  item.ProductDetailId,
+                                )}
+                                className="account-order-detail-item-image"
+                                onClick={closeOrderDetailModal}
+                              >
+                                <Image
+                                  src={image}
+                                  fill
+                                  sizes="72px"
+                                  alt={item.ProductName}
+                                  className="object-cover"
+                                />
+                              </Link>
+                              <div className="min-w-0">
+                                <Link
+                                  href={getProductDetailUrl(
+                                    item.ProductId,
+                                    item.ProductDetailId,
+                                  )}
+                                  className="text-button font-semibold hover:underline line-clamp-2"
+                                  onClick={closeOrderDetailModal}
+                                >
+                                  {item.ProductName}
+                                </Link>
+                                {item.VariantName && (
+                                  <p className="caption1 text-secondary mt-1">
+                                    {item.VariantName.replace(/,/g, ", ")}
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between gap-3 mt-2">
+                                  <span className="caption1 text-secondary">
+                                    Qty: {item.Quantity}
+                                  </span>
+                                  <span className="text-button font-semibold">
+                                    {formatRsPrice(item.TotalAmount)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        },
+                      )
+                    )}
+                  </div>
+
+                  <div className="account-order-detail-totals">
+                    <div className="account-order-detail-total-row">
+                      <span>Order Amount</span>
+                      <span>
+                        {formatRsPrice(selectedOrderDetail.OrderAmount)}
+                      </span>
+                    </div>
+                    <div className="account-order-detail-total-row">
+                      <span>Delivery</span>
+                      <span>
+                        {selectedOrderDetail.DeliveryCharges > 0
+                          ? formatRsPrice(selectedOrderDetail.DeliveryCharges)
+                          : "Free"}
+                      </span>
+                    </div>
+                    {selectedOrderDetail.NetDiscount > 0 && (
+                      <div className="account-order-detail-total-row">
+                        <span>Discount</span>
+                        <span className="text-green">
+                          -{formatRsPrice(selectedOrderDetail.NetDiscount)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="account-order-detail-total-row is-grand">
+                      <span>Net Total</span>
+                      <span>
+                        {formatRsPrice(selectedOrderDetail.NetAmount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="account-order-detail-actions">
+                    <Link
+                      href={`/order/${selectedOrderDetail.OrderId}`}
+                      className="button-main bg-black account-order-detail-btn"
+                      onClick={closeOrderDetailModal}
+                    >
+                      Open Full Order Page
+                    </Link>
+                    <button
+                      type="button"
+                      className="account-order-detail-btn is-secondary"
+                      onClick={closeOrderDetailModal}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-center text-secondary py-10">
+                  Order details not available.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white p-8 rounded-lg shadow-lg w-[400px]">

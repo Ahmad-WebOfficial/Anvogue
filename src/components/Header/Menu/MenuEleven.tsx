@@ -84,7 +84,7 @@ const MenuEleven = () => {
                 <i className="icon-category text-2xl"></i>
               </div>
               <Link href={"/"} className="flex items-center">
-                <div className="heading4">Anvogue</div>
+                <div className="heading4">TopSaver</div>
               </Link>
               <div className="form-search w-2/3 pl-8 flex items-center h-[44px] max-lg:hidden">
                 <div className="category-block relative h-full">
@@ -1490,7 +1490,7 @@ const MenuEleven = () => {
                   href={"/"}
                   className="logo text-3xl font-semibold text-center"
                 >
-                  Anvogue
+                  TopSaver
                 </Link>
               </div>
               <div className="form-search relative mt-2">

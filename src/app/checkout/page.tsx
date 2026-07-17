@@ -39,6 +39,7 @@ const Checkout = () => {
     lastName: "",
     email: "",
     phone: "",
+    phoneCode: "+92",
     address: "",
     postalCode: "",
     countryId: "",
@@ -52,8 +53,15 @@ const Checkout = () => {
     isGiftOrder: false,
     deliveryOption: 1,
     isoCode: "PK",
-    phoneCode: "+92",
     deliveryDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+    billingSameAsShipping: true,
+    billingFirstName: "",
+    billingLastName: "",
+    billingEmail: "",
+    billingPhone: "",
+    isAddNewAddress: true,
+    longitude: "",
+    latitude: "",
   });
 
   const subTotal = cartState.subTotal || 0;
@@ -193,6 +201,17 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       return;
     }
 
+    if (
+      !form.billingSameAsShipping &&
+      (!form.billingFirstName ||
+        !form.billingLastName ||
+        !form.billingEmail ||
+        !form.billingPhone)
+    ) {
+      toast.error("Please fill all billing details.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = buildCreateOrderPayload(form);
@@ -295,6 +314,19 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         value={form.email}
                         onChange={(e) => updateForm("email", e.target.value)}
                         required
+                      />
+                    </div>
+                    <div className="checkout-field">
+                      <label className="checkout-label" htmlFor="phoneCode">
+                        Phone Code
+                      </label>
+                      <input
+                        id="phoneCode"
+                        className="checkout-input"
+                        type="text"
+                        placeholder="+92"
+                        value={form.phoneCode}
+                        onChange={(e) => updateForm("phoneCode", e.target.value)}
                       />
                     </div>
                     <div className="checkout-field">
@@ -492,6 +524,119 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         onChange={(e) => updateForm("postalCode", e.target.value)}
                       />
                     </div>
+
+                    <label className="checkout-checkbox-row full-width">
+                      <input
+                        type="checkbox"
+                        checked={form.isAddNewAddress}
+                        onChange={(e) =>
+                          updateForm("isAddNewAddress", e.target.checked)
+                        }
+                      />
+                      <span>Save this address for future orders</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="checkout-section">
+                  <h2 className="checkout-section-title">
+                    <span className="checkout-section-icon">
+                      <Icon.CreditCard size={18} weight="bold" />
+                    </span>
+                    Billing Details
+                  </h2>
+                  <div className="checkout-field-grid cols-2">
+                    <label className="checkout-checkbox-row full-width">
+                      <input
+                        type="checkbox"
+                        checked={form.billingSameAsShipping}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          if (checked) {
+                            updateForm("billingSameAsShipping", true);
+                            return;
+                          }
+                          setForm((prev) => ({
+                            ...prev,
+                            billingSameAsShipping: false,
+                            billingFirstName: prev.billingFirstName || prev.firstName,
+                            billingLastName: prev.billingLastName || prev.lastName,
+                            billingEmail: prev.billingEmail || prev.email,
+                            billingPhone: prev.billingPhone || prev.phone,
+                          }));
+                        }}
+                      />
+                      <span>Billing details same as shipping</span>
+                    </label>
+
+                    {!form.billingSameAsShipping && (
+                      <>
+                        <div className="checkout-field">
+                          <label className="checkout-label" htmlFor="billingFirstName">
+                            Billing First Name *
+                          </label>
+                          <input
+                            id="billingFirstName"
+                            className="checkout-input"
+                            type="text"
+                            placeholder="John"
+                            value={form.billingFirstName}
+                            onChange={(e) =>
+                              updateForm("billingFirstName", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="checkout-field">
+                          <label className="checkout-label" htmlFor="billingLastName">
+                            Billing Last Name *
+                          </label>
+                          <input
+                            id="billingLastName"
+                            className="checkout-input"
+                            type="text"
+                            placeholder="Doe"
+                            value={form.billingLastName}
+                            onChange={(e) =>
+                              updateForm("billingLastName", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="checkout-field">
+                          <label className="checkout-label" htmlFor="billingEmail">
+                            Billing Email *
+                          </label>
+                          <input
+                            id="billingEmail"
+                            className="checkout-input"
+                            type="email"
+                            placeholder="billing@example.com"
+                            value={form.billingEmail}
+                            onChange={(e) =>
+                              updateForm("billingEmail", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="checkout-field">
+                          <label className="checkout-label" htmlFor="billingPhone">
+                            Billing Phone *
+                          </label>
+                          <input
+                            id="billingPhone"
+                            className="checkout-input"
+                            type="tel"
+                            placeholder="0300 1234567"
+                            value={form.billingPhone}
+                            onChange={(e) =>
+                              updateForm("billingPhone", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 

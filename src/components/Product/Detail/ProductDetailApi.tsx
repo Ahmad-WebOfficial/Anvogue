@@ -108,25 +108,15 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
         );
 
         setProductDetail(detail);
-
-        const defaultVariant =
-          detail.ProductVariantDetail?.productVariantCombinationList?.find(
-            (variant) => variant.ProductDetailId === detail.ProductDetailId,
-          ) ??
-          detail.ProductVariantDetail?.productVariantCombinationList?.find(
-            (variant) =>
-              productDetailId &&
-              variant.ProductDetailId === Number(productDetailId),
-          ) ??
-          detail.ProductVariantDetail?.productVariantCombinationList?.[0] ??
-          null;
-
-        setSelectedVariant(defaultVariant);
-        syncGroupSelections(detail, defaultVariant);
+        // Do not auto-select size/color/variant — user must choose
+        setSelectedVariant(null);
+        setGroupSelections({});
         setQuantity(1);
       } catch (err) {
         setError(getApiErrorMessage(err, "Failed to load product details."));
         setProductDetail(null);
+        setSelectedVariant(null);
+        setGroupSelections({});
       } finally {
         setLoading(false);
       }
@@ -197,8 +187,8 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
       productDetail,
       nextSelections,
     );
+    setSelectedVariant(matchedVariant);
     if (matchedVariant) {
-      setSelectedVariant(matchedVariant);
       setActiveImageIndex(0);
       if (mainSwiper && !mainSwiper.destroyed) {
         mainSwiper.slideTo(0, 0);
@@ -225,6 +215,13 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
 
   const handleAddToCart = async () => {
     if (!inStock) return;
+
+    const variantsList =
+      productDetail.ProductVariantDetail?.productVariantCombinationList ?? [];
+    if (variantsList.length > 0 && !selectedVariant) {
+      toast.error("Please select size, color and variant first.");
+      return;
+    }
 
     const cartProduct = mapProductDetailToProductType(
       productDetail,

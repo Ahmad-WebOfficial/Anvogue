@@ -25,7 +25,7 @@ const AboutUs = () => {
             <div className="text flex items-center justify-center">
               <div className="content md:w-5/6 w-full">
                 <div className="heading3 text-center">
-                  Welcome to Anvogue
+                  Welcome to TopSaver
                 </div>
                 <div className="body1 text-center md:mt-7 mt-5">
                   We are a modern fashion destination focused on quality products,

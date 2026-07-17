@@ -188,7 +188,7 @@ const Footer = () => {
 
           <div className="footer-bottom border-t border-line">
             <p className="footer-copyright caption1 text-secondary">
-              © {new Date().getFullYear()} Anvogue. All Rights Reserved.
+              © {new Date().getFullYear()} TopSaver. All Rights Reserved.
             </p>
           </div>
         </div>

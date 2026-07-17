@@ -33,6 +33,7 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
+import toast from "react-hot-toast";
 
 const ModalQuickview = () => {
   const [productQty, setProductQty] = useState(1);
@@ -134,16 +135,9 @@ const ModalQuickview = () => {
         );
 
         setProductDetail(detail);
-
-        const defaultVariant =
-          detail.ProductVariantDetail?.productVariantCombinationList?.find(
-            (variant) => variant.ProductDetailId === detail.ProductDetailId,
-          ) ??
-          detail.ProductVariantDetail?.productVariantCombinationList?.[0] ??
-          null;
-
-        setSelectedVariant(defaultVariant);
-        syncGroupSelections(detail, defaultVariant);
+        // Do not auto-select size/color/variant — user must choose
+        setSelectedVariant(null);
+        setGroupSelections({});
       } catch (err) {
         setProductDetail(null);
         setSelectedVariant(null);
@@ -167,9 +161,7 @@ const ModalQuickview = () => {
       productDetail,
       nextSelections,
     );
-    if (matchedVariant) {
-      setSelectedVariant(matchedVariant);
-    }
+    setSelectedVariant(matchedVariant);
   };
 
   const handleVariantSelect = (variant: ProductVariantCombination) => {
@@ -181,6 +173,11 @@ const ModalQuickview = () => {
 
   const handleAddToCart = async () => {
     if (!selectedProduct || !productDetail || !inStock) return;
+
+    if (variants.length > 0 && !selectedVariant) {
+      toast.error("Please select size, color and variant first.");
+      return;
+    }
 
     const cartProduct = mapProductDetailToProductType(
       productDetail,

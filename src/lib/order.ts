@@ -47,6 +47,7 @@ export interface CreateOrderFormValues {
   lastName: string;
   email: string;
   phone: string;
+  phoneCode: string;
   address: string;
   postalCode: string;
   countryId: string;
@@ -60,8 +61,15 @@ export interface CreateOrderFormValues {
   isGiftOrder: boolean;
   deliveryOption: number;
   isoCode: string;
-  phoneCode: string;
   deliveryDate: string;
+  billingSameAsShipping: boolean;
+  billingFirstName: string;
+  billingLastName: string;
+  billingEmail: string;
+  billingPhone: string;
+  isAddNewAddress: boolean;
+  longitude: string;
+  latitude: string;
 }
 
 export interface OrderItem {
@@ -215,6 +223,9 @@ export function buildCreateOrderPayload(
   values: CreateOrderFormValues,
 ): CreateOrderPayload {
   const fullName = `${values.firstName.trim()} ${values.lastName.trim()}`.trim();
+  const billingFullName = values.billingSameAsShipping
+    ? fullName
+    : `${values.billingFirstName.trim()} ${values.billingLastName.trim()}`.trim();
 
   return {
     IsGiftOrder: values.isGiftOrder,
@@ -232,13 +243,17 @@ export function buildCreateOrderPayload(
       City: values.cityName || "",
       AddressBookId: 0,
       AreaId: Number(values.areaId) || 0,
-      Longitude: "",
-      Latitude: "",
+      Longitude: values.longitude.trim(),
+      Latitude: values.latitude.trim(),
     },
     BillingDetail: {
-      EmailAddress: values.email.trim(),
-      Phone: values.phone.trim(),
-      FullName: fullName,
+      EmailAddress: values.billingSameAsShipping
+        ? values.email.trim()
+        : values.billingEmail.trim(),
+      Phone: values.billingSameAsShipping
+        ? values.phone.trim()
+        : values.billingPhone.trim(),
+      FullName: billingFullName,
     },
     SessionId: getCartSessionId(),
     BranchId: Number(values.branchId) || 0,
@@ -247,7 +262,7 @@ export function buildCreateOrderPayload(
       : new Date().toISOString(),
     ISOCode: values.isoCode || "PK",
     PhoneCode: values.phoneCode || "+92",
-    IsAddNewAddress: true,
+    IsAddNewAddress: values.isAddNewAddress,
     DeliveryOption: values.deliveryOption || 1,
     SpecialInstructions: values.specialInstructions.trim(),
     DeliveryInstructions: values.deliveryInstructions.trim(),

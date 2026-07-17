@@ -41,7 +41,7 @@ const TenantLogo = ({
       "Welcome Back!"
     )
   ) : (
-    "Anvogue"
+    "TopSaver"
   );
 
   return (
@@ -53,13 +53,13 @@ const TenantLogo = ({
           ? welcomeName
             ? `Welcome, ${welcomeName}`
             : "Welcome Back!"
-          : "Anvogue"
+          : "TopSaver"
       }
     >
       {logoSrc && (
         <Image
           src={logoSrc}
-          alt={welcomeName ? "User profile" : "Anvogue logo"}
+          alt={welcomeName ? "User profile" : "TopSaver logo"}
           width={44}
           height={44}
           className={`${imageClassName} shrink-0`}

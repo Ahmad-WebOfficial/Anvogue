@@ -49,7 +49,11 @@ const OrderDonutChart = ({
   const percent = total > 0 ? Math.min((value / total) * 100, 100) : 0;
   const offset = circumference - (percent / 100) * circumference;
   const color =
-    tone === "pending" ? "#f59e0b" : tone === "canceled" ? "#dc2626" : "#1f1f1f";
+    tone === "pending"
+      ? "#f59e0b"
+      : tone === "canceled"
+        ? "#dc2626"
+        : "#1f1f1f";
 
   return (
     <svg className="account-donut" viewBox={`0 0 ${size} ${size}`} aria-hidden>
@@ -131,7 +135,9 @@ const MyAccount = () => {
   const [selectedOrderDetail, setSelectedOrderDetail] =
     useState<OrderDetailData | null>(null);
   const [orderDetailLoading, setOrderDetailLoading] = useState(false);
-  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(
+    null,
+  );
   const [userProfile, setUserProfile] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -146,17 +152,20 @@ const MyAccount = () => {
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const reviewsPageSize = 10;
 
+  const [trackingInfo, setTrackingInfo] = useState<any>(null);
+  const [loadingTracking, setLoadingTracking] = useState(false);
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingForgot, setLoadingForgot] = useState(false);
   const [loadingReset, setLoadingReset] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [formData, setFormData] = useState({
-    FullName: "Tony Nguyen",
-    PhoneNumber: "345 678 910",
-    PhoneCode: "+12",
-    Email: "hi.avitex@gmail.com",
-    DOB: "2000-01-01",
-    Country: "Pakistan",
+    FullName: "",
+    PhoneNumber: "",
+    PhoneCode: "",
+    Email: "",
+    DOB: "",
+    Country: "",
     Gender: 0,
     password: "",
     newPassword: "",
@@ -171,6 +180,26 @@ const MyAccount = () => {
       ...prev,
       [name]: name === "Gender" ? parseInt(value) : value,
     }));
+  };
+
+  const handleTrackOrder = async (orderId) => {
+    setLoadingTracking(true);
+    try {
+      const res = await api.get(
+        `/api/v1/OrderTracking/track-order?orderId=${orderId}`,
+      );
+      if (res.status === 200) {
+        setTrackingInfo(res.data.Data);
+
+        closeOrderDetailModal();
+
+        setShowTrackingModal(true);
+      }
+    } catch (error) {
+      toast.error("Tracking details nahi mil saki.");
+    } finally {
+      setLoadingTracking(false);
+    }
   };
   const handleDeleteAccount = async () => {
     setLoadingProfile(true);
@@ -198,23 +227,31 @@ const MyAccount = () => {
       const payload = {
         FullName: formData.FullName,
         PhoneNumber: formData.PhoneNumber,
-        PhoneCode: formData.PhoneCode,
+        PhoneCode: formData.PhoneCode || "92",
         Email: formData.Email,
-        DOB: formData.DOB,
+        DOB: formData.DOB ? new Date(formData.DOB).toISOString() : null,
         Country: formData.Country,
-        Gender: formData.Gender,
+        Gender: Number(formData.Gender),
       };
 
-      const res = await api.put("/api/v1/Customer/UpdateProfile", payload, {});
+      const res = await api.put("/api/v1/Customer/UpdateProfile", payload);
 
       if (res.status === 200) {
-        toast.success("Profile Updated!");
+        toast.success("Profile Updated Successfully!");
 
-        await getProfile();
+        setFormData((prev: any) => ({
+          ...prev,
+          ...payload,
+        }));
 
         setIsEditing(false);
+
+        setTimeout(() => {
+          getProfile();
+        }, 1500);
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Update failed:", error);
       toast.error("Profile update failed");
     } finally {
       setLoadingProfile(false);
@@ -259,7 +296,7 @@ const MyAccount = () => {
     setLoadingProfile(true);
     try {
       const res = await api.get("/api/v1/Customer/GetProfile");
-      // console.log("get profile:", res);
+      console.log("API Response:", res.data);
       if (res.data?.Data) {
         const p = res.data.Data;
 
@@ -284,9 +321,6 @@ const MyAccount = () => {
       setLoadingProfile(false);
     }
   };
-  useEffect(() => {
-    getProfile();
-  }, []);
 
   const getOrders = async () => {
     try {
@@ -308,10 +342,6 @@ const MyAccount = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    getOrders();
-  }, []);
 
   const getCustomerReviews = async (pageNumber = 1) => {
     setReviewsLoading(true);
@@ -336,7 +366,12 @@ const MyAccount = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    getProfile();
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([getProfile(), getOrders()]);
+      setLoading(false);
+    };
+    init();
   }, []);
   const handleActiveAddress = (order: string) => {
     setActiveAddress((prevOrder) => (prevOrder === order ? null : order));
@@ -376,12 +411,18 @@ const MyAccount = () => {
     if (!orderId || cancellingOrderId) return;
 
     const label = formatOrderStatusLabel(status);
-    if (label === "Cancelled" || label === "Completed" || label === "Delivered") {
+    if (
+      label === "Cancelled" ||
+      label === "Completed" ||
+      label === "Delivered"
+    ) {
       toast.error("This order cannot be cancelled.");
       return;
     }
 
-    const confirmed = window.confirm("Are you sure you want to cancel this order?");
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this order?",
+    );
     if (!confirmed) return;
 
     setCancellingOrderId(orderId);
@@ -505,7 +546,9 @@ const MyAccount = () => {
                 <div className="overview grid sm:grid-cols-3 gap-5">
                   <div className="account-stat-card">
                     <div className="min-w-0">
-                      <span className="account-stat-label">Awaiting Pickup</span>
+                      <span className="account-stat-label">
+                        Awaiting Pickup
+                      </span>
                       <h5 className="account-stat-value">{awaitingOrders}</h5>
                       <p className="account-stat-meta">
                         {totalOrders > 0
@@ -522,7 +565,9 @@ const MyAccount = () => {
 
                   <div className="account-stat-card">
                     <div className="min-w-0">
-                      <span className="account-stat-label">Cancelled Orders</span>
+                      <span className="account-stat-label">
+                        Cancelled Orders
+                      </span>
                       <h5 className="account-stat-value">{cancelledOrders}</h5>
                       <p className="account-stat-meta">
                         {totalOrders > 0
@@ -712,7 +757,7 @@ const MyAccount = () => {
                         <div className="flex flex-wrap gap-4 p-5">
                           <button
                             type="button"
-                            className="button-main"
+                            className="button-main bg-black"
                             onClick={() =>
                               void handleOpenOrderDetail(Number(order.OrderId))
                             }
@@ -871,7 +916,7 @@ const MyAccount = () => {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4 gap-y-5 mt-5">
-                  <div className="first-name">
+                  <div className="full-name">
                     <label className="caption1 capitalize">
                       Full Name <span className="text-red">*</span>
                     </label>
@@ -884,6 +929,7 @@ const MyAccount = () => {
                       type="text"
                     />
                   </div>
+
                   <div className="phone-number">
                     <label className="caption1 capitalize">
                       Phone Number <span className="text-red">*</span>
@@ -897,6 +943,22 @@ const MyAccount = () => {
                       type="text"
                     />
                   </div>
+
+                  <div className="phone-code">
+                    <label className="caption1 capitalize">
+                      Phone Code <span className="text-red">*</span>
+                    </label>
+                    <input
+                      disabled={!isEditing}
+                      name="PhoneCode"
+                      value={formData.PhoneCode}
+                      onChange={handleInputChange}
+                      className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                      type="text"
+                      placeholder="92"
+                    />
+                  </div>
+
                   <div className="email">
                     <label className="caption1 capitalize">
                       Email Address <span className="text-red">*</span>
@@ -910,6 +972,35 @@ const MyAccount = () => {
                       type="email"
                     />
                   </div>
+
+                  <div className="dob">
+                    <label className="caption1 capitalize">
+                      Date of Birth <span className="text-red">*</span>
+                    </label>
+                    <input
+                      disabled={!isEditing}
+                      name="DOB"
+                      value={formData.DOB?.split("T")[0]}
+                      onChange={handleInputChange}
+                      className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                      type="date"
+                    />
+                  </div>
+
+                  <div className="country">
+                    <label className="caption1 capitalize">
+                      Country <span className="text-red">*</span>
+                    </label>
+                    <input
+                      disabled={!isEditing}
+                      name="Country"
+                      value={formData.Country}
+                      onChange={handleInputChange}
+                      className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                      type="text"
+                    />
+                  </div>
+
                   <div className="gender">
                     <label className="caption1 capitalize">
                       Gender <span className="text-red">*</span>
@@ -1049,7 +1140,8 @@ const MyAccount = () => {
                   All Orders
                 </h2>
                 <p className="caption1 text-secondary mt-1">
-                  {totalOrders} order{totalOrders === 1 ? "" : "s"} in your account
+                  {totalOrders} order{totalOrders === 1 ? "" : "s"} in your
+                  account
                 </p>
               </div>
               <button
@@ -1065,7 +1157,10 @@ const MyAccount = () => {
             <div className="account-orders-modal-body">
               {orders.length > 0 ? (
                 orders.map((order) => (
-                  <div key={order.OrderId} className="account-orders-modal-item">
+                  <div
+                    key={order.OrderId}
+                    className="account-orders-modal-item"
+                  >
                     <div className="min-w-0">
                       <strong className="text-button block truncate">
                         {order.OrderNumber}
@@ -1090,7 +1185,9 @@ const MyAccount = () => {
                   </div>
                 ))
               ) : (
-                <p className="text-center text-secondary py-10">No orders found.</p>
+                <p className="text-center text-secondary py-10">
+                  No orders found.
+                </p>
               )}
             </div>
           </div>
@@ -1164,8 +1261,8 @@ const MyAccount = () => {
                           "—"}
                       </p>
                       <p className="caption1 text-secondary mt-1 break-all">
-                        {selectedOrderDetail.OrderBillingDetails?.EmailAddress ||
-                          "—"}
+                        {selectedOrderDetail.OrderBillingDetails
+                          ?.EmailAddress || "—"}
                       </p>
                     </div>
 
@@ -1331,22 +1428,53 @@ const MyAccount = () => {
                       </span>
                     </div>
                   </div>
+                  <div className="account-order-detail-main">
+                    {trackingInfo && (
+                      <div
+                        className="tracking-status-box"
+                        style={{
+                          marginTop: "15px",
+                          padding: "10px",
+                          backgroundColor: "#f9f9f9",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <h4 style={{ fontWeight: "bold", marginBottom: "5px" }}>
+                          Tracking Information:
+                        </h4>
+                        <p>Status: {trackingInfo.Status}</p>
+                        <p>Location: {trackingInfo.CurrentLocation}</p>
+                      </div>
+                    )}
 
-                  <div className="account-order-detail-actions">
-                    <Link
-                      href={`/order/${selectedOrderDetail.OrderId}`}
-                      className="button-main bg-black account-order-detail-btn"
-                      onClick={closeOrderDetailModal}
-                    >
-                      Open Full Order Page
-                    </Link>
-                    <button
-                      type="button"
-                      className="account-order-detail-btn is-secondary"
-                      onClick={closeOrderDetailModal}
-                    >
-                      Close
-                    </button>
+                    <div className="account-order-detail-actions mb-3">
+                      <Link
+                        href={`/order/${selectedOrderDetail.OrderId}`}
+                        className="button-main bg-black account-order-detail-btn"
+                        onClick={closeOrderDetailModal}
+                      >
+                        Full Order Page
+                      </Link>
+
+                      <button
+                        type="button"
+                        className="account-order-detail-btn bg-green hover:bg-black hover:text-white"
+                        onClick={() =>
+                          handleTrackOrder(selectedOrderDetail.OrderId)
+                        }
+                        disabled={loadingTracking}
+                      >
+                        {loadingTracking ? "Loading..." : "Track Order"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="account-order-detail-btn is-secondary"
+                        onClick={closeOrderDetailModal}
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -1358,7 +1486,54 @@ const MyAccount = () => {
           </div>
         </div>
       )}
+      {showTrackingModal && trackingInfo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-4 border-b shrink-0">
+              <h3 className="text-xl font-bold">Order Tracking</h3>
+              <button
+                onClick={() => setShowTrackingModal(false)}
+                className="text-gray-500 hover:text-black transition-colors"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
 
+            <div className="p-6 overflow-y-auto">
+              <div className="space-y-0">
+                {trackingInfo.Pipeline.map((step) => (
+                  <div
+                    key={step.WorkflowStatusId}
+                    className={`flex justify-between items-center p-3 border-b last:border-b-0 ${
+                      step.WorkflowStatusId <= trackingInfo.CurrentStatusId
+                        ? "text-green-600 font-bold"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    <span>{step.StatusName}</span>
+                    {step.WorkflowStatusId <= trackingInfo.CurrentStatusId && (
+                      <span>✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white p-8 rounded-lg shadow-lg w-[400px]">

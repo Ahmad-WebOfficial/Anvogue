@@ -59,6 +59,12 @@ export interface CartSummary {
 }
 
 const SESSION_STORAGE_KEY = "cart_session_id";
+const SHIPPING_PREF_KEY = "checkout_shipping_pref";
+
+export type CartShippingPref = {
+  countryId: string;
+  stateId: string;
+};
 
 export function getCartSessionId(): string {
   if (typeof window === "undefined") return "";
@@ -75,6 +81,42 @@ export function getCartSessionId(): string {
   }
 
   return sessionId;
+}
+
+export function saveCartShippingPref(pref: CartShippingPref): void {
+  if (typeof window === "undefined") return;
+
+  if (!pref.countryId && !pref.stateId) {
+    localStorage.removeItem(SHIPPING_PREF_KEY);
+    return;
+  }
+
+  localStorage.setItem(
+    SHIPPING_PREF_KEY,
+    JSON.stringify({
+      countryId: pref.countryId || "",
+      stateId: pref.stateId || "",
+    }),
+  );
+}
+
+export function getCartShippingPref(): CartShippingPref | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(SHIPPING_PREF_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<CartShippingPref>;
+    const countryId = String(parsed.countryId || "");
+    const stateId = String(parsed.stateId || "");
+
+    if (!countryId && !stateId) return null;
+
+    return { countryId, stateId };
+  } catch {
+    return null;
+  }
 }
 
 function extractCartItems(data: unknown): ApiCartItem[] {
@@ -162,6 +204,58 @@ export async function addProductToCart(
     null,
     { params },
   );
+}
+
+export async function removeCartItemById(cartId: string): Promise<void> {
+  await api.delete(`/api/v1/Cart/DeleteItemFromCart/remove/${cartId}`);
+}
+
+/**
+ * Persist a cart line quantity.
+ * AddToCart is additive, so increases send a delta; decreases remove + re-add.
+ */
+export async function updateCartItemQuantity(options: {
+  cartId: string;
+  productId: number;
+  productDetailId: number;
+  currentQuantity: number;
+  nextQuantity: number;
+}): Promise<void> {
+  const {
+    cartId,
+    productId,
+    productDetailId,
+    currentQuantity,
+    nextQuantity,
+  } = options;
+
+  if (nextQuantity < 1) {
+    throw new Error("Quantity must be at least 1.");
+  }
+
+  if (
+    !cartId ||
+    !productId ||
+    !productDetailId ||
+    Number.isNaN(productId) ||
+    Number.isNaN(productDetailId)
+  ) {
+    throw new Error("Unable to update cart item.");
+  }
+
+  if (nextQuantity === currentQuantity) return;
+
+  if (nextQuantity > currentQuantity) {
+    await addProductToCart(
+      productId,
+      productDetailId,
+      nextQuantity - currentQuantity,
+    );
+    return;
+  }
+
+  await removeCartItemById(cartId);
+  await addProductToCart(productId, productDetailId, nextQuantity);
 }
 
 export async function fetchCurrentCart(): Promise<CartSummary> {

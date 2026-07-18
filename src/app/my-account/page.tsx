@@ -29,6 +29,94 @@ import {
   OrderDetailData,
 } from "@/lib/order";
 
+type ProfileFormData = {
+  FullName: string;
+  PhoneNumber: string;
+  PhoneCode: string;
+  Email: string;
+  DOB: string;
+  Country: string;
+  Gender: number;
+  password: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type CustomerProfile = {
+  FullName?: string;
+  PhoneNumber?: string;
+  PhoneCode?: string;
+  Email?: string;
+  DOB?: string;
+  Country?: string;
+  Gender?: number;
+  EarnedRewardPoints?: number;
+  CustomerDefaultAddress?: unknown;
+};
+
+function unwrapApiBody(response: unknown): Record<string, unknown> | null {
+  if (!response || typeof response !== "object") return null;
+
+  const record = response as Record<string, unknown>;
+
+  if ("Data" in record || "Message" in record || "StatusCode" in record) {
+    return record;
+  }
+
+  if (record.data && typeof record.data === "object") {
+    return record.data as Record<string, unknown>;
+  }
+
+  return null;
+}
+
+function extractProfileData(response: unknown): CustomerProfile | null {
+  const body = unwrapApiBody(response);
+  if (!body) return null;
+
+  const data = body.Data;
+  if (!data || typeof data !== "object") return null;
+
+  return data as CustomerProfile;
+}
+
+function isProfileRequestSuccess(response: unknown): boolean {
+  const record = response as Record<string, unknown> | null;
+  const body = unwrapApiBody(response);
+  const httpStatus = Number(record?.status ?? 0);
+  const bodyStatus = Number(
+    body?.StatusCode ?? body?.HttpStatusCode ?? body?.statusCode ?? 0,
+  );
+  const type = String(body?.Type ?? body?.type ?? "").toLowerCase();
+
+  if (type === "error" || type === "failure") return false;
+  if (httpStatus >= 400 || bodyStatus >= 400) return false;
+  if (httpStatus >= 200 && httpStatus < 300) return true;
+  if (bodyStatus >= 200 && bodyStatus < 300) return true;
+
+  return Boolean(body?.Message || body?.Data);
+}
+
+function toDateInputValue(dob?: string | null): string {
+  if (!dob) return "";
+  return String(dob).slice(0, 10);
+}
+
+function mapProfileToForm(profile: CustomerProfile): ProfileFormData {
+  return {
+    FullName: profile.FullName || "",
+    PhoneNumber: profile.PhoneNumber || "",
+    PhoneCode: profile.PhoneCode || "",
+    Email: profile.Email || "",
+    DOB: toDateInputValue(profile.DOB),
+    Country: profile.Country || "",
+    Gender: profile.Gender ?? 0,
+    password: "",
+    newPassword: "",
+    confirmPassword: "",
+  };
+}
+
 const DASHBOARD_ORDERS_LIMIT = 5;
 
 type OrderStatTone = "pending" | "canceled" | "total";
@@ -138,13 +226,9 @@ const MyAccount = () => {
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(
     null,
   );
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<CustomerProfile | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(true);
   const [customerReviews, setCustomerReviews] = useState<CustomerReview[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -156,10 +240,9 @@ const MyAccount = () => {
   const [loadingTracking, setLoadingTracking] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
-  const [loadingForgot, setLoadingForgot] = useState(false);
-  const [loadingReset, setLoadingReset] = useState(false);
+  const [loadingChangePassword, setLoadingChangePassword] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProfileFormData>({
     FullName: "",
     PhoneNumber: "",
     PhoneCode: "",
@@ -225,70 +308,76 @@ const MyAccount = () => {
     setLoadingProfile(true);
     try {
       const payload = {
-        FullName: formData.FullName,
-        PhoneNumber: formData.PhoneNumber,
-        PhoneCode: formData.PhoneCode || "92",
-        Email: formData.Email,
-        DOB: formData.DOB ? new Date(formData.DOB).toISOString() : null,
-        Country: formData.Country,
+        FullName: formData.FullName.trim(),
+        PhoneNumber: formData.PhoneNumber.trim(),
+        PhoneCode: formData.PhoneCode.trim() || "92",
+        Email: formData.Email.trim(),
+        DOB: formData.DOB ? toDateInputValue(formData.DOB) : null,
+        Country: formData.Country.trim(),
         Gender: Number(formData.Gender),
       };
 
       const res = await api.put("/api/v1/Customer/UpdateProfile", payload);
 
-      if (res.status === 200) {
-        toast.success("Profile Updated Successfully!");
-
-        setFormData((prev: any) => ({
-          ...prev,
-          ...payload,
-        }));
-
-        setIsEditing(false);
-
-        setTimeout(() => {
-          getProfile();
-        }, 1500);
+      if (!isProfileRequestSuccess(res)) {
+        throw new Error("Profile update failed");
       }
-    } catch (error: any) {
+
+      toast.success("Profile Updated Successfully!");
+      setIsEditing(false);
+      await getProfile();
+    } catch (error) {
       console.error("Update failed:", error);
-      toast.error("Profile update failed");
+      toast.error(
+        getApiErrorMessage(error, "Profile update failed. Please try again."),
+      );
     } finally {
       setLoadingProfile(false);
     }
   };
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoadingForgot(true);
-    try {
-      await api.post("/api/v2/Account/SendForgotPasswordEmail", {
-        Username: phone,
-      });
-      setStep(2);
-      toast.success("OTP sent successfully!");
-    } catch (error) {
-      toast.error("Failed to send code.");
-    } finally {
-      setLoadingForgot(false);
-    }
-  };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoadingReset(true);
+    const oldPassword = formData.password.trim();
+    const nextPassword = formData.newPassword.trim();
+    const confirmPassword = formData.confirmPassword.trim();
+
+    if (!oldPassword || !nextPassword || !confirmPassword) {
+      toast.error("Please fill in all password fields.");
+      return;
+    }
+
+    if (nextPassword !== confirmPassword) {
+      toast.error("New password and confirm password do not match.");
+      return;
+    }
+
+    if (oldPassword === nextPassword) {
+      toast.error("New password must be different from the old password.");
+      return;
+    }
+
+    setLoadingChangePassword(true);
     try {
-      await api.post("/api/v2/Account/ResetPassword", {
-        Username: phone,
-        Password: newPassword,
-        Code: otp,
+      await api.post("/api/v1/Account/ChangePassword", {
+        OldPassword: oldPassword,
+        NewPassword: nextPassword,
       });
-      toast.success("Password reset successful!");
-      router.push("/login");
+
+      toast.success("Password changed successfully!");
+      setFormData((prev) => ({
+        ...prev,
+        password: "",
+        newPassword: "",
+        confirmPassword: "",
+      }));
     } catch (error) {
-      toast.error("Reset failed. Please check your OTP or Password.");
+      toast.error(
+        getApiErrorMessage(error, "Failed to change password. Please try again."),
+      );
     } finally {
-      setLoadingReset(false);
+      setLoadingChangePassword(false);
     }
   };
 
@@ -296,27 +385,19 @@ const MyAccount = () => {
     setLoadingProfile(true);
     try {
       const res = await api.get("/api/v1/Customer/GetProfile");
-      console.log("API Response:", res.data);
-      if (res.data?.Data) {
-        const p = res.data.Data;
+      const profile = extractProfileData(res);
 
-        setUserProfile(p);
-
-        setFormData({
-          FullName: p.FullName || "",
-          PhoneNumber: p.PhoneNumber || "",
-          PhoneCode: p.PhoneCode || "",
-          Email: p.Email || "",
-          DOB: p.DOB ? p.DOB.split("T")[0] : "",
-          Country: p.Country || "",
-          Gender: p.Gender ?? 0,
-          password: "",
-          newPassword: "",
-          confirmPassword: "",
-        });
+      if (!profile) {
+        throw new Error("Profile data not found in response.");
       }
-    } catch (error: any) {
-      console.error("Error details:", error.response?.data || error.message);
+
+      setUserProfile(profile);
+      setFormData(mapProfileToForm(profile));
+    } catch (error) {
+      console.error("Error details:", error);
+      toast.error(
+        getApiErrorMessage(error, "Failed to load profile. Please try again."),
+      );
     } finally {
       setLoadingProfile(false);
     }
@@ -980,7 +1061,7 @@ const MyAccount = () => {
                     <input
                       disabled={!isEditing}
                       name="DOB"
-                      value={formData.DOB?.split("T")[0]}
+                      value={toDateInputValue(formData.DOB)}
                       onChange={handleInputChange}
                       className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
                       type="date"
@@ -1037,9 +1118,14 @@ const MyAccount = () => {
 
                   {isEditing && (
                     <button
-                      title="Cancle"
+                      title="Cancel"
                       type="button"
-                      onClick={() => setIsEditing(false)}
+                      onClick={() => {
+                        if (userProfile) {
+                          setFormData(mapProfileToForm(userProfile));
+                        }
+                        setIsEditing(false);
+                      }}
                       className="button-main border bg-green border-black text-black"
                     >
                       Cancel
@@ -1047,73 +1133,77 @@ const MyAccount = () => {
                   )}
                 </div>
 
-                <div className="forgot-pass md:py-20 py-10">
-                  <div className="container">
-                    <div className="content-main flex gap-y-8 max-md:flex-row">
-                      <div className="left  w-full  ">
-                        <div className="heading4">
-                          {step === 1
-                            ? "Reset your password"
-                            : "Verify & Reset"}
-                        </div>
+                <div className="mt-10 pt-8 border-t border-line">
+                  <div className="heading5">Change Password</div>
+                  <p className="caption1 text-secondary mt-2">
+                    Enter your current password and choose a new one.
+                  </p>
 
-                        {step === 1 ? (
-                          <form
-                            onSubmit={handleSendOTP}
-                            className="md:mt-7 mt-4"
-                          >
-                            <input
-                              className="border-line px-4 pt-3 pb-3 w-full rounded-lg border"
-                              type="text"
-                              placeholder="Enter username *"
-                              value={phone}
-                              onChange={(e) => setPhone(e.target.value)}
-                              required
-                            />
-                            <div className="block-button md:mt-7 mt-4">
-                              <button
-                                title="Submit"
-                                className="button-main cursor-pointer"
-                                disabled={loadingForgot}
-                              >
-                                {loadingForgot ? "Sending..." : "Submit"}
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          <form
-                            onSubmit={handleResetPassword}
-                            className="md:mt-7 mt-4"
-                          >
-                            <input
-                              className="border-line px-4 pt-3 pb-3 w-full rounded-lg border mb-4"
-                              type="text"
-                              placeholder="Enter OTP *"
-                              value={otp}
-                              onChange={(e) => setOtp(e.target.value)}
-                              required
-                            />
-                            <input
-                              className="border-line px-4 pt-3 pb-3 w-full rounded-lg border"
-                              type="password"
-                              placeholder="New Password *"
-                              required
-                              onChange={(e) => setNewPassword(e.target.value)}
-                            />
-                            <div className="flex gap-4 md:mt-7 mt-4">
-                              <button
-                                title="Reset Password"
-                                className="button-main cursor-pointer"
-                                disabled={loadingReset}
-                              >
-                                {loadingReset ? "Resetting..." : "Reset"}
-                              </button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
+                  <form
+                    onSubmit={handleChangePassword}
+                    className="grid sm:grid-cols-2 gap-4 gap-y-5 mt-5"
+                  >
+                    <div className="sm:col-span-2 md:max-w-md">
+                      <label className="caption1 capitalize">
+                        Current Password <span className="text-red">*</span>
+                      </label>
+                      <input
+                        name="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                        type="password"
+                        placeholder="Current password"
+                        autoComplete="current-password"
+                        required
+                      />
                     </div>
-                  </div>
+
+                    <div>
+                      <label className="caption1 capitalize">
+                        New Password <span className="text-red">*</span>
+                      </label>
+                      <input
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleInputChange}
+                        className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                        type="password"
+                        placeholder="New password"
+                        autoComplete="new-password"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="caption1 capitalize">
+                        Confirm Password <span className="text-red">*</span>
+                      </label>
+                      <input
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        className="border-line mt-2 px-4 py-3 w-full rounded-lg border"
+                        type="password"
+                        placeholder="Confirm new password"
+                        autoComplete="new-password"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <button
+                        type="submit"
+                        title="Change Password"
+                        className="button-main bg-black text-white cursor-pointer"
+                        disabled={loadingChangePassword}
+                      >
+                        {loadingChangePassword
+                          ? "Updating..."
+                          : "Update Password"}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             </div>
@@ -1411,6 +1501,12 @@ const MyAccount = () => {
                         {selectedOrderDetail.DeliveryCharges > 0
                           ? formatRsPrice(selectedOrderDetail.DeliveryCharges)
                           : "Free"}
+                      </span>
+                    </div>
+                    <div className="account-order-detail-total-row">
+                      <span>POS Charges</span>
+                      <span>
+                        {formatRsPrice(selectedOrderDetail.POSCharges ?? 0)}
                       </span>
                     </div>
                     {selectedOrderDetail.NetDiscount > 0 && (

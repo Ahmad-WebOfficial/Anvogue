@@ -35,7 +35,12 @@ const VerifyOTP = () => {
 
     if (queryEmail) {
       setEmail(queryEmail);
-      Cookies.set("registerEmail", queryEmail, { expires: 1 });
+      Cookies.set("registerEmail", queryEmail, {
+        expires: 1,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+        path: "/",
+      });
       return;
     }
 
@@ -62,7 +67,7 @@ const VerifyOTP = () => {
 
     const storedData = getStoredRegData();
     if (!storedData?.username || !storedData.phoneNumber) {
-      const msg = "registration details missing. Please register again.";
+      const msg = "Registration details missing. Please register again.";
       setError(msg);
       toast.error(msg);
       return;
@@ -87,9 +92,13 @@ const VerifyOTP = () => {
 
     try {
       const response = await api.post("/api/v1/Account/VerifyOTP", payloadForVerify);
+      const responseBody =
+        response && typeof response === "object" && "data" in response
+          ? (response as { data: unknown }).data
+          : response;
 
       const loggedIn = await completeLoginAfterVerification(
-        response.data,
+        responseBody,
         storedData.username,
       );
 

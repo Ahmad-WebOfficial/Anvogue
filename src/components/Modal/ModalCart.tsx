@@ -10,7 +10,11 @@ import { countdownTime } from "@/store/countdownTime";
 import CountdownTimeType from "@/type/CountdownType";
 import api from "@/lib/api";
 import toaster from "react-hot-toast";
-import { formatRsPrice } from "@/lib/cart";
+import { formatRsPrice, getCartShippingPref, saveCartShippingPref } from "@/lib/cart";
+import {
+  getPendingPromoCode,
+  savePendingPromoCode,
+} from "@/lib/promo";
 import {
   fetchProductDetails,
   RelatedProduct,
@@ -19,6 +23,7 @@ import {
   getProductDetailUrl,
   mapProductDetailToProductType,
 } from "@/lib/featured-products";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 
 type SelectOption = { Value: string; Text: string };
 
@@ -40,6 +45,7 @@ const ModalCart = ({
   const [countries, setCountries] = useState<SelectOption[]>([]);
   const [states, setStates] = useState<SelectOption[]>([]);
   const [promoCode, setPromoCode] = useState("");
+  const [savedPromoCode, setSavedPromoCode] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedState, setSelectedState] = useState("");
   const [addingRelatedId, setAddingRelatedId] = useState<number | null>(null);
@@ -48,6 +54,7 @@ const ModalCart = ({
   const {
     cartState,
     cartLoading,
+    updatingCartId,
     addToCart,
     removeFromCart,
     updateCart,
@@ -57,8 +64,27 @@ const ModalCart = ({
   useEffect(() => {
     if (isModalOpen) {
       void fetchCart();
+      const pending = getPendingPromoCode();
+      setSavedPromoCode(pending);
+      if (pending) setPromoCode(pending);
     }
   }, [isModalOpen, fetchCart]);
+
+  const handleApplyPromoCode = () => {
+    const code = promoCode.trim();
+    if (!code) {
+      toaster.error("Please enter a coupon code!");
+      return;
+    }
+
+    // Promo API needs OrderId — save now, apply after order is created.
+    savePendingPromoCode(code);
+    setSavedPromoCode(code);
+    toaster.success(
+      `Promo code "${code}" saved. Discount will apply on your order payment summary.`,
+    );
+    setActiveTab("");
+  };
 
   const handleAddRelatedToCart = async (related: RelatedProduct) => {
     setAddingRelatedId(related.ProductId);
@@ -99,7 +125,27 @@ const ModalCart = ({
 
   useEffect(() => {
     void getCountries();
+
+    const pref = getCartShippingPref();
+    if (!pref?.countryId) return;
+
+    setSelectedCountry(pref.countryId);
+    setSelectedState(pref.stateId || "");
+    void getStates(pref.countryId);
   }, []);
+
+  const handleSaveShipping = () => {
+    saveCartShippingPref({
+      countryId: selectedCountry,
+      stateId: selectedState,
+    });
+
+    if (selectedCountry) {
+      toaster.success("Shipping preference saved for checkout.");
+    }
+
+    setActiveTab("");
+  };
 
   const moneyForFreeship = 150;
   const displayTotal = cartState.netTotal || cartState.subTotal || 0;
@@ -252,10 +298,7 @@ const ModalCart = ({
 
             <div className="list-product">
               {cartLoading ? (
-                <>
-                  <div className="modal-cart-skeleton" />
-                  <div className="modal-cart-skeleton" />
-                </>
+                <ProductSkeleton variant="cart-list" count={2} />
               ) : hasItems ? (
                 cartState.cartArray.map((product, index) => {
                   const image =
@@ -330,9 +373,12 @@ const ModalCart = ({
                               type="button"
                               aria-label="Decrease quantity"
                               className="modal-cart-qty-btn"
-                              disabled={product.quantity <= 1}
+                              disabled={
+                                product.quantity <= 1 ||
+                                updatingCartId === product.cartId
+                              }
                               onClick={() =>
-                                updateCart(
+                                void updateCart(
                                   product.cartId,
                                   product.quantity - 1,
                                   product.selectedSize,
@@ -349,8 +395,9 @@ const ModalCart = ({
                               type="button"
                               aria-label="Increase quantity"
                               className="modal-cart-qty-btn"
+                              disabled={updatingCartId === product.cartId}
                               onClick={() =>
-                                updateCart(
+                                void updateCart(
                                   product.cartId,
                                   product.quantity + 1,
                                   product.selectedSize,
@@ -432,11 +479,16 @@ const ModalCart = ({
                   <span className="text-secondary">Subtotal</span>
                   <span>{formatRsPrice(cartState.subTotal)}</span>
                 </div>
-                {cartState.totalDiscount > 0 && (
+                {(cartState.totalDiscount > 0 || savedPromoCode) && (
                   <div className="modal-cart-summary-row">
-                    <span className="text-secondary">Discount</span>
+                    <span className="text-secondary">
+                      Discount
+                      {savedPromoCode ? ` (${savedPromoCode})` : ""}
+                    </span>
                     <span className="text-green font-semibold">
-                      -{formatRsPrice(cartState.totalDiscount)}
+                      {cartState.totalDiscount > 0
+                        ? `-${formatRsPrice(cartState.totalDiscount)}`
+                        : "At checkout"}
                     </span>
                   </div>
                 )}
@@ -496,8 +548,13 @@ const ModalCart = ({
                         className="w-full py-3 pl-5 rounded-xl bg-white border border-line"
                         value={selectedCountry}
                         onChange={(e) => {
-                          setSelectedCountry(e.target.value);
-                          void getStates(e.target.value);
+                          const countryId = e.target.value;
+                          setSelectedCountry(countryId);
+                          setSelectedState("");
+                          setStates([]);
+                          if (countryId) {
+                            void getStates(countryId);
+                          }
                         }}
                       >
                         <option value="">Select Country</option>
@@ -545,7 +602,7 @@ const ModalCart = ({
                   <button
                     type="button"
                     className="button-main bg-black w-full text-center rounded-xl"
-                    onClick={() => setActiveTab("")}
+                    onClick={handleSaveShipping}
                   >
                     Done
                   </button>
@@ -576,27 +633,35 @@ const ModalCart = ({
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value)}
                   />
+                  {savedPromoCode && (
+                    <p className="caption1 text-secondary mt-3">
+                      Saved for checkout:{" "}
+                      <span className="text-black font-semibold">
+                        {savedPromoCode}
+                      </span>
+                    </p>
+                  )}
+                  <p className="caption2 text-secondary mt-2">
+                    Promo discount is applied after your order is created, on
+                    the payment summary.
+                  </p>
                 </div>
                 <div className="block-button text-center pt-4 px-6 pb-6">
                   <button
                     type="button"
                     className="button-main bg-black w-full text-center rounded-xl"
-                    onClick={() => {
-                      if (!promoCode) {
-                        toaster.error("Please enter a coupon code!");
-                        return;
-                      }
-                      toaster.success("Coupon feature coming soon");
-                      setActiveTab("");
-                    }}
+                    onClick={handleApplyPromoCode}
                   >
                     Apply
                   </button>
                   <button
                     type="button"
                     onClick={() => {
+                      savePendingPromoCode("");
                       setPromoCode("");
+                      setSavedPromoCode(null);
                       setActiveTab("");
+                      toaster.success("Promo code cleared.");
                     }}
                     className="modal-cart-continue"
                   >

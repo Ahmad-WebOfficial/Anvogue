@@ -5,6 +5,7 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation } from "swiper/modules";
 import "swiper/css/bundle";
 import Product from "../Product/Product";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { motion } from "framer-motion";
 import {
   fetchProductsByBrand,
@@ -85,14 +86,7 @@ const TabFeatures: React.FC = () => {
 
         <div className="list-product hide-product-sold section-swiper-navigation style-outline style-border md:mt-10 mt-6">
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="aspect-[3/4] rounded-2xl bg-surface animate-pulse"
-                />
-              ))}
-            </div>
+            <ProductSkeleton variant="grid" count={4} />
           ) : error ? (
             <p className="text-center py-10 text-secondary">{error}</p>
           ) : filteredProducts.length === 0 ? (

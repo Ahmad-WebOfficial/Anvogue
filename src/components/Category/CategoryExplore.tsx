@@ -15,6 +15,7 @@ import CategoryDetailCard from "@/components/Home1/CategoryDetailCard";
 import CategorySwiper from "@/components/Home1/CategorySwiper";
 import CategoryProducts from "@/components/Category/CategoryProducts";
 import { CategorySiblingLinks } from "@/components/Category/CategoryQuickLinks";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 
 interface CategoryExploreProps {
   categoryId: number;
@@ -62,8 +63,21 @@ const CategoryExplore: React.FC<CategoryExploreProps> = ({ categoryId }) => {
   if (loading) {
     return (
       <div className="category-explore md:py-20 py-10">
-        <div className="container text-center text-secondary">
-          Loading category...
+        <div className="container">
+          <div className="mb-6 h-4 w-48 animate-pulse rounded bg-[#ebebeb]" />
+          <div className="mb-8 overflow-hidden rounded-2xl border border-line bg-white md:rounded-3xl">
+            <div className="grid grid-cols-1 lg:grid-cols-12">
+              <div className="space-y-4 p-5 sm:p-7 lg:col-span-5">
+                <div className="h-6 w-24 animate-pulse rounded-full bg-[#ebebeb]" />
+                <div className="h-8 w-3/4 animate-pulse rounded bg-[#ebebeb]" />
+                <div className="h-4 w-full animate-pulse rounded bg-[#ebebeb]" />
+                <div className="h-4 w-2/3 animate-pulse rounded bg-[#ebebeb]" />
+                <div className="h-12 w-40 animate-pulse rounded-xl bg-[#ebebeb]" />
+              </div>
+              <div className="h-[220px] animate-pulse bg-[#ebebeb] lg:col-span-7 lg:h-[300px]" />
+            </div>
+          </div>
+          <ProductSkeleton variant="grid" count={8} />
         </div>
       </div>
     );

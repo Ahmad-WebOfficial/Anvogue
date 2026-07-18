@@ -13,6 +13,7 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import api, { getApiErrorMessage } from "@/lib/api";
+import { checkUserIsUnique } from "@/lib/user-unique";
 
 type SignUpData = {
   clientRole: number;
@@ -27,6 +28,18 @@ type SignUpData = {
   confirmPassword: string;
 };
 
+type FieldUniqueState = {
+  checking: boolean;
+  isUnique: boolean | null;
+  message: string;
+};
+
+const emptyUniqueState = (): FieldUniqueState => ({
+  checking: false,
+  isUnique: null,
+  message: "",
+});
+
 type RegisterPayload = {
   ClientRole: number;
   UserName: string;
@@ -39,6 +52,8 @@ type RegisterPayload = {
   Password: string;
   ConfirmPassword: string;
 };
+
+const CLIENT_ROLE = 4;
 
 const AUTH_BENEFITS = [
   {
@@ -62,10 +77,53 @@ const validateEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+/** PhoneInput stores dial-code + number; API wants local number only. */
+function toLocalPhoneNumber(fullPhone: string, dialCode: string): string {
+  let digits = fullPhone.replace(/\D/g, "");
+  const code = dialCode.replace(/\D/g, "");
+
+  if (code && digits.startsWith(code)) {
+    digits = digits.slice(code.length);
+  }
+
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  return digits;
+}
+
+function isRegisterSuccess(response: unknown): boolean {
+  if (!response || typeof response !== "object") return true;
+
+  const record = response as Record<string, unknown>;
+  const body =
+    record.data && typeof record.data === "object"
+      ? (record.data as Record<string, unknown>)
+      : record;
+
+  const type = String(body.Type ?? body.type ?? "").toLowerCase();
+  const status = Number(
+    record.status ?? body.StatusCode ?? body.HttpStatusCode ?? 0,
+  );
+
+  if (type === "error" || type === "failure") return false;
+  if (status >= 400) return false;
+
+  return true;
+}
+
+const cookieOptions = {
+  expires: 1,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "Strict" as const,
+  path: "/",
+};
+
 const Register = () => {
   const router = useRouter();
   const [signUpData, setSignUpData] = useState<SignUpData>({
-    clientRole: 4,
+    clientRole: CLIENT_ROLE,
     userName: "",
     firstName: "",
     lastName: "",
@@ -80,11 +138,91 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [uniqueStatus, setUniqueStatus] = useState({
+    username: emptyUniqueState(),
+    email: emptyUniqueState(),
+    phone: emptyUniqueState(),
+  });
+
+  const setFieldUnique = (
+    field: "username" | "email" | "phone",
+    patch: Partial<FieldUniqueState>,
+  ) => {
+    setUniqueStatus((prev) => ({
+      ...prev,
+      [field]: { ...prev[field], ...patch },
+    }));
+  };
+
+  const verifyUsernameUnique = async (rawValue?: string) => {
+    const value = (rawValue ?? signUpData.userName).trim();
+    if (value.length < 5) {
+      setFieldUnique("username", emptyUniqueState());
+      return true;
+    }
+
+    setFieldUnique("username", { checking: true, message: "", isUnique: null });
+    const result = await checkUserIsUnique(value, "username");
+    setFieldUnique("username", {
+      checking: false,
+      isUnique: result.isUnique,
+      message: result.message,
+    });
+    return result.isUnique;
+  };
+
+  const verifyEmailUnique = async (rawValue?: string) => {
+    const value = (rawValue ?? signUpData.email).trim();
+    if (!validateEmail(value)) {
+      setFieldUnique("email", emptyUniqueState());
+      return true;
+    }
+
+    setFieldUnique("email", { checking: true, message: "", isUnique: null });
+    const result = await checkUserIsUnique(value, "email");
+    setFieldUnique("email", {
+      checking: false,
+      isUnique: result.isUnique,
+      message: result.message,
+    });
+    return result.isUnique;
+  };
+
+  const verifyPhoneUnique = async (rawPhone?: string, rawCode?: string) => {
+    const phoneCode =
+      (rawCode ?? signUpData.phoneCode).replace(/\D/g, "") || "92";
+    const localPhone = toLocalPhoneNumber(
+      rawPhone ?? signUpData.phoneNumber,
+      phoneCode,
+    );
+
+    if (localPhone.length < 10 || localPhone.length > 15) {
+      setFieldUnique("phone", emptyUniqueState());
+      return true;
+    }
+
+    setFieldUnique("phone", { checking: true, message: "", isUnique: null });
+    const result = await checkUserIsUnique(localPhone, "phone");
+    setFieldUnique("phone", {
+      checking: false,
+      isUnique: result.isUnique,
+      message: result.message,
+    });
+    return result.isUnique;
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    const userName = signUpData.userName.trim();
+    const firstName = signUpData.firstName.trim();
+    const lastName = signUpData.lastName.trim();
+    const email = signUpData.email.trim();
+    const phoneCode = signUpData.phoneCode.replace(/\D/g, "") || "92";
+    const isoCode = (signUpData.isoCode || "PK").toUpperCase();
+    const localPhone = toLocalPhoneNumber(signUpData.phoneNumber, phoneCode);
 
     if (signUpData.password !== signUpData.confirmPassword) {
       const msg = "Passwords do not match.";
@@ -100,31 +238,28 @@ const Register = () => {
       return;
     }
 
-    if (signUpData.userName.trim().length < 5) {
+    if (userName.length < 5) {
       const msg = "Username must be at least 5 characters.";
       setError(msg);
       toast.error(msg);
       return;
     }
 
-    if (!signUpData.firstName.trim() || !signUpData.lastName.trim()) {
+    if (!firstName || !lastName) {
       const msg = "Please enter your first and last name.";
       setError(msg);
       toast.error(msg);
       return;
     }
 
-    if (!validateEmail(signUpData.email)) {
+    if (!validateEmail(email)) {
       const msg = "Please enter a valid email address.";
       setError(msg);
       toast.error(msg);
       return;
     }
 
-    const submittedPhone = signUpData.phoneNumber.trim();
-    const normalizedPhone = submittedPhone.replace(/[^\d+]/g, "");
-
-    if (normalizedPhone.length < 10 || normalizedPhone.length > 15) {
+    if (localPhone.length < 10 || localPhone.length > 15) {
       const msg = "Please enter a valid phone number (10-15 digits).";
       setError(msg);
       toast.error(msg);
@@ -138,24 +273,63 @@ const Register = () => {
       return;
     }
 
-    const payload: RegisterPayload = {
-      ClientRole: signUpData.clientRole,
-      UserName: signUpData.userName,
-      FirstName: signUpData.firstName,
-      LastName: signUpData.lastName,
-      Email: signUpData.email,
-      PhoneCode: signUpData.phoneCode,
-      ISOCode: signUpData.isoCode,
-      PhoneNumber: normalizedPhone.startsWith("+")
-        ? normalizedPhone.slice(1)
-        : normalizedPhone,
-      Password: signUpData.password,
-      ConfirmPassword: signUpData.confirmPassword,
-    };
-
     setLoading(true);
     try {
-      await api.post("/api/v1/Account/Register", payload);
+      const [usernameCheck, emailCheck, phoneCheck] = await Promise.all([
+        checkUserIsUnique(userName, "username"),
+        checkUserIsUnique(email, "email"),
+        checkUserIsUnique(localPhone, "phone"),
+      ]);
+
+      setFieldUnique("username", {
+        checking: false,
+        isUnique: usernameCheck.isUnique,
+        message: usernameCheck.message,
+      });
+      setFieldUnique("email", {
+        checking: false,
+        isUnique: emailCheck.isUnique,
+        message: emailCheck.message,
+      });
+      setFieldUnique("phone", {
+        checking: false,
+        isUnique: phoneCheck.isUnique,
+        message: phoneCheck.message,
+      });
+
+      if (
+        !usernameCheck.isUnique ||
+        !emailCheck.isUnique ||
+        !phoneCheck.isUnique
+      ) {
+        const conflictMessage = !usernameCheck.isUnique
+          ? usernameCheck.message
+          : !emailCheck.isUnique
+            ? emailCheck.message
+            : phoneCheck.message;
+        setError(conflictMessage);
+        toast.error(conflictMessage);
+        return;
+      }
+
+      const payload: RegisterPayload = {
+        ClientRole: CLIENT_ROLE,
+        UserName: userName,
+        FirstName: firstName,
+        LastName: lastName,
+        Email: email,
+        PhoneCode: phoneCode,
+        ISOCode: isoCode,
+        PhoneNumber: localPhone,
+        Password: signUpData.password,
+        ConfirmPassword: signUpData.confirmPassword,
+      };
+
+      const registerRes = await api.post("/api/v1/Account/Register", payload);
+
+      if (!isRegisterSuccess(registerRes)) {
+        throw new Error("Registration failed. Please check your details.");
+      }
 
       Cookies.set(
         "userRegData",
@@ -165,11 +339,12 @@ const Register = () => {
           phoneNumber: payload.PhoneNumber,
           phoneCode: payload.PhoneCode,
         }),
-        { expires: 1, secure: true, sameSite: "Strict" },
+        cookieOptions,
       );
 
+      Cookies.set("registerEmail", payload.Email, cookieOptions);
+
       if (typeof window !== "undefined") {
-        Cookies.set("registerEmail", payload.Email, { expires: 1 });
         sessionStorage.setItem("regPassword", signUpData.password);
       }
 
@@ -196,6 +371,7 @@ const Register = () => {
       }
 
       toast.success("Registration successful! OTP sent on Email.");
+      setSuccess("Registration successful! Redirecting to verify OTP...");
       setTimeout(() => {
         router.push(
           `/register/verify-otp?email=${encodeURIComponent(payload.Email)}`,
@@ -271,9 +447,30 @@ const Register = () => {
                             ...prev,
                             userName: e.target.value,
                           }));
+                          setFieldUnique("username", emptyUniqueState());
+                        }}
+                        onBlur={() => {
+                          void verifyUsernameUnique();
                         }}
                       />
                     </div>
+                    {uniqueStatus.username.checking && (
+                      <p className="caption2 text-secondary mt-1">
+                        Checking username...
+                      </p>
+                    )}
+                    {!uniqueStatus.username.checking &&
+                      uniqueStatus.username.message && (
+                        <p
+                          className={`caption2 mt-1 ${
+                            uniqueStatus.username.isUnique
+                              ? "text-green"
+                              : "text-red"
+                          }`}
+                        >
+                          {uniqueStatus.username.message}
+                        </p>
+                      )}
                   </div>
 
                   <div className="auth-field-row">
@@ -342,9 +539,30 @@ const Register = () => {
                             ...prev,
                             email: e.target.value,
                           }));
+                          setFieldUnique("email", emptyUniqueState());
+                        }}
+                        onBlur={() => {
+                          void verifyEmailUnique();
                         }}
                       />
                     </div>
+                    {uniqueStatus.email.checking && (
+                      <p className="caption2 text-secondary mt-1">
+                        Checking email...
+                      </p>
+                    )}
+                    {!uniqueStatus.email.checking &&
+                      uniqueStatus.email.message && (
+                        <p
+                          className={`caption2 mt-1 ${
+                            uniqueStatus.email.isUnique
+                              ? "text-green"
+                              : "text-red"
+                          }`}
+                        >
+                          {uniqueStatus.email.message}
+                        </p>
+                      )}
                   </div>
 
                   <div className="auth-field auth-phone-field">
@@ -371,17 +589,38 @@ const Register = () => {
                           isoCode: data.countryCode.toUpperCase(),
                           phoneNumber: value || "",
                         }));
+                        setFieldUnique("phone", emptyUniqueState());
                       }}
                       inputProps={{
                         id: "phoneNumber",
                         name: "phoneNumber",
                         required: true,
+                        onBlur: () => {
+                          void verifyPhoneUnique();
+                        },
                       }}
                       containerClass="w-full"
                       enableSearch
                       disableSearchIcon
                       searchPlaceholder="Search country"
                     />
+                    {uniqueStatus.phone.checking && (
+                      <p className="caption2 text-secondary mt-1">
+                        Checking phone number...
+                      </p>
+                    )}
+                    {!uniqueStatus.phone.checking &&
+                      uniqueStatus.phone.message && (
+                        <p
+                          className={`caption2 mt-1 ${
+                            uniqueStatus.phone.isUnique
+                              ? "text-green"
+                              : "text-red"
+                          }`}
+                        >
+                          {uniqueStatus.phone.message}
+                        </p>
+                      )}
                   </div>
 
                   <div className="auth-field-row">

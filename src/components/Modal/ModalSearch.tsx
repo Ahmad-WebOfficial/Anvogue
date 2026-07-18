@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import Product from '../Product/Product';
+import ProductSkeleton from '@/components/Other/ProductSkeleton'
 import { useModalSearchContext } from '@/context/ModalSearchContext'
 import { ProductType } from '@/type/ProductType'
 import {
@@ -148,12 +149,7 @@ const ModalSearch = () => {
                         </div>
                         <div className="list-product pb-5 hide-product-sold grid xl:grid-cols-4 sm:grid-cols-2 gap-7 mt-4">
                             {loading ? (
-                                Array.from({ length: 4 }).map((_, index) => (
-                                    <div
-                                        key={index}
-                                        className="rounded-2xl bg-surface animate-pulse aspect-[3/4]"
-                                    />
-                                ))
+                                <ProductSkeleton variant="grid" count={4} className="col-span-full" />
                             ) : suggestions.length > 0 ? (
                                 suggestions.slice(0, 4).map((product) => (
                                     <Product

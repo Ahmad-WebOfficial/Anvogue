@@ -27,5 +27,14 @@ export interface ProductType {
     images: Array<string>,
     description: string,
     action: string,
-    slug: string
+    slug: string,
+    /** API commerce flags */
+    isPromotional?: boolean,
+    discount?: number,
+    discountType?: number,
+    inventoryManagement?: boolean,
+    availableStock?: number | null,
+    comingSoon?: boolean,
+    status?: number,
+    inStock?: boolean,
 }

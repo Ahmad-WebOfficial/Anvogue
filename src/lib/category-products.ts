@@ -24,10 +24,28 @@ export interface LandingPageProduct {
   IsCampaignApplied?: boolean;
   Discount?: number;
   DiscountValueType?: number;
+  ComingSoon?: boolean;
+  Status?: number;
+  InventoryManagement?: boolean;
+  AvailableStock?: number | null;
   Category?: {
     CategoryId: number;
     CategoryName: string;
   };
+}
+
+/** Hide out-of-stock products from listings (coming soon still visible). */
+export function isLandingProductVisible(product: LandingPageProduct): boolean {
+  if (product.ComingSoon) return true;
+  if (product.IsProductInStock === false) return false;
+  return true;
+}
+
+export function canPurchaseLandingProduct(product: LandingPageProduct): boolean {
+  if (product.ComingSoon) return false;
+  if (product.Status === 0) return false;
+  if (product.IsProductInStock === false) return false;
+  return true;
 }
 
 export type HomeProductTab = "best sellers" | "on sale" | "new arrivals";
@@ -125,6 +143,8 @@ export function mapLandingProductToProductType(
 ): ProductType {
   const image = getProductImage(product);
   const pricing = resolveLandingProductPricing(product);
+  const inStock = product.IsProductInStock !== false;
+  const comingSoon = Boolean(product.ComingSoon);
 
   return {
     id: String(product.ProductId),
@@ -140,7 +160,7 @@ export function mapLandingProductToProductType(
     originPrice: pricing.originPrice,
     brand: "",
     sold: 0,
-    quantity: 100,
+    quantity: inStock ? 100 : 0,
     quantityPurchase: 1,
     sizes: [],
     variation: [],
@@ -149,6 +169,14 @@ export function mapLandingProductToProductType(
     description: product.Description || "",
     action: "add to cart",
     slug: String(product.ProductId),
+    isPromotional: Boolean(product.IsPromotionalProduct),
+    discount: product.Discount ?? 0,
+    discountType: product.DiscountValueType ?? 0,
+    inventoryManagement: Boolean(product.InventoryManagement),
+    availableStock: product.AvailableStock ?? null,
+    comingSoon,
+    status: product.Status ?? 1,
+    inStock,
   };
 }
 
@@ -174,6 +202,7 @@ async function fetchFromLandingPage(
         product.Category?.CategoryId ?? group.Category?.CategoryId;
 
       if (productCategoryId !== categoryId) continue;
+      if (!isLandingProductVisible(product)) continue;
 
       seen.add(product.ProductId);
       products.push(
@@ -222,8 +251,8 @@ export async function fetchProductsByBrand(
     },
   });
 
-  return extractProductListFromByCategory(res.data?.Data).filter((product) =>
-    Boolean(product?.ProductId),
+  return extractProductListFromByCategory(res.data?.Data).filter(
+    (product) => Boolean(product?.ProductId) && isLandingProductVisible(product),
   );
 }
 
@@ -231,13 +260,15 @@ export function filterProductsForHomeTab(
   products: LandingPageProduct[],
   tab: HomeProductTab,
 ): LandingPageProduct[] {
+  const visible = products.filter(isLandingProductVisible);
+
   switch (tab) {
     case "best sellers":
-      return products.filter((product) => product.IsFeaturedProduct);
+      return visible.filter((product) => product.IsFeaturedProduct);
     case "new arrivals":
-      return products.filter((product) => product.IsNewProduct);
+      return visible.filter((product) => product.IsNewProduct);
     case "on sale": {
-      const remaining = products.filter(
+      const remaining = visible.filter(
         (product) => !product.IsNewProduct && !product.IsFeaturedProduct,
       );
 
@@ -245,11 +276,10 @@ export function filterProductsForHomeTab(
         return remaining;
       }
 
-      // Agar sab products new/featured hon, to jo featured nahi wo on sale me
-      return products.filter((product) => !product.IsFeaturedProduct);
+      return visible.filter((product) => !product.IsFeaturedProduct);
     }
     default:
-      return products;
+      return visible;
   }
 }
 

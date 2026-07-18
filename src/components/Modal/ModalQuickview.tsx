@@ -12,6 +12,7 @@ import { useModalWishlistContext } from "@/context/ModalWishlistContext";
 import { useCompare } from "@/context/CompareContext";
 import { useModalCompareContext } from "@/context/ModalCompareContext";
 import Rate from "../Other/Rate";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import ModalSizeguide from "./ModalSizeguide";
 import {
   fetchProductDetails,
@@ -20,6 +21,10 @@ import {
   getVariantPrice,
   getComparePrice,
   formatRsPrice,
+  formatDiscountBadge,
+  getActiveDiscount,
+  getAvailableStockCount,
+  canAddProductToCart,
   parseVariantGroupOptions,
   findVariantByGroupSelection,
   ProductDetailData,
@@ -33,6 +38,7 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
+import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
 import toast from "react-hot-toast";
 
 const ModalQuickview = () => {
@@ -86,6 +92,36 @@ const ModalQuickview = () => {
   const inStock = selectedVariant?.InStock ?? productDetail?.InStock ?? false;
   const totalPrice = activePrice * productQty;
   const activeImage = images[activeImageIndex] ?? images[0];
+  const activeDiscount = productDetail
+    ? getActiveDiscount(productDetail, selectedVariant)
+    : { discount: 0, discountType: 0 };
+  const discountLabel = formatDiscountBadge(
+    activeDiscount.discount,
+    activeDiscount.discountType,
+  );
+  const availableStock = productDetail
+    ? getAvailableStockCount(productDetail, selectedVariant)
+    : null;
+  const cartGate = productDetail
+    ? canAddProductToCart(productDetail, { selectedVariant, inStock })
+    : { allowed: false, reason: "Product details unavailable." };
+  const maxQuantity =
+    availableStock !== null ? Math.max(1, availableStock) : 999;
+  const quickviewBadges = productDetail
+    ? buildProductBadges({
+        isPromotional:
+          productDetail.IsPromotional ||
+          Boolean(selectedVariant?.IsPromotional),
+        discountLabel,
+        inventoryManagement:
+          selectedVariant?.InventoryManagement ??
+          productDetail.InventoryManagement,
+        availableStock,
+        comingSoon: productDetail.ComingSoon,
+        status: productDetail.Status,
+        inStock,
+      })
+    : [];
 
   const syncGroupSelections = (
     detail: ProductDetailData,
@@ -172,19 +208,12 @@ const ModalQuickview = () => {
   };
 
   const handleAddToCart = async () => {
-    // 1. Pehla check: Kya Status 0 hai?
-    if (productDetail?.Status === 0) {
-      // Yahan apna "Attractive Popup" ya toast show karein
-      // Agar aap toast use kar rahe hain:
-      toast.info("Yeh product abhi cart mein add nahi ho sakta.");
-      
-      // Agar aapne koi apna custom modal banana hai to wo yahan open karein
-      // showAttractivePopup(); 
-      return; 
-    }
+    if (!selectedProduct || !productDetail) return;
 
-    // 2. Baki purana logic (jo aapne pehle likha tha)
-    if (!selectedProduct || !productDetail || !inStock) return;
+    if (!cartGate.allowed) {
+      toast.error(cartGate.reason || "Unable to add this product to cart.");
+      return;
+    }
 
     if (variants.length > 0 && !selectedVariant) {
       toast.error("Please select size, color and variant first.");
@@ -195,7 +224,7 @@ const ModalQuickview = () => {
       productDetail,
       selectedVariant ?? undefined,
     );
-    cartProduct.quantityPurchase = productQty;
+    cartProduct.quantityPurchase = Math.min(productQty, maxQuantity);
 
     try {
       await addToCart(cartProduct);
@@ -260,8 +289,19 @@ const ModalQuickview = () => {
           onClick={(e) => e.stopPropagation()}
         >
           {loading ? (
-            <div className="modal-quickview-scroll flex items-center justify-center min-h-[420px] px-6 py-10">
-              <p className="text-secondary">Loading product details...</p>
+            <div className="modal-quickview-scroll">
+              <div className="px-6 pb-4 flex items-center justify-between border-b border-line sticky top-0 bg-white z-10">
+                <div className="heading5">Quick View</div>
+                <button
+                  type="button"
+                  className="close-btn w-8 h-8 rounded-full bg-surface flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
+                  onClick={closeQuickview}
+                  aria-label="Close"
+                >
+                  <Icon.X size={16} />
+                </button>
+              </div>
+              <ProductSkeleton variant="quickview" />
             </div>
           ) : error ? (
             <div className="modal-quickview-scroll flex flex-col items-center justify-center min-h-[420px] px-6 py-10 text-center">
@@ -289,7 +329,8 @@ const ModalQuickview = () => {
               <div className="flex flex-col lg:flex-row gap-6 px-4 sm:px-6 pt-6">
                 {/* Images */}
                 <div className="w-full lg:w-[42%] flex-shrink-0">
-                  <div className="main-img bg-img w-full aspect-[3/4] rounded-2xl overflow-hidden bg-surface">
+                  <div className="main-img bg-img w-full aspect-[3/4] rounded-2xl overflow-hidden bg-surface relative">
+                    <ProductBadges badges={quickviewBadges} />
                     {activeImage && (
                       <Image
                         src={activeImage}
@@ -366,16 +407,30 @@ const ModalQuickview = () => {
                         )}
                       </div>
                     )}
-                    {comparePrice > activePrice && (
+                    {discountLabel ? (
                       <>
                         <div className="w-px h-4 bg-line" />
-                        <div className="product-origin-price text-secondary2">
-                          <del>{formatRsPrice(comparePrice)}</del>
-                        </div>
+                        {comparePrice > activePrice && (
+                          <div className="product-origin-price text-secondary2">
+                            <del>{formatRsPrice(comparePrice)}</del>
+                          </div>
+                        )}
                         <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 rounded-full">
-                          -{percentSale}%
+                          {discountLabel}
                         </div>
                       </>
+                    ) : (
+                      comparePrice > activePrice && (
+                        <>
+                          <div className="w-px h-4 bg-line" />
+                          <div className="product-origin-price text-secondary2">
+                            <del>{formatRsPrice(comparePrice)}</del>
+                          </div>
+                          <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 rounded-full">
+                            -{percentSale}%
+                          </div>
+                        </>
+                      )
                     )}
                   </div>
 
@@ -417,9 +472,12 @@ const ModalQuickview = () => {
                       <div className="text-title mb-3">Variants</div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {variants.map((variant) => {
-                          const variantImage = productDetail
-                            ? getVariantDisplayImage(variant, productDetail)
-                            : "/images/product/1000x1000.png";
+                          // Use exact ImageName from API response
+                          const variantImage =
+                            variant.ImageName?.trim() ||
+                            (productDetail
+                              ? getVariantDisplayImage(variant, productDetail)
+                              : "/images/product/1000x1000.png");
                           const isSelected =
                             selectedVariant?.ProductDetailId ===
                             variant.ProductDetailId;
@@ -460,7 +518,17 @@ const ModalQuickview = () => {
                   )}
 
                   {/* Quantity & Add to cart */}
-                  <div className="text-title mt-6 mb-3">Quantity</div>
+                  <div className="mt-6 mb-3 flex items-center justify-between gap-3">
+                    <div className="text-title">Quantity</div>
+                    {availableStock !== null && (
+                      <span className="caption1 font-semibold text-black">
+                        Available:{" "}
+                        <span className="inline-flex min-w-[28px] items-center justify-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2 py-0.5 text-[#1d4ed8]">
+                          {availableStock}
+                        </span>
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <div className="quantity-block p-3 flex items-center justify-between rounded-lg border border-line w-full sm:w-[140px] flex-shrink-0">
                       <Icon.Minus
@@ -471,17 +539,25 @@ const ModalQuickview = () => {
                       <span className="body1 font-semibold">{productQty}</span>
                       <Icon.Plus
                         size={18}
-                        onClick={() => setProductQty((q) => q + 1)}
-                        className="cursor-pointer"
+                        onClick={() =>
+                          setProductQty((q) => Math.min(maxQuantity, q + 1))
+                        }
+                        className={`${productQty >= maxQuantity ? "opacity-30" : ""} cursor-pointer`}
                       />
                     </div>
                     <button
                       type="button"
                       onClick={() => void handleAddToCart()}
-                      disabled={!inStock}
-                      className={`button-main flex-1 text-center bg-white text-black border border-black ${inStock ? "cursor-pointer hover:bg-black hover:text-white" : "opacity-50 cursor-not-allowed"}`}
+                      disabled={!cartGate.allowed}
+                      className={`button-main flex-1 text-center bg-white text-black border border-black ${cartGate.allowed ? "cursor-pointer hover:bg-black hover:text-white" : "opacity-50 cursor-not-allowed"}`}
                     >
-                      {inStock ? "Add To Cart" : "Out of Stock"}
+                      {productDetail.ComingSoon
+                        ? "Coming Soon"
+                        : productDetail.Status === 0
+                          ? "Unavailable"
+                          : cartGate.allowed
+                            ? "Add To Cart"
+                            : "Out of Stock"}
                     </button>
                   </div>
 

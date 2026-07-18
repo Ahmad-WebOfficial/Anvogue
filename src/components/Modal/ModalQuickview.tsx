@@ -172,6 +172,18 @@ const ModalQuickview = () => {
   };
 
   const handleAddToCart = async () => {
+    // 1. Pehla check: Kya Status 0 hai?
+    if (productDetail?.Status === 0) {
+      // Yahan apna "Attractive Popup" ya toast show karein
+      // Agar aap toast use kar rahe hain:
+      toast.info("Yeh product abhi cart mein add nahi ho sakta.");
+      
+      // Agar aapne koi apna custom modal banana hai to wo yahan open karein
+      // showAttractivePopup(); 
+      return; 
+    }
+
+    // 2. Baki purana logic (jo aapne pehle likha tha)
     if (!selectedProduct || !productDetail || !inStock) return;
 
     if (variants.length > 0 && !selectedVariant) {
@@ -321,20 +333,12 @@ const ModalQuickview = () => {
                       </div>
                       <h2 className="heading4 mt-1 break-words">{productDetail.Name}</h2>
                     </div>
-                    <button
-                      type="button"
-                      className={`add-wishlist-btn w-10 h-10 flex-shrink-0 flex items-center justify-center border border-line rounded-lg duration-300 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some((item: ProductType) => item.id === productId) ? "active bg-black text-white" : ""}`}
-                      onClick={handleAddToWishlist}
-                      aria-label="Add to wishlist"
-                    >
-                      {wishlistState.wishlistArray.some(
-                        (item: ProductType) => item.id === productId,
-                      ) ? (
-                        <Icon.Heart size={20} weight="fill" className="text-red" />
-                      ) : (
-                        <Icon.Heart size={20} />
-                      )}
-                    </button>
+                    <button 
+  onClick={handleAddToCart}
+  disabled={productDetail.Status === 0}
+>
+  {productDetail.Status === 0 ? "Currently Unavailable" : "Add to Cart"}
+</button>
                   </div>
 
                   {productDetail.AverageRating > 0 && (

@@ -208,64 +208,85 @@ const MenuOne: React.FC<Props> = ({ props }) => {
   const displayName = user?.welcomeName ?? null;
   const userInitials = getUserInitials(displayName, user?.email ?? "");
 
-  const renderAccountMenuContent = (onClose: () => void) =>
-    isLoggedIn ? (
-      <>
-        <div className="account-dropdown-header">
-          <div className="account-dropdown-avatar">{userInitials}</div>
-          <div className="account-dropdown-meta">
-            <p className="account-dropdown-name">
-              {displayName ? `Hi, ${displayName}` : "Welcome Back!"}
-            </p>
-            {user?.email && (
-              <p className="account-dropdown-email">{user.email}</p>
-            )}
-          </div>
-        </div>
-        <div className="account-dropdown-body">
-          <Link href="/my-account" className="account-dropdown-item" onClick={onClose}>
-            <span className="account-dropdown-item-icon">
-              <Icon.SquaresFour size={18} weight="duotone" />
-            </span>
-            <span>My Account</span>
-          </Link>
-          <Link href="/wishlist" className="account-dropdown-item" onClick={onClose}>
-            <span className="account-dropdown-item-icon">
-              <Icon.Heart size={18} weight="duotone" />
-            </span>
-            <span>Wishlist</span>
-          </Link>
-          <div className="account-dropdown-divider" />
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              setShowLogoutModal(true);
-            }}
-            className="account-dropdown-item account-dropdown-item-danger"
-          >
-            <span className="account-dropdown-item-icon">
-              <Icon.SignOut size={18} weight="duotone" />
-            </span>
-            <span>Logout</span>
-          </button>
-        </div>
-      </>
-    ) : (
-      <div className="account-dropdown-body account-dropdown-body-guest">
-        <p className="account-dropdown-guest-title text-center">Your Account</p>
-        <p className="account-dropdown-guest-text">
-          Sign in to manage orders, wishlist and profile.
-        </p>
-        <Link href="/login" className="account-dropdown-primary-btn" onClick={onClose}>
-          Sign In
+ // 1. Aapka function waisa hi hai jaisa aapne bheja tha
+const renderAccountMenuContent = (onClose: () => void) => {
+  return isLoggedIn ? (
+    <>
+    <div className="account-dropdown-header">
+  {/* Yahan Initials ki jagah Icon laga diya hai */}
+  <div className="account-dropdown-avatar">
+     <Icon.User size={24} weight="duotone" />
+  </div>
+  
+  <div className="account-dropdown-meta">
+    <p className="account-dropdown-name">
+      {displayName ? `Hi, ${displayName}` : "Welcome Back!"}
+    </p>
+    {user?.email && (
+      <p className="account-dropdown-email">{user.email}</p>
+    )}
+  </div>
+</div>
+      <div className="account-dropdown-body">
+        <Link href="/my-account" className="account-dropdown-item" onClick={onClose}>
+          <span className="account-dropdown-item-icon">
+            <Icon.SquaresFour size={18} weight="duotone" />
+          </span>
+          <span>My Account</span>
         </Link>
-        <Link href="/register" className="account-dropdown-secondary-btn" onClick={onClose}>
-          Create Account
+        <Link href="/wishlist" className="account-dropdown-item" onClick={onClose}>
+          <span className="account-dropdown-item-icon">
+            <Icon.Heart size={18} weight="duotone" />
+          </span>
+          <span>Wishlist</span>
         </Link>
-       
+        <div className="account-dropdown-divider" />
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            setShowLogoutModal(true);
+          }}
+          className="account-dropdown-item account-dropdown-item-danger"
+        >
+          <span className="account-dropdown-item-icon">
+            <Icon.SignOut size={18} weight="duotone" />
+          </span>
+          <span>Logout</span>
+        </button>
       </div>
-    );
+    </>
+  ) : (
+    <div className="account-dropdown-body account-dropdown-body-guest">
+      <p className="account-dropdown-guest-title text-center">Your Account</p>
+      <p className="account-dropdown-guest-text">
+        Sign in to manage orders, wishlist and profile.
+      </p>
+      <Link href="/login" className="account-dropdown-primary-btn" onClick={onClose}>
+        Sign In
+      </Link>
+      <Link href="/register" className="account-dropdown-secondary-btn" onClick={onClose}>
+        Create Account
+      </Link>
+    </div>
+  );
+};
+
+// 2. Navbar ke andar jahan "User Icon" hai, wahan ye code use karein:
+<button 
+  className="user-profile-btn" 
+  onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+>
+  {isLoggedIn ? (
+    // Login hone par initials ka circle dikhega
+    <div className="avatar-circle-nav">
+      {userInitials}
+    </div>
+  ) : (
+    // Login na hone par icon dikhega
+    <Icon.User size={24} />
+  )}
+</button>
 
   return (
     <>
@@ -275,32 +296,42 @@ const MenuOne: React.FC<Props> = ({ props }) => {
         <div className="container mx-auto h-full px-4 lg:px-6">
           <div className="header-main grid grid-cols-[1fr_auto_1fr] items-center h-full gap-3">
             <div className="header-left flex items-center justify-start min-w-0">
-              <button
-                type="button"
-                className="menu-mobile-icon lg:hidden flex items-center justify-center w-10 h-10 -ml-1"
-                onClick={handleMenuMobile}
-                aria-label="Open menu"
-              >
-                <i className="icon-category text-2xl"></i>
-              </button>
-              <div className="hidden lg:flex items-center min-w-0">
-                <TenantLogo
-                  imageClassName="h-9 w-9 object-contain"
-                  textClassName="heading4 text-xl font-semibold tracking-tight"
-                  welcomeName={isLoggedIn ? user?.welcomeName ?? null : undefined}
-                />
-              </div>
-            </div>
+  <button
+    type="button"
+    className="menu-mobile-icon lg:hidden flex items-center justify-center w-10 h-10 -ml-1"
+    onClick={handleMenuMobile}
+    aria-label="Open menu"
+  >
+    <i className="icon-category text-2xl"></i>
+  </button>
+  <div className="hidden lg:flex flex-col justify-center min-w-0">
+    <TenantLogo
+      imageClassName="h-9 w-9 object-contain"
+      textClassName="heading4 text-xl font-semibold tracking-tight"
+      logoName="TopSaver"
+    />
+    {isLoggedIn && (
+      <span className="text-[10px] text-gray-500 font-medium leading-none ml-18 mt-1">
+        Welcome, {user?.welcomeName}
+      </span>
+    )}
+  </div>
+</div>
 
             <div className="header-center flex items-center justify-center min-w-0">
-              <div className="lg:hidden flex justify-center max-w-[220px]">
-                <TenantLogo
-                  className="justify-center"
-                  imageClassName="h-9 w-9 object-contain"
-                  textClassName="heading4 text-base font-semibold tracking-tight"
-                  welcomeName={isLoggedIn ? user?.welcomeName ?? null : undefined}
-                />
-              </div>
+             <div className="lg:hidden flex flex-col items-center justify-center max-w-[220px]">
+    <TenantLogo
+      className="justify-center"
+      imageClassName="h-9 w-9 object-contain"
+      textClassName="heading4 text-base font-semibold tracking-tight"
+      logoName="TopSaver"
+    />
+    {isLoggedIn && (
+      <span className="text-[10px] text-gray-500 font-medium leading-none mt-0.5">
+        Welcome, {user?.welcomeName}
+      </span>
+    )}
+  </div>
               <div className="menu-main h-full hidden lg:block">
                 <ul className="flex items-center gap-7 xl:gap-9 h-full">
                   <li className="h-full">
@@ -415,72 +446,86 @@ const MenuOne: React.FC<Props> = ({ props }) => {
             </div>
 
             {/* Right: action icons */}
-            <div className="header-right flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
-              <button
-                type="button"
-                className="header-action-btn header-search-desktop"
-                onClick={() => router.push("/search-result")}
-                title="Search"
-                aria-label="Search"
-              >
-                <Icon.MagnifyingGlass size={24} />
-              </button>
+                 <div className="header-right flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
+  <button
+    type="button"
+    className="header-action-btn header-search-desktop"
+    onClick={() => router.push("/search-result")}
+    title="Search"
+    aria-label="Search"
+  >
+    <Icon.MagnifyingGlass size={24} />
+  </button>
 
-              <div className="relative user-icon header-action-btn" title="Account">
-                {accountMenuOpen && (
-                  <div
-                    className="account-dropdown-backdrop lg:hidden"
-                    onClick={closeAccountMenu}
-                    aria-hidden="true"
-                  />
-                )}
+  <div className="relative user-icon header-action-btn" title="Account">
+    {accountMenuOpen && (
+      <div
+        className="account-dropdown-backdrop lg:hidden"
+        onClick={closeAccountMenu}
+        aria-hidden="true"
+      />
+    )}
 
-                <button
-                  type="button"
-                  className="flex items-center justify-center w-full h-full relative z-[1]"
-                  aria-label="Account menu"
-                  aria-expanded={accountMenuOpen}
-                  onMouseEnter={openAccountMenuDesktop}
-                  onMouseLeave={scheduleCloseAccountMenuDesktop}
-                  onClick={() => {
-                    if (window.innerWidth < 1024) {
-                      setAccountMenuOpen((prev) => !prev);
-                    }
-                  }}
-                >
-                  <Icon.User size={24} />
-                </button>
+  <button
+  type="button"
+  className="flex items-center justify-center w-full h-full relative z-[1]"
+  aria-label="Account menu"
+  aria-expanded={accountMenuOpen}
+  onMouseEnter={openAccountMenuDesktop}
+  onMouseLeave={scheduleCloseAccountMenuDesktop}
+  onClick={() => {
+    if (window.innerWidth < 1024) {
+      setAccountMenuOpen((prev) => !prev);
+    }
+  }}
+>
+ {isLoggedIn ? (
+  <div
+    className="flex items-center justify-center rounded-full font-bold text-[14px] text-white"
+    style={{
+      width: "32px",
+      height: "32px",
+      backgroundColor: "#000",
+    }}
+  >
+    {userInitials}
+  </div>
+) : (
+  <Icon.User size={24} />
+)}
+</button>
 
-                <div
-                  className={`account-dropdown-panel ${accountMenuOpen ? "is-open" : ""}`}
-                  onMouseEnter={openAccountMenuDesktop}
-                  onMouseLeave={scheduleCloseAccountMenuDesktop}
-                >
-                  <div
-                    className={`account-dropdown transition-all duration-300 ${
-                      accountMenuOpen
-                        ? "opacity-100 visible translate-y-0"
-                        : "opacity-0 invisible -translate-y-1 pointer-events-none"
-                    }`}
-                  >
-                    {renderAccountMenuContent(closeAccountMenu)}
-                  </div>
-                </div>
-              </div>
+    <div
+      className={`account-dropdown-panel ${accountMenuOpen ? "is-open" : ""}`}
+      onMouseEnter={openAccountMenuDesktop}
+      onMouseLeave={scheduleCloseAccountMenuDesktop}
+    >
+      <div
+        className={`account-dropdown transition-all duration-300 ${
+          accountMenuOpen
+            ? "opacity-100 visible translate-y-0"
+            : "opacity-0 invisible -translate-y-1 pointer-events-none"
+        }`}
+      >
+        {renderAccountMenuContent(closeAccountMenu)}
+      </div>
+    </div>
+  </div>
 
-              <button
-                type="button"
-                className="cart-icon header-action-btn relative"
-                onClick={openModalCart}
-                title="Cart"
-                aria-label="Cart"
-              >
-                <Icon.Handbag size={24} />
-                <span className="quantity cart-quantity absolute -right-1 -top-1 text-[10px] text-white bg-black min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-medium">
-                  {cartState.cartArray.length}
-                </span>
-              </button>
-            </div>
+  <button
+    type="button"
+    className="cart-icon header-action-btn relative"
+    onClick={openModalCart}
+    title="Cart"
+    aria-label="Cart"
+  >
+    <Icon.Handbag size={24} />
+    <span className="quantity cart-quantity absolute -right-1 -top-1 text-[10px] text-white bg-black min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-medium">
+      {cartState.cartArray.length}
+    </span>
+  </button>
+</div>
+       
           </div>
         </div>
       </div>

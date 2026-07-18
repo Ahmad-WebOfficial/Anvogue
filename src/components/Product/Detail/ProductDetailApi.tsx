@@ -581,7 +581,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                       type="button"
                       onClick={() => void handleAddToCart()}
                       disabled={!inStock}
-                      className={`button-main flex-1 text-center ${inStock ? "hover:opacity-90" : "opacity-50 cursor-not-allowed"}`}
+                      className={`button-main flex-1 bg-black text-center ${inStock ? "hover:opacity-90" : "opacity-50 cursor-not-allowed"}`}
                     >
                       {inStock
                         ? `Add To Cart — ${formatRsPrice(totalPrice)}`

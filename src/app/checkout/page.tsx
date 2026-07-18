@@ -731,7 +731,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     className="button-main bg-black"
                     disabled={submitting || cartState.cartArray.length === 0}
                   >
-                    {submitting ? "Creating Order..." : "Place Order"}
+                    {submitting ? "Creating pay now..." : "Pay Now"}
                   </button>
                 </div>
               </form>

@@ -7,6 +7,7 @@ import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
 import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType'
 import Product from '@/components/Product/Product'
+import ProductSkeleton from '@/components/Other/ProductSkeleton'
 import HandlePagination from '@/components/Other/HandlePagination'
 import {
     filterProductsByQuery,
@@ -138,13 +139,8 @@ const SearchResult = () => {
                         </div>
 
                         {loading ? (
-                            <div className="list-product grid lg:grid-cols-4 sm:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-5">
-                                {Array.from({ length: 8 }).map((_, index) => (
-                                    <div
-                                        key={index}
-                                        className="rounded-2xl bg-surface animate-pulse aspect-[3/4]"
-                                    />
-                                ))}
+                            <div className="mt-5">
+                                <ProductSkeleton variant="grid" count={8} />
                             </div>
                         ) : error ? (
                             <div className="text-center py-10 rounded-2xl bg-surface mt-5">

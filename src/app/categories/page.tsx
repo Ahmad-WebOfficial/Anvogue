@@ -8,6 +8,7 @@ import Footer from "@/components/Footer/Footer";
 import CategoryDetailCard from "@/components/Home1/CategoryDetailCard";
 import CategorySwiper from "@/components/Home1/CategorySwiper";
 import { useCategoryTree } from "@/hooks/useCategoryTree";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 
 export default function CategoriesPage() {
   const { rootCategories, loading, error } = useCategoryTree();
@@ -41,9 +42,9 @@ export default function CategoriesPage() {
           </div>
 
           {loading && (
-            <p className="text-center text-secondary py-16">
-              Loading categories...
-            </p>
+            <div className="mt-8 md:mt-12">
+              <ProductSkeleton variant="grid" count={8} />
+            </div>
           )}
 
           {error && <p className="text-center text-red py-16">{error}</p>}

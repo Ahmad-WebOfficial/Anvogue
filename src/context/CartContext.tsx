@@ -1,12 +1,12 @@
 "use client";
 
-import api from "@/lib/api";
 import React, {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useReducer,
+  useRef,
   useState,
 } from "react";
 import { ProductType } from "@/type/ProductType";
@@ -22,6 +22,8 @@ import {
   getCartItemName,
   getCartItemUnitPrice,
   getCartItemVariantsLabel,
+  removeCartItemById,
+  updateCartItemQuantity,
 } from "@/lib/cart";
 import { RelatedProduct } from "@/lib/product-details";
 import { getApiErrorMessage } from "@/lib/api";
@@ -60,6 +62,7 @@ type CartAction =
 interface CartContextProps {
   cartState: CartState;
   cartLoading: boolean;
+  updatingCartId: string | null;
   addToCart: (item: ProductType) => Promise<void>;
   removeFromCart: (cartId: string) => Promise<void>;
   updateCart: (
@@ -67,7 +70,7 @@ interface CartContextProps {
     quantity: number,
     selectedSize: string,
     selectedColor: string,
-  ) => void;
+  ) => Promise<void>;
   fetchCart: () => Promise<void>;
 }
 
@@ -207,16 +210,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [cartState, dispatch] = useReducer(cartReducer, initialState);
   const [cartLoading, setCartLoading] = useState(false);
+  const [updatingCartId, setUpdatingCartId] = useState<string | null>(null);
+  const fetchGenerationRef = useRef(0);
 
   const fetchCart = useCallback(async () => {
+    const generation = ++fetchGenerationRef.current;
     setCartLoading(true);
     try {
       const summary = await fetchCurrentCart();
+      if (generation !== fetchGenerationRef.current) return;
       dispatch({ type: "SET_CART", payload: summary });
     } catch (error) {
       console.error("Fetch cart error:", error);
     } finally {
-      setCartLoading(false);
+      if (generation === fetchGenerationRef.current) {
+        setCartLoading(false);
+      }
     }
   }, []);
 
@@ -255,7 +264,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const removeFromCart = async (cartId: string) => {
     try {
-      await api.delete(`/api/v1/Cart/DeleteItemFromCart/remove/${cartId}`);
+      await removeCartItemById(cartId);
       await fetchCart();
       toast.success("Item removed successfully!");
     } catch (error) {
@@ -264,18 +273,48 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const updateCart = (
+  const updateCart = async (
     itemId: string,
     quantity: number,
     selectedSize: string,
     selectedColor: string,
   ) => {
     if (quantity < 1) return;
+    if (updatingCartId) return;
 
+    const item = cartState.cartArray.find(
+      (line) => line.cartId === itemId || line.id === itemId,
+    );
+    if (!item) return;
+
+    const previousQuantity = item.quantity;
+    if (previousQuantity === quantity) return;
+
+    setUpdatingCartId(item.cartId);
+
+    // Optimistic UI so summary/line totals update immediately
     dispatch({
       type: "UPDATE_CART",
-      payload: { itemId, quantity, selectedSize, selectedColor },
+      payload: { itemId: item.cartId, quantity, selectedSize, selectedColor },
     });
+
+    try {
+      await updateCartItemQuantity({
+        cartId: item.cartId,
+        productId: Number(item.id),
+        productDetailId: Number(item.productDetailId),
+        currentQuantity: previousQuantity,
+        nextQuantity: quantity,
+      });
+      await fetchCart();
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Failed to update cart quantity."),
+      );
+      await fetchCart();
+    } finally {
+      setUpdatingCartId(null);
+    }
   };
 
   return (
@@ -283,6 +322,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         cartState,
         cartLoading,
+        updatingCartId,
         addToCart,
         removeFromCart,
         updateCart,

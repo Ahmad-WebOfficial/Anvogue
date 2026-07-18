@@ -156,15 +156,24 @@ export function getProductImages(detail: ProductDetailData): string[] {
   return ["/images/product/1000x1000.png"];
 }
 
+/**
+ * Always use variant.ImageName from API response when present.
+ * Do not replace it with product gallery images.
+ */
 export function getVariantDisplayImage(
   variant: ProductVariantCombination,
-  detail: ProductDetailData,
+  detail?: ProductDetailData,
 ): string {
-  if (variant.ImageName && !isPlaceholderImage(variant.ImageName)) {
-    return variant.ImageName;
+  const imageName = variant.ImageName?.trim();
+  if (imageName) {
+    return imageName;
   }
 
-  return getProductImages(detail)[0] ?? "/images/product/1000x1000.png";
+  if (detail) {
+    return getProductImages(detail)[0] ?? "/images/product/1000x1000.png";
+  }
+
+  return "/images/product/1000x1000.png";
 }
 
 export function getDisplayImages(
@@ -177,12 +186,19 @@ export function getDisplayImages(
     return galleryImages;
   }
 
-  const variantImage = getVariantDisplayImage(selectedVariant, detail);
-  if (galleryImages.includes(variantImage)) {
-    return [variantImage, ...galleryImages.filter((img) => img !== variantImage)];
+  // Use exact ImageName from selected variant when API provides it.
+  const variantImageName = selectedVariant.ImageName?.trim();
+  if (variantImageName) {
+    if (galleryImages.includes(variantImageName)) {
+      return [
+        variantImageName,
+        ...galleryImages.filter((img) => img !== variantImageName),
+      ];
+    }
+    return [variantImageName, ...galleryImages];
   }
 
-  return [variantImage, ...galleryImages];
+  return galleryImages;
 }
 
 export function getVariantPrice(variant: ProductVariantCombination): number {
@@ -209,6 +225,99 @@ export function getDetailSalePrice(detail: ProductDetailData): number {
 
 export function formatRsPrice(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-PK")}`;
+}
+
+/** DiscountType 1 = fixed amount, otherwise percentage. */
+export function formatDiscountBadge(
+  discount: number,
+  discountType = 0,
+): string | null {
+  if (!discount || discount <= 0) return null;
+  if (discountType === 1) {
+    return `-${formatRsPrice(discount)}`;
+  }
+  return `-${discount}%`;
+}
+
+export function getActiveDiscount(
+  detail: ProductDetailData,
+  selectedVariant?: ProductVariantCombination | null,
+): { discount: number; discountType: number } {
+  if (selectedVariant && (selectedVariant.Discount ?? 0) > 0) {
+    return {
+      discount: selectedVariant.Discount,
+      discountType: selectedVariant.DiscountType ?? 0,
+    };
+  }
+
+  return {
+    discount: detail.Discount ?? 0,
+    discountType: detail.DiscountValueType ?? 0,
+  };
+}
+
+export function getAvailableStockCount(
+  detail: ProductDetailData,
+  selectedVariant?: ProductVariantCombination | null,
+): number | null {
+  const inventoryOn = Boolean(
+    selectedVariant?.InventoryManagement ?? detail.InventoryManagement,
+  );
+  if (!inventoryOn) return null;
+
+  const rawStock =
+    selectedVariant?.AvailableStock ??
+    (detail as ProductDetailData & { AvailableStock?: number | null })
+      .AvailableStock;
+
+  if (rawStock === null || rawStock === undefined) return null;
+
+  const stock = Number(rawStock);
+  return Number.isNaN(stock) ? null : stock;
+}
+
+export function canAddProductToCart(
+  detail: ProductDetailData,
+  options?: {
+    selectedVariant?: ProductVariantCombination | null;
+    inStock?: boolean;
+  },
+): { allowed: boolean; reason?: string } {
+  if (detail.ComingSoon) {
+    return {
+      allowed: false,
+      reason: "This product is coming soon.",
+    };
+  }
+
+  if (detail.Status === 0) {
+    return {
+      allowed: false,
+      reason: "This product is currently unavailable.",
+    };
+  }
+
+  const inStock =
+    options?.inStock ??
+    options?.selectedVariant?.InStock ??
+    detail.InStock;
+
+  if (!inStock) {
+    return {
+      allowed: false,
+      reason: "This product is out of stock.",
+    };
+  }
+
+  const stockCount = getAvailableStockCount(detail, options?.selectedVariant);
+  if (stockCount !== null && stockCount <= 0) {
+    return {
+      allowed: false,
+      reason: "This product is out of stock.",
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function getComparePrice(

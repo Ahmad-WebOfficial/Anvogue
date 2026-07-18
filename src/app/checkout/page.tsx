@@ -11,10 +11,11 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import api from "@/lib/api";
-import { formatRsPrice } from "@/lib/cart";
+import { formatRsPrice, getCartShippingPref } from "@/lib/cart";
 import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse } from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
+import { getPendingPromoCode } from "@/lib/promo";
 import toast from "react-hot-toast";
 
 type SelectOption = { Value: string; Text: string };
@@ -33,6 +34,7 @@ const Checkout = () => {
   const [areas, setAreas] = useState<SelectOption[]>([]);
   const [branches, setBranches] = useState<SelectOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingPromo, setPendingPromo] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -70,6 +72,7 @@ const Checkout = () => {
 
   useEffect(() => {
     void fetchCart();
+    setPendingPromo(getPendingPromoCode());
   }, [fetchCart]);
 
   useEffect(() => {
@@ -116,6 +119,31 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     void getCountries();
   }, []);
 
+  useEffect(() => {
+    const pref = getCartShippingPref();
+    if (!pref?.countryId) return;
+
+    setForm((prev) => {
+      if (prev.countryId) return prev;
+      return {
+        ...prev,
+        countryId: pref.countryId,
+        stateId: pref.stateId || "",
+      };
+    });
+
+    void (async () => {
+      try {
+        const res = await api.get("/api/v1/Common/states", {
+          params: { CountryId: pref.countryId },
+        });
+        setStates(Array.isArray(res.data?.Data) ? res.data.Data : []);
+      } catch (error) {
+        console.error("Failed to prefill checkout states:", error);
+      }
+    })();
+  }, []);
+
   const fetchStates = async (countryId: string) => {
     if (!countryId) return;
     try {
@@ -158,7 +186,13 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       const res = await api.get("/api/v1/Common/branches", {
         params: { CityId: cityId },
       });
-      setBranches(Array.isArray(res.data?.Data) ? res.data.Data : []);
+      const list = Array.isArray(res.data?.Data) ? res.data.Data : [];
+      setBranches(list);
+      if (list.length > 0) {
+        setForm((prev) =>
+          prev.branchId ? prev : { ...prev, branchId: String(list[0].Value) },
+        );
+      }
     } catch (error) {
       console.error("Failed to fetch branches:", error);
     }
@@ -216,7 +250,8 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     try {
       const payload = buildCreateOrderPayload(form);
       const response = await createOrder(payload);
-      const newOrderId = extractOrderId(response.Data);
+      const newOrderId =
+        extractOrderId(response.Data) ?? extractOrderId(response);
 
       let guestLoggedIn = false;
       if (!isAuthenticated()) {
@@ -233,7 +268,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       if (newOrderId) {
         router.push(`/order/${newOrderId}?pay=1`);
       } else {
-        router.push("/");
+        toast.error(
+          "Order was created but order ID was missing. Please check My Account → Orders.",
+        );
+        router.push("/my-account");
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Failed to create order."));
@@ -813,16 +851,25 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                   <span>{formatRsPrice(subTotal)}</span>
                 </div>
 
-                {discount > 0 && (
+                <div className="checkout-total-row">
+                  <span>Discount</span>
+                  <span className={discount > 0 ? "text-green" : undefined}>
+                    {discount > 0
+                      ? `-${formatRsPrice(discount)}`
+                      : formatRsPrice(0)}
+                  </span>
+                </div>
+
+                {pendingPromo && (
                   <div className="checkout-total-row">
-                    <span>Discount</span>
-                    <span className="text-green">-{formatRsPrice(discount)}</span>
+                    <span>Promo Code</span>
+                    <span>{pendingPromo}</span>
                   </div>
                 )}
 
                 <div className="checkout-total-row">
-                  <span>Shipping</span>
-                  <span>{ship === 0 ? "Free" : formatRsPrice(ship)}</span>
+                  <span>Delivery Charges</span>
+                  <span>{formatRsPrice(ship)}</span>
                 </div>
 
                 <div className="checkout-total-row is-grand">

@@ -14,8 +14,11 @@ import { useModalCompareContext } from "@/context/ModalCompareContext";
 import { useModalQuickviewContext } from "@/context/ModalQuickviewContext";
 import { useRouter } from "next/navigation";
 import { getProductDetailUrl } from "@/lib/featured-products";
+import { formatDiscountBadge } from "@/lib/product-details";
+import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
 import Marquee from "react-fast-marquee";
 import Rate from "../Other/Rate";
+import toast from "react-hot-toast";
 
 interface ProductProps {
   data: ProductType;
@@ -44,10 +47,31 @@ const Product: React.FC<ProductProps> = ({
   const displayPrice = data.price > 0 ? data.price : data.originPrice;
   const showOriginPrice =
     !hideOriginPrice && data.originPrice > displayPrice && data.originPrice > 0;
-  const showSaleBadge = showOriginPrice;
-  const discountPercent = showOriginPrice
-    ? Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)
-    : 0;
+  const discountLabel =
+    formatDiscountBadge(data.discount ?? 0, data.discountType ?? 0) ||
+    (showOriginPrice
+      ? `-${Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)}%`
+      : null);
+  const productBadges = buildProductBadges({
+    isPromotional: data.isPromotional,
+    discountLabel,
+    inventoryManagement: data.inventoryManagement,
+    availableStock: data.availableStock,
+    comingSoon: data.comingSoon,
+    status: data.status,
+    inStock: data.inStock,
+  });
+  const canPurchase =
+    !data.comingSoon &&
+    data.status !== 0 &&
+    data.inStock !== false &&
+    !(
+      data.inventoryManagement &&
+      data.availableStock !== null &&
+      data.availableStock !== undefined &&
+      Number(data.availableStock) <= 0
+    );
+
   const { addToCart, updateCart, cartState } = useCart();
   const { openModalCart } = useModalCartContext();
   const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist();
@@ -65,14 +89,39 @@ const Product: React.FC<ProductProps> = ({
     setActiveSize(item);
   };
 
-  const handleAddToCart = () => {
-    if (!cartState.cartArray.find((item) => item.id === data.id)) {
-      addToCart({ ...data });
-      updateCart(data.id, data.quantityPurchase, activeSize, activeColor);
-    } else {
-      updateCart(data.id, data.quantityPurchase, activeSize, activeColor);
+  const handleAddToCart = async () => {
+    if (data.comingSoon) {
+      toast.error("This product is coming soon.");
+      return;
     }
-    openModalCart();
+    if (data.status === 0) {
+      toast.error("This product is currently unavailable.");
+      return;
+    }
+    if (data.inStock === false) {
+      toast.error("This product is out of stock.");
+      return;
+    }
+    if (
+      data.inventoryManagement &&
+      data.availableStock !== null &&
+      data.availableStock !== undefined &&
+      Number(data.availableStock) <= 0
+    ) {
+      toast.error("This product is out of stock.");
+      return;
+    }
+
+    try {
+      if (!cartState.cartArray.find((item) => item.id === data.id)) {
+        await addToCart({ ...data });
+      } else {
+        updateCart(data.id, data.quantityPurchase, activeSize, activeColor);
+      }
+      openModalCart();
+    } catch {
+      // toast in context
+    }
   };
 
   const handleAddToWishlist = () => {
@@ -122,21 +171,17 @@ const Product: React.FC<ProductProps> = ({
             className="product-main cursor-pointer block"
           >
             <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
-              {showSaleBadge && discountPercent > 0 && (
-                <div className="product-tag text-button-uppercase text-black bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                  -{discountPercent}%
-                </div>
-              )}
+              <ProductBadges badges={productBadges} />
               {style === "style-1" ||
                 style === "style-3" ||
                 style === "style-4" ? (
                 <div className="list-action-right absolute top-3 right-3 max-lg:hidden">
-                  {style === "style-4" && (
+                  {style === "style-4" && canPurchase && (
                     <div
                       className={`add-cart-btn w-[32px] h-[32px] flex items-center justify-center rounded-full bg-white duration-300 relative mb-2 ${compareState.compareArray.some((item) => item.id === data.id) ? "active" : ""}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleAddToCart();
+                        void handleAddToCart();
                       }}
                     >
                       <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">
@@ -478,20 +523,20 @@ const Product: React.FC<ProductProps> = ({
                   </div>
                 )}
 
-                {showSaleBadge && discountPercent > 0 && (
+                {discountLabel && (
                   <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 rounded-full">
-                    -{discountPercent}%
+                    {discountLabel}
                   </div>
                 )}
               </div>
               {style === "style-5" && (
                 <>
-                  {data.action === "add to cart" ? (
+                  {data.action === "add to cart" && canPurchase ? (
                     <div
                       className="add-cart-btn w-full text-button-uppercase py-2.5 text-center mt-2 rounded-full duration-300 bg-white border border-black hover:bg-black hover:text-white max-lg:hidden"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleAddToCart();
+                        void handleAddToCart();
                       }}
                     >
                       Add To Cart
@@ -522,16 +567,7 @@ const Product: React.FC<ProductProps> = ({
                     onClick={() => handleDetailProduct(data.id)}
                     className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2"
                   >
-                    {/* {data.new && (
-                      <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                        Newss
-                      </div>
-                    )}
-                    {data.sale && (
-                      <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                        Sale
-                      </div>
-                    )} */}
+                    <ProductBadges badges={productBadges} />
                     <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
                       {thumbImages.map((img, index) => (
                         <Image
@@ -592,9 +628,9 @@ const Product: React.FC<ProductProps> = ({
                             <del>{formatProductPrice(data.originPrice)}</del>
                           </div>
                         )}
-                        {showSaleBadge && discountPercent > 0 && (
+                        {discountLabel && (
                           <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
-                            -{discountPercent}%
+                            {discountLabel}
                           </div>
                         )}
                       </div>
@@ -812,9 +848,9 @@ const Product: React.FC<ProductProps> = ({
                 {formatProductPrice(data.originPrice)}
               </span>
             )}
-            {showSaleBadge && discountPercent > 0 && (
+            {discountLabel && (
               <span className="caption2 font-semibold bg-green text-black px-2 py-0.5 rounded-full inline-block mt-1">
-                -{discountPercent}%
+                {discountLabel}
               </span>
             )}
           </div>

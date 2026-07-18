@@ -1,6 +1,11 @@
 import api from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
-import { RelatedProduct } from "@/lib/product-details";
+import {
+  RelatedProduct,
+  getAvailableStockCount,
+  getProductImages,
+  isPlaceholderImage,
+} from "@/lib/product-details";
 
 export interface FeaturedProductCategory {
   CategoryId: number;
@@ -28,6 +33,10 @@ export interface FeaturedProduct {
   IsProductInStock: boolean;
   IsPromotionalProduct: boolean;
   ProductDetailId?: number;
+  ComingSoon?: boolean;
+  InventoryManagement?: boolean;
+  AvailableStock?: number | null;
+  Status?: number;
   Category: FeaturedProductCategory;
   Seo: FeaturedProductSeo;
   Tags: string;
@@ -64,17 +73,34 @@ export function mapProductDetailToProductType(
   detail: import("@/lib/product-details").ProductDetailData,
   selectedVariant?: import("@/lib/product-details").ProductVariantCombination,
 ): ProductType {
+  const gallery = getProductImages(detail);
+  const variantImage =
+    selectedVariant?.ImageName?.trim() || null;
   const image =
-    detail.ProductImages?.[0]?.LargeImagePath ||
-    detail.ProductImages?.[0]?.OriginalImagePath ||
-    selectedVariant?.ImageName ||
+    (variantImage && !isPlaceholderImage(variantImage)
+      ? variantImage
+      : null) ||
+    gallery[0] ||
     "/images/product/1000x1000.png";
+  const images =
+    variantImage && !isPlaceholderImage(variantImage)
+      ? [variantImage, ...gallery.filter((img) => img !== variantImage)]
+      : gallery;
 
   const price = selectedVariant
     ? selectedVariant.DiscountedPrice > 0
       ? selectedVariant.DiscountedPrice
       : selectedVariant.Price
     : detail.MinPrice;
+
+  const discount = selectedVariant?.Discount ?? detail.Discount ?? 0;
+  const discountType =
+    selectedVariant?.DiscountType ?? detail.DiscountValueType ?? 0;
+  const inStock = selectedVariant?.InStock ?? detail.InStock;
+  const inventoryManagement = Boolean(
+    selectedVariant?.InventoryManagement ?? detail.InventoryManagement,
+  );
+  const availableStock = getAvailableStockCount(detail, selectedVariant);
 
   return {
     id: String(detail.ProductId),
@@ -85,13 +111,13 @@ export function mapProductDetailToProductType(
     name: detail.Name,
     gender: "",
     new: detail.IsPromotional,
-    sale: detail.Discount > 0 || detail.IsPromotional,
+    sale: discount > 0 || detail.IsPromotional,
     rate: detail.AverageRating || 5,
     price,
     originPrice: selectedVariant?.Price ?? detail.MaxPrice ?? price,
     brand: detail.BrandName || "",
     sold: 0,
-    quantity: detail.InStock ? 100 : 0,
+    quantity: inStock ? 100 : 0,
     quantityPurchase: 1,
     sizes:
       detail.ProductVariantDetail?.productVariantCombinationList?.map(
@@ -99,13 +125,18 @@ export function mapProductDetailToProductType(
       ) ?? [],
     variation: [],
     thumbImage: [image],
-    images:
-      detail.ProductImages?.map(
-        (img) => img.LargeImagePath || img.OriginalImagePath || img.IconImagePath,
-      ).filter(Boolean) ?? [image],
+    images,
     description: detail.Description,
     action: "add to cart",
     slug: detail.Seo?.UrlSlug || String(detail.ProductId),
+    isPromotional: Boolean(detail.IsPromotional),
+    discount,
+    discountType,
+    inventoryManagement,
+    availableStock,
+    comingSoon: Boolean(detail.ComingSoon),
+    status: detail.Status,
+    inStock,
   };
 }
 
@@ -140,6 +171,12 @@ export function mapRelatedProductToProductType(
     description: product.Category?.CategoryDescription || "",
     action: "add to cart",
     slug: product.Seo?.UrlSlug || String(product.ProductId),
+    isPromotional: product.IsPromotionalProduct,
+    discount: 0,
+    discountType: 0,
+    comingSoon: false,
+    status: 1,
+    inStock: true,
   };
 }
 
@@ -147,6 +184,7 @@ export function mapFeaturedProductToProductType(
   product: FeaturedProduct,
 ): ProductType {
   const image = getProductImage(product);
+  const inStock = product.IsProductInStock !== false;
 
   return {
     id: String(product.ProductId),
@@ -162,7 +200,7 @@ export function mapFeaturedProductToProductType(
     originPrice: product.Price,
     brand: "",
     sold: 0,
-    quantity: product.IsProductInStock ? 100 : 0,
+    quantity: inStock ? 100 : 0,
     quantityPurchase: 1,
     sizes: [],
     variation: [],
@@ -171,6 +209,17 @@ export function mapFeaturedProductToProductType(
     description: product.Description,
     action: "add to cart",
     slug: product.Seo?.UrlSlug || String(product.ProductId),
+    isPromotional: product.IsPromotionalProduct,
+    discount: 0,
+    discountType: 0,
+    inventoryManagement: Boolean(product.InventoryManagement),
+    availableStock:
+      product.InventoryManagement && product.AvailableStock != null
+        ? Number(product.AvailableStock)
+        : null,
+    comingSoon: Boolean(product.ComingSoon),
+    status: product.Status ?? 1,
+    inStock,
   };
 }
 
@@ -185,5 +234,7 @@ export async function fetchFeaturedProducts(): Promise<FeaturedProduct[]> {
     },
   );
 
-  return res.data?.Data ?? [];
+  return (res.data?.Data ?? []).filter(
+    (product) => product.IsProductInStock !== false,
+  );
 }

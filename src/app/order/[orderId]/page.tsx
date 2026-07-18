@@ -28,6 +28,16 @@ import {
 } from "@/lib/order";
 import { getProductDetailUrl } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
+import {
+  applyPromoCodeToOrder,
+  cancelPromoCodeFromOrder,
+  clearPendingPromoCode,
+  extractCampaignIdFromOrder,
+  getOrderCampaignId,
+  getPendingPromoCode,
+  getPromoErrorMessage,
+  saveOrderCampaignId,
+} from "@/lib/promo";
 import toast from "react-hot-toast";
 
 const OrderDetailsPage = () => {
@@ -35,6 +45,7 @@ const OrderDetailsPage = () => {
   const searchParams = useSearchParams();
   const orderId = Number(params.orderId);
   const autopayTriggered = useRef(false);
+  const promoAutoApplied = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -47,7 +58,23 @@ const OrderDetailsPage = () => {
   const [isCancelled, setIsCancelled] = useState(false);
   const [paying, setPaying] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [cancellingPromo, setCancellingPromo] = useState(false);
+  const [campaignId, setCampaignId] = useState<number | null>(null);
   const router = useRouter();
+
+  const resolveCampaignId = (
+    orderDetails: OrderDetailData | null,
+    paymentOptions: SelectPaymentData | null,
+  ): number | null => {
+    return (
+      extractCampaignIdFromOrder(paymentOptions) ||
+      extractCampaignIdFromOrder(orderDetails) ||
+      (orderDetails ? getOrderCampaignId(orderDetails.OrderId) : null) ||
+      null
+    );
+  };
 
   const loadOrder = async () => {
     if (!orderId || Number.isNaN(orderId)) {
@@ -63,8 +90,9 @@ const OrderDetailsPage = () => {
       const orderDetails = await fetchCustomerOrderDetails(orderId);
       setOrder(orderDetails);
 
+      let paymentOptions: SelectPaymentData | null = null;
       try {
-        const paymentOptions = await fetchSelectPayment(orderId);
+        paymentOptions = await fetchSelectPayment(orderId);
         setPaymentData(paymentOptions);
 
         if (paymentOptions.PaymentGateways.length > 0) {
@@ -79,6 +107,16 @@ const OrderDetailsPage = () => {
           ),
         );
       }
+
+      const resolvedCampaign = resolveCampaignId(orderDetails, paymentOptions);
+      if (resolvedCampaign) {
+        setCampaignId(resolvedCampaign);
+        saveOrderCampaignId(orderId, resolvedCampaign);
+      }
+
+      if (orderDetails.PromoCode) {
+        setPromoInput(orderDetails.PromoCode);
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to load order details."));
     } finally {
@@ -89,6 +127,109 @@ const OrderDetailsPage = () => {
   useEffect(() => {
     void loadOrder();
   }, [orderId]);
+
+  const handleApplyPromo = useCallback(
+    async (codeOverride?: string) => {
+      const code = (codeOverride ?? promoInput).trim();
+      if (!code) {
+        toast.error("Please enter a valid promo code.");
+        return;
+      }
+      if (!orderId || Number.isNaN(orderId)) {
+        toast.error("Invalid order ID.");
+        return;
+      }
+
+      setApplyingPromo(true);
+      try {
+        const result = await applyPromoCodeToOrder(code, orderId);
+        if (!result.success) {
+          toast.error(
+            result.message ||
+              "This promo code is invalid or cannot be applied to your order.",
+          );
+          return;
+        }
+
+        clearPendingPromoCode();
+        setPromoInput(code);
+        if (result.campaignId) {
+          setCampaignId(result.campaignId);
+        }
+        toast.success(result.message);
+        await loadOrder();
+      } catch (err) {
+        clearPendingPromoCode();
+        toast.error(
+          getPromoErrorMessage(
+            err,
+            "This promo code is invalid or cannot be applied to your order.",
+          ),
+        );
+      } finally {
+        setApplyingPromo(false);
+      }
+    },
+    [orderId, promoInput],
+  );
+
+  const handleCancelPromo = useCallback(async () => {
+    if (!orderId || Number.isNaN(orderId)) {
+      toast.error("Invalid order ID.");
+      return;
+    }
+
+    const resolved =
+      campaignId ||
+      resolveCampaignId(order, paymentData) ||
+      getOrderCampaignId(orderId);
+
+    if (!resolved) {
+      toast.error(
+        "Unable to remove promo. Campaign details were not found. Please refresh and try again.",
+      );
+      return;
+    }
+
+    setCancellingPromo(true);
+    try {
+      const result = await cancelPromoCodeFromOrder(orderId, resolved);
+      setCampaignId(null);
+      setPromoInput("");
+      toast.success(result.message);
+      await loadOrder();
+    } catch (err) {
+      toast.error(
+        getPromoErrorMessage(
+          err,
+          "We couldn't remove this promo code. Please try again.",
+        ),
+      );
+    } finally {
+      setCancellingPromo(false);
+    }
+  }, [orderId, campaignId, order, paymentData]);
+
+  // Auto-apply promo saved from cart/checkout once order page loads.
+  useEffect(() => {
+    if (!orderId || Number.isNaN(orderId) || loading || !order) return;
+    if (promoAutoApplied.current) return;
+    if (order.PromoCode) {
+      setPromoInput(order.PromoCode);
+      promoAutoApplied.current = true;
+      return;
+    }
+
+    const pending = getPendingPromoCode();
+    if (!pending) {
+      promoAutoApplied.current = true;
+      return;
+    }
+
+    promoAutoApplied.current = true;
+    setPromoInput(pending);
+    void handleApplyPromo(pending);
+  }, [orderId, loading, order, handleApplyPromo]);
 
   const openCancelModal = () => {
     if (!order || isCancelled || cancelling) return;
@@ -523,19 +664,27 @@ const OrderDetailsPage = () => {
                     <div className="order-total-row">
                       <span className="text-secondary">Delivery Charges</span>
                       <span>
-                        {displayOrder.DeliveryCharges > 0
-                          ? formatRsPrice(displayOrder.DeliveryCharges)
-                          : "Free"}
+                        {formatRsPrice(displayOrder.DeliveryCharges ?? 0)}
                       </span>
                     </div>
-                    {displayOrder.NetDiscount > 0 && (
-                      <div className="order-total-row">
-                        <span className="text-secondary">Discount</span>
-                        <span className="text-green">
-                          -{formatRsPrice(displayOrder.NetDiscount)}
-                        </span>
-                      </div>
-                    )}
+                    <div className="order-total-row">
+                      <span className="text-secondary">POS Charges</span>
+                      <span>
+                        {formatRsPrice(displayOrder.POSCharges ?? 0)}
+                      </span>
+                    </div>
+                    <div className="order-total-row">
+                      <span className="text-secondary">Discount</span>
+                      <span
+                        className={
+                          displayOrder.NetDiscount > 0 ? "text-green" : undefined
+                        }
+                      >
+                        {displayOrder.NetDiscount > 0
+                          ? `-${formatRsPrice(displayOrder.NetDiscount)}`
+                          : formatRsPrice(0)}
+                      </span>
+                    </div>
                     {displayOrder.PromoCode && (
                       <div className="order-total-row">
                         <span className="text-secondary">Promo Code</span>
@@ -546,6 +695,58 @@ const OrderDetailsPage = () => {
                       <span>Net Amount</span>
                       <span>{formatRsPrice(displayOrder.NetAmount)}</span>
                     </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label
+                      htmlFor="order-promo-code"
+                      className="caption1 text-secondary"
+                    >
+                      Promo Code
+                    </label>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        id="order-promo-code"
+                        type="text"
+                        className="border-line px-4 py-2 w-full rounded-lg border"
+                        placeholder="Enter promo code"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        disabled={
+                          applyingPromo ||
+                          cancellingPromo ||
+                          Boolean(
+                            displayOrder.PromoCode || displayOrder.NetDiscount > 0,
+                          )
+                        }
+                      />
+                      {displayOrder.PromoCode ||
+                      displayOrder.NetDiscount > 0 ||
+                      campaignId ? (
+                        <button
+                          type="button"
+                          className="button-main bg-red px-4 whitespace-nowrap"
+                          onClick={() => void handleCancelPromo()}
+                          disabled={applyingPromo || cancellingPromo}
+                        >
+                          {cancellingPromo ? "Removing..." : "Remove"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button-main bg-black px-4 whitespace-nowrap"
+                          onClick={() => void handleApplyPromo()}
+                          disabled={applyingPromo || cancellingPromo}
+                        >
+                          {applyingPromo ? "Applying..." : "Apply"}
+                        </button>
+                      )}
+                    </div>
+                    <p className="caption2 text-secondary mt-2">
+                      {displayOrder.PromoCode || displayOrder.NetDiscount > 0
+                        ? "Promo applied. Remove it to try a different code."
+                        : "Enter a valid promo code. Invalid codes will be rejected."}
+                    </p>
                   </div>
 
                   <p className="caption2 text-secondary text-center mt-3">

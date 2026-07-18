@@ -1,13 +1,10 @@
 import React, { Suspense } from "react";
 import ProductDefault from "./ProductDefault";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 
 export default function ProductDefaultPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="container py-20 text-center">Loading product...</div>
-      }
-    >
+    <Suspense fallback={<ProductSkeleton variant="detail" />}>
       <ProductDefault />
     </Suspense>
   );

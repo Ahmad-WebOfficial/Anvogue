@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Product from "@/components/Product/Product";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { ProductType } from "@/type/ProductType";
 import { fetchProductsByCategoryId } from "@/lib/category-products";
 import { getApiErrorMessage } from "@/lib/api";
@@ -46,16 +47,7 @@ const CategoryProducts: React.FC<CategoryProductsProps> = ({
   }, [categoryId]);
 
   if (loading) {
-    return (
-      <div className="grid lg:grid-cols-4 md:grid-cols-3 grid-cols-2 gap-5 md:gap-[30px]">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="rounded-2xl bg-surface animate-pulse aspect-[3/4]"
-          />
-        ))}
-      </div>
-    );
+    return <ProductSkeleton variant="grid" count={8} />;
   }
 
   if (error) {

@@ -14,6 +14,7 @@ import {
   getProductImage,
   mapFeaturedProductToProductType,
 } from "@/lib/featured-products";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 
 const ModalNewsletter = () => {
   const [open, setOpen] = useState(false);
@@ -137,11 +138,7 @@ const ModalNewsletter = () => {
 
               <div className="newsletter-modal-list">
                 {loading ? (
-                  <div className="newsletter-modal-loading">
-                    {[1, 2, 3].map((item) => (
-                      <div key={item} className="newsletter-modal-skeleton" />
-                    ))}
-                  </div>
+                  <ProductSkeleton variant="list-item" count={3} />
                 ) : (
                   products.slice(0, 5).map((product) => (
                     <article

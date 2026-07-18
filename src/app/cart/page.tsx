@@ -11,6 +11,7 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import { formatRsPrice } from "@/lib/cart";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { fetchProductDetails, RelatedProduct } from "@/lib/product-details";
 import {
   getProductDetailUrl,
@@ -25,6 +26,7 @@ const Cart = () => {
   const {
     cartState,
     cartLoading,
+    updatingCartId,
     updateCart,
     removeFromCart,
     fetchCart,
@@ -59,7 +61,7 @@ const Cart = () => {
 
     const item = cartState.cartArray.find((i) => i.cartId === cartId);
     if (item) {
-      updateCart(
+      void updateCart(
         cartId,
         newQuantity,
         item.selectedSize,
@@ -125,9 +127,21 @@ const Cart = () => {
           </div>
 
           {cartLoading ? (
-            <div className="cart-loading">
-              <div className="cart-loading-spinner" />
-              <p className="text-secondary">Loading your cart...</p>
+            <div className="cart-layout">
+              <div className="rounded-2xl border border-line bg-white p-4 sm:p-6">
+                <ProductSkeleton variant="cart-list" count={3} />
+              </div>
+              <aside className="mt-6 space-y-4 lg:mt-0">
+                <div className="rounded-2xl border border-line bg-white p-5">
+                  <div className="mb-4 h-5 w-32 animate-pulse rounded bg-[#ebebeb]" />
+                  <div className="space-y-3">
+                    <div className="h-4 w-full animate-pulse rounded bg-[#ebebeb]" />
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-[#ebebeb]" />
+                    <div className="h-4 w-1/2 animate-pulse rounded bg-[#ebebeb]" />
+                    <div className="mt-4 h-12 w-full animate-pulse rounded-xl bg-[#ebebeb]" />
+                  </div>
+                </div>
+              </aside>
             </div>
           ) : (
             <div className="cart-layout">
@@ -244,7 +258,10 @@ const Cart = () => {
                                   type="button"
                                   aria-label="Decrease quantity"
                                   className="cart-qty-btn"
-                                  disabled={product.quantity <= 1}
+                                  disabled={
+                                    product.quantity <= 1 ||
+                                    updatingCartId === product.cartId
+                                  }
                                   onClick={() =>
                                     handleQuantityChange(
                                       product.cartId,
@@ -259,6 +276,7 @@ const Cart = () => {
                                   type="button"
                                   aria-label="Increase quantity"
                                   className="cart-qty-btn"
+                                  disabled={updatingCartId === product.cartId}
                                   onClick={() =>
                                     handleQuantityChange(
                                       product.cartId,
@@ -292,7 +310,10 @@ const Cart = () => {
                                   type="button"
                                   aria-label="Decrease quantity"
                                   className="cart-qty-btn"
-                                  disabled={product.quantity <= 1}
+                                  disabled={
+                                    product.quantity <= 1 ||
+                                    updatingCartId === product.cartId
+                                  }
                                   onClick={() =>
                                     handleQuantityChange(
                                       product.cartId,
@@ -307,6 +328,7 @@ const Cart = () => {
                                   type="button"
                                   aria-label="Increase quantity"
                                   className="cart-qty-btn"
+                                  disabled={updatingCartId === product.cartId}
                                   onClick={() =>
                                     handleQuantityChange(
                                       product.cartId,
@@ -410,19 +432,21 @@ const Cart = () => {
                     <span>{formatRsPrice(subTotal)}</span>
                   </div>
 
-                  {totalDiscount > 0 && (
-                    <div className="cart-total-row">
-                      <span className="text-secondary">Discount</span>
-                      <span className="text-green">-{formatRsPrice(totalDiscount)}</span>
-                    </div>
-                  )}
+                  <div className="cart-total-row">
+                    <span className="text-secondary">Discount</span>
+                    <span className={totalDiscount > 0 ? "text-green" : undefined}>
+                      {totalDiscount > 0
+                        ? `-${formatRsPrice(totalDiscount)}`
+                        : formatRsPrice(0)}
+                    </span>
+                  </div>
 
                   <div className="cart-total-row">
-                    <span className="text-secondary">Shipping</span>
+                    <span className="text-secondary">Delivery Charges</span>
                     <span>
-                      {qualifiesForFreeShipping || shipCart === 0
-                        ? "Free"
-                        : formatRsPrice(shipCart)}
+                      {formatRsPrice(
+                        qualifiesForFreeShipping || shipCart === 0 ? 0 : shipCart,
+                      )}
                     </span>
                   </div>
 

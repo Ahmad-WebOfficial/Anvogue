@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import api from "@/lib/api";
+import api, { getApiErrorMessage } from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import TopNavOne from "@/components/Header/TopNav/TopNavOne";
@@ -10,6 +10,8 @@ import MenuOne from "@/components/Header/Menu/MenuOne";
 import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+
+const RESET_TYPE_EMAIL = 1;
 
 const RESET_STEPS = [
   {
@@ -31,23 +33,33 @@ const RESET_STEPS = [
 
 const ForgotPassword = () => {
   const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [userName, setUserName] = useState("");
+  const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedUserName = userName.trim();
+    if (!trimmedUserName) {
+      toast.error("Please enter your username.");
+      return;
+    }
+
     setLoading(true);
     try {
       await api.post("/api/v2/Account/SendForgotPasswordEmail", {
-        Username: phone,
+        UserName: trimmedUserName,
       });
       setStep(2);
-      toast.success("OTP sent successfully!");
-    } catch {
-      toast.error("Failed to send code.");
+      toast.success("Verification code sent successfully!");
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Failed to send verification code."),
+      );
     } finally {
       setLoading(false);
     }
@@ -55,17 +67,45 @@ const ForgotPassword = () => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedUserName = userName.trim();
+    const trimmedCode = code.trim();
+    const password = newPassword.trim();
+    const confirm = confirmPassword.trim();
+
+    if (!trimmedUserName || !trimmedCode || !password || !confirm) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    if (password !== confirm) {
+      toast.error("Password and confirm password do not match.");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+
     setLoading(true);
     try {
       await api.post("/api/v2/Account/ResetPassword", {
-        Username: phone,
-        Password: newPassword,
-        Code: otp,
+        UserName: trimmedUserName,
+        Password: password,
+        ConfirmPassword: confirm,
+        Code: trimmedCode,
+        ResetType: RESET_TYPE_EMAIL,
       });
       toast.success("Password reset successful!");
       router.push("/login");
-    } catch {
-      toast.error("Reset failed. Please check your OTP or password.");
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "Reset failed. Please check your code or password.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -122,8 +162,9 @@ const ForgotPassword = () => {
                           id="username"
                           type="text"
                           placeholder="Enter your username"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
+                          value={userName}
+                          onChange={(e) => setUserName(e.target.value)}
+                          autoComplete="username"
                           required
                         />
                       </div>
@@ -155,9 +196,9 @@ const ForgotPassword = () => {
                           className="auth-input"
                           id="otp"
                           type="text"
-                          placeholder="Enter OTP from email"
-                          value={otp}
-                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="Enter code from email"
+                          value={code}
+                          onChange={(e) => setCode(e.target.value)}
                           required
                         />
                       </div>
@@ -176,6 +217,26 @@ const ForgotPassword = () => {
                           placeholder="Min. 6 characters"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
+                          autoComplete="new-password"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label htmlFor="confirmPassword" className="auth-label">
+                        Confirm Password
+                      </label>
+                      <div className="auth-input-wrap">
+                        <Icon.LockKey size={18} className="auth-input-icon" />
+                        <input
+                          className="auth-input"
+                          id="confirmPassword"
+                          type="password"
+                          placeholder="Confirm new password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          autoComplete="new-password"
                           required
                         />
                       </div>

@@ -112,6 +112,8 @@ export interface OrderDetailData {
   BranchName: string;
   OrderAmount: number;
   DeliveryCharges: number;
+  /** POS / service fee from backend (e.g. Rs. 1). Included in NetAmount. */
+  POSCharges?: number;
   TotalItems: number;
   ProductDetailIds: number[];
   NetAmount: number;
@@ -133,6 +135,8 @@ export interface OrderDetailData {
   CustomerFullName: string;
   PromoCode: string | null;
   NetDiscount: number;
+  CampaignId?: number | null;
+  AppliedCampaignId?: number | null;
 }
 
 export interface PaymentGateway {
@@ -174,19 +178,62 @@ interface ApiResponse<T> {
 
 export type CreateOrderResponse = ApiResponse<unknown>;
 
+function parsePositiveId(value: unknown): number | null {
+  if (typeof value === "number" && !Number.isNaN(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
+  }
+  return null;
+}
+
 export function extractOrderId(data: unknown): number | null {
-  if (!data || typeof data !== "object") return null;
+  if (data == null) return null;
+
+  const direct = parsePositiveId(data);
+  if (direct) return direct;
+
+  if (typeof data !== "object") return null;
 
   const record = data as Record<string, unknown>;
-  const orderId = record.OrderId;
+  const fromFields = parsePositiveId(
+    record.OrderId ?? record.orderId ?? record.Id ?? record.id,
+  );
+  if (fromFields) return fromFields;
 
-  if (typeof orderId === "number" && !Number.isNaN(orderId)) return orderId;
-  if (typeof orderId === "string" && orderId.trim()) {
-    const parsed = Number(orderId);
-    return Number.isNaN(parsed) ? null : parsed;
+  for (const key of ["Data", "data", "OrderDto", "orderDto", "Order", "order"]) {
+    if (record[key] != null) {
+      const nested = extractOrderId(record[key]);
+      if (nested) return nested;
+    }
   }
 
   return null;
+}
+
+/** API rejects null/empty for several string fields even when UI treats them as optional. */
+function normalizeCreateOrderPayload(
+  payload: CreateOrderPayload,
+): CreateOrderPayload {
+  const sessionId = payload.SessionId?.trim() || getCartSessionId();
+
+  return {
+    ...payload,
+    SessionId: sessionId,
+    ISOCode: payload.ISOCode?.trim() || "PK",
+    PhoneCode: payload.PhoneCode?.trim() || "+92",
+    SpecialInstructions: payload.SpecialInstructions?.trim() || "N/A",
+    DeliveryInstructions: payload.DeliveryInstructions?.trim() || "N/A",
+    ShippingDetail: {
+      ...payload.ShippingDetail,
+      ISOCode: payload.ShippingDetail.ISOCode?.trim() || "PK",
+      Longitude: payload.ShippingDetail.Longitude?.trim() || "0",
+      Latitude: payload.ShippingDetail.Latitude?.trim() || "0",
+      Address: payload.ShippingDetail.Address?.trim() || "N/A",
+    },
+  };
 }
 
 function extractLoginTokenModel(data: unknown): Record<string, unknown> | null {
@@ -243,8 +290,8 @@ export function buildCreateOrderPayload(
       City: values.cityName || "",
       AddressBookId: 0,
       AreaId: Number(values.areaId) || 0,
-      Longitude: values.longitude.trim(),
-      Latitude: values.latitude.trim(),
+      Longitude: values.longitude.trim() || "0",
+      Latitude: values.latitude.trim() || "0",
     },
     BillingDetail: {
       EmailAddress: values.billingSameAsShipping
@@ -264,8 +311,8 @@ export function buildCreateOrderPayload(
     PhoneCode: values.phoneCode || "+92",
     IsAddNewAddress: values.isAddNewAddress,
     DeliveryOption: values.deliveryOption || 1,
-    SpecialInstructions: values.specialInstructions.trim(),
-    DeliveryInstructions: values.deliveryInstructions.trim(),
+    SpecialInstructions: values.specialInstructions.trim() || "N/A",
+    DeliveryInstructions: values.deliveryInstructions.trim() || "N/A",
     OrderSource: 1,
     CityId: Number(values.cityId) || 0,
     CountryId: Number(values.countryId) || 0,
@@ -277,9 +324,35 @@ export async function createOrder(
 ): Promise<CreateOrderResponse> {
   const response = await api.post<CreateOrderResponse>(
     "/api/v1/Order/create",
-    payload,
+    normalizeCreateOrderPayload(payload),
   );
-  return response.data;
+
+  const body = response.data as CreateOrderResponse & {
+    StatusCode?: number;
+    ExceptionType?: string;
+  };
+
+  if (!body || typeof body !== "object") {
+    throw new Error("Failed to create order. Empty response from server.");
+  }
+
+  const statusCode = Number(body.HttpStatusCode ?? body.StatusCode ?? 200);
+  const type = String(body.Type || "").toLowerCase();
+  const isErrorType =
+    type === "error" ||
+    type === "exception" ||
+    Boolean(body.ExceptionType) ||
+    statusCode >= 400;
+
+  if (isErrorType) {
+    throw new Error(body.Message || "Failed to create order.");
+  }
+
+  if (body.Data == null) {
+    throw new Error(body.Message || "Failed to create order. No order data returned.");
+  }
+
+  return body;
 }
 
 export async function fetchCustomerOrderDetails(

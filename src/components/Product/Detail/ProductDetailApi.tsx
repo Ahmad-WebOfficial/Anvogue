@@ -10,6 +10,7 @@ import "swiper/css/bundle";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import type { Swiper as SwiperType } from "swiper";
 import Rate from "@/components/Other/Rate";
+import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { useCart } from "@/context/CartContext";
 import { useModalCartContext } from "@/context/ModalCartContext";
 import { useWishlist } from "@/context/WishlistContext";
@@ -24,6 +25,10 @@ import {
   getComparePrice,
   getDetailSalePrice,
   formatRsPrice,
+  formatDiscountBadge,
+  getActiveDiscount,
+  getAvailableStockCount,
+  canAddProductToCart,
   parseVariantGroupOptions,
   findVariantByGroupSelection,
   saveProductRating,
@@ -37,6 +42,7 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
+import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
 import { toast } from "react-hot-toast";
 
 interface Props {
@@ -139,13 +145,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   }, [productId, productDetailId]);
 
   if (loading) {
-    return (
-      <div className="product-detail default md:py-20 py-10">
-        <div className="container text-center text-secondary">
-          Loading product details...
-        </div>
-      </div>
-    );
+    return <ProductSkeleton variant="detail" />;
   }
 
   if (error || !productDetail) {
@@ -178,6 +178,30 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     !selectedVariant && productDetail.MinPrice !== productDetail.MaxPrice;
   const inStock = selectedVariant?.InStock ?? productDetail.InStock ?? false;
   const productIdStr = String(productDetail.ProductId);
+  const activeDiscount = getActiveDiscount(productDetail, selectedVariant);
+  const discountLabel = formatDiscountBadge(
+    activeDiscount.discount,
+    activeDiscount.discountType,
+  );
+  const availableStock = getAvailableStockCount(productDetail, selectedVariant);
+  const cartGate = canAddProductToCart(productDetail, {
+    selectedVariant,
+    inStock,
+  });
+  const maxQuantity =
+    availableStock !== null ? Math.max(1, availableStock) : 999;
+  const detailBadges = buildProductBadges({
+    isPromotional:
+      productDetail.IsPromotional ||
+      Boolean(selectedVariant?.IsPromotional),
+    discountLabel,
+    inventoryManagement:
+      selectedVariant?.InventoryManagement ?? productDetail.InventoryManagement,
+    availableStock,
+    comingSoon: productDetail.ComingSoon,
+    status: productDetail.Status,
+    inStock,
+  });
 
   const handleGroupSelection = (groupName: string, option: string) => {
     const nextSelections = { ...groupSelections, [groupName]: option };
@@ -210,11 +234,14 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   };
 
   const handleQuantityChange = (delta: number) => {
-    setQuantity((prev) => Math.max(1, prev + delta));
+    setQuantity((prev) => Math.min(maxQuantity, Math.max(1, prev + delta)));
   };
 
   const handleAddToCart = async () => {
-    if (!inStock) return;
+    if (!cartGate.allowed) {
+      toast.error(cartGate.reason || "Unable to add this product to cart.");
+      return;
+    }
 
     const variantsList =
       productDetail.ProductVariantDetail?.productVariantCombinationList ?? [];
@@ -227,7 +254,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
       productDetail,
       selectedVariant ?? undefined,
     );
-    cartProduct.quantityPurchase = quantity;
+    cartProduct.quantityPurchase = Math.min(quantity, maxQuantity);
 
     try {
       await addToCart(cartProduct);
@@ -291,6 +318,14 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     event.preventDefault();
     if (!productDetail) return;
 
+    if (!productDetail.EnableSubmitRatingReviews) {
+      const message =
+        "Reviews are not available for this product right now.";
+      setRatingError(message);
+      toast.error(message);
+      return;
+    }
+
     if (ratingValue < 1) {
       setRatingError("Please select a star rating.");
       return;
@@ -334,6 +369,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   };
 
   const displayRating = hoverRating || ratingValue;
+  const canSubmitRating = Boolean(productDetail?.EnableSubmitRatingReviews);
 
   return (
     <div className="product-detail default">
@@ -341,7 +377,8 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
         <div className="container">
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
             {/* Gallery */}
-            <div className="w-full lg:w-1/2">
+            <div className="w-full lg:w-1/2 relative">
+              <ProductBadges badges={detailBadges} className="z-[3]" />
               <Swiper
                 onSwiper={setMainSwiper}
                 onSlideChange={(swiper) => setActiveImageIndex(swiper.activeIndex)}
@@ -501,10 +538,10 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                   <div className="text-title mb-4">Select Variant</div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {variants.map((variant) => {
-                      const variantImage = getVariantDisplayImage(
-                        variant,
-                        productDetail,
-                      );
+                      // Use exact ImageName from API response
+                      const variantImage =
+                        variant.ImageName?.trim() ||
+                        getVariantDisplayImage(variant, productDetail);
                       const isSelected =
                         selectedVariant?.ProductDetailId ===
                         variant.ProductDetailId;
@@ -551,7 +588,17 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
 
               {/* Quantity */}
               <div className="mt-8">
-                <div className="text-title mb-3">Quantity</div>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="text-title">Quantity</div>
+                  {availableStock !== null && (
+                    <span className="caption1 font-semibold text-black">
+                      Available:{" "}
+                      <span className="inline-flex min-w-[28px] items-center justify-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2 py-0.5 text-[#1d4ed8]">
+                        {availableStock}
+                      </span>
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
                   <div className="quantity-block p-3 flex items-center justify-between rounded-xl border border-line w-full sm:w-[160px] flex-shrink-0 bg-white">
                     <button
@@ -570,7 +617,8 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                       type="button"
                       aria-label="Increase quantity"
                       onClick={() => handleQuantityChange(1)}
-                      className="p-1 cursor-pointer hover:text-black"
+                      disabled={quantity >= maxQuantity}
+                      className={`p-1 ${quantity >= maxQuantity ? "opacity-30 cursor-not-allowed" : "cursor-pointer hover:text-black"}`}
                     >
                       <Icon.Plus size={20} />
                     </button>
@@ -580,12 +628,16 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                     <button
                       type="button"
                       onClick={() => void handleAddToCart()}
-                      disabled={!inStock}
-                      className={`button-main flex-1 bg-black text-center ${inStock ? "hover:opacity-90" : "opacity-50 cursor-not-allowed"}`}
+                      disabled={!cartGate.allowed}
+                      className={`button-main flex-1 bg-black text-center ${cartGate.allowed ? "hover:opacity-90" : "opacity-50 cursor-not-allowed"}`}
                     >
-                      {inStock
-                        ? `Add To Cart — ${formatRsPrice(totalPrice)}`
-                        : "Out of Stock"}
+                      {productDetail.ComingSoon
+                        ? "Coming Soon"
+                        : productDetail.Status === 0
+                          ? "Unavailable"
+                          : cartGate.allowed
+                            ? `Add To Cart — ${formatRsPrice(totalPrice)}`
+                            : "Out of Stock"}
                     </button>
                     <button
                       type="button"
@@ -667,9 +719,15 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                     <div id="form-review" className="form-review">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                         <div>
-                          <div className="heading6 text-black">Rate this product</div>
+                          <div className="heading6 text-black">
+                            {canSubmitRating
+                              ? "Rate this product"
+                              : "Customer ratings"}
+                          </div>
                           <p className="caption1 text-secondary mt-1">
-                            Share your experience with {productDetail.Name}
+                            {canSubmitRating
+                              ? `Share your experience with ${productDetail.Name}`
+                              : "Reviews cannot be submitted for this product at the moment."}
                           </p>
                         </div>
                         {productDetail.AverageRating > 0 && (
@@ -682,80 +740,96 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                         )}
                       </div>
 
-                      <form
-                        className="grid grid-cols-1 gap-5"
-                        onSubmit={(event) => void handleSubmitRating(event)}
-                      >
-                        <div>
-                          <div className="text-button mb-3">Your Rating</div>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {Array.from({ length: 5 }, (_, index) => {
-                              const starValue = index + 1;
-                              const isActive = starValue <= displayRating;
+                      {canSubmitRating ? (
+                        <form
+                          className="grid grid-cols-1 gap-5"
+                          onSubmit={(event) => void handleSubmitRating(event)}
+                        >
+                          <div>
+                            <div className="text-button mb-3">Your Rating</div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {Array.from({ length: 5 }, (_, index) => {
+                                const starValue = index + 1;
+                                const isActive = starValue <= displayRating;
 
-                              return (
-                                <button
-                                  key={starValue}
-                                  type="button"
-                                  aria-label={`Rate ${starValue} star${starValue > 1 ? "s" : ""}`}
-                                  className="p-1 transition-transform hover:scale-110"
-                                  onClick={() => setRatingValue(starValue)}
-                                  onMouseEnter={() => setHoverRating(starValue)}
-                                  onMouseLeave={() => setHoverRating(0)}
-                                  disabled={submittingRating}
-                                >
-                                  <Icon.Star
-                                    size={28}
-                                    weight="fill"
-                                    color={isActive ? "#ECB018" : "#9FA09C"}
-                                  />
-                                </button>
-                              );
-                            })}
-                            <span className="caption1 text-secondary ml-2">
-                              {ratingValue > 0
-                                ? `${ratingValue} / 5`
-                                : "Select stars"}
-                            </span>
+                                return (
+                                  <button
+                                    key={starValue}
+                                    type="button"
+                                    aria-label={`Rate ${starValue} star${starValue > 1 ? "s" : ""}`}
+                                    className="p-1 transition-transform hover:scale-110"
+                                    onClick={() => setRatingValue(starValue)}
+                                    onMouseEnter={() => setHoverRating(starValue)}
+                                    onMouseLeave={() => setHoverRating(0)}
+                                    disabled={submittingRating}
+                                  >
+                                    <Icon.Star
+                                      size={28}
+                                      weight="fill"
+                                      color={isActive ? "#ECB018" : "#9FA09C"}
+                                    />
+                                  </button>
+                                );
+                              })}
+                              <span className="caption1 text-secondary ml-2">
+                                {ratingValue > 0
+                                  ? `${ratingValue} / 5`
+                                  : "Select stars"}
+                              </span>
+                            </div>
                           </div>
+
+                          <div>
+                            <label
+                              htmlFor="product-review"
+                              className="text-button mb-3 block"
+                            >
+                              Your Review
+                            </label>
+                            <textarea
+                              id="product-review"
+                              className="border border-line px-4 py-3 w-full rounded-xl min-h-[140px] resize-y"
+                              placeholder="Write your review here..."
+                              value={reviewText}
+                              onChange={(event) =>
+                                setReviewText(event.target.value)
+                              }
+                              disabled={submittingRating}
+                              required
+                            />
+                          </div>
+
+                          {ratingError && (
+                            <p className="caption1 text-red">{ratingError}</p>
+                          )}
+
+                          {ratingSuccess && (
+                            <p className="caption1 text-green">
+                              {ratingSuccess}
+                            </p>
+                          )}
+
+                          <div>
+                            <button
+                              type="submit"
+                              disabled={submittingRating}
+                              className="button-main bg-white text-black border border-black disabled:opacity-60"
+                            >
+                              {submittingRating
+                                ? "Submitting..."
+                                : "Submit Review"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="border border-line rounded-xl px-5 py-4 bg-surface">
+                          <p className="caption1 text-secondary">
+                            Rating and review submission is disabled for this
+                            product. You can still view the average rating if
+                            available.
+                          </p>
                         </div>
-
-                        <div>
-                          <label
-                            htmlFor="product-review"
-                            className="text-button mb-3 block"
-                          >
-                            Your Review
-                          </label>
-                          <textarea
-                            id="product-review"
-                            className="border border-line px-4 py-3 w-full rounded-xl min-h-[140px] resize-y"
-                            placeholder="Write your review here..."
-                            value={reviewText}
-                            onChange={(event) => setReviewText(event.target.value)}
-                            disabled={submittingRating}
-                            required
-                          />
-                        </div>
-
-                        {ratingError && (
-                          <p className="caption1 text-red">{ratingError}</p>
-                        )}
-
-                        {ratingSuccess && (
-                          <p className="caption1 text-green">{ratingSuccess}</p>
-                        )}
-
-                        <div>
-                          <button
-                            type="submit"
-                            disabled={submittingRating}
-                            className="button-main bg-white text-black border border-black disabled:opacity-60"
-                          >
-                            {submittingRating ? "Submitting..." : "Submit Review"}
-                          </button>
-                        </div>
-                      </form>
+                      )}
                     </div>
                   )}
                 </div>

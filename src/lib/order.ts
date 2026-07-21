@@ -1,6 +1,7 @@
 import api from "@/lib/api";
-import { getCartSessionId } from "@/lib/cart";
+import { clearCartShippingPref, getCartSessionId } from "@/lib/cart";
 import { setAuthSessionFromResponse } from "@/lib/auth";
+import { clearPendingPromoCode } from "@/lib/promo";
 
 export interface ShippingDetailPayload {
   FullName: string;
@@ -43,8 +44,7 @@ export interface CreateOrderPayload {
 }
 
 export interface CreateOrderFormValues {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
   phone: string;
   phoneCode: string;
@@ -63,8 +63,7 @@ export interface CreateOrderFormValues {
   isoCode: string;
   deliveryDate: string;
   billingSameAsShipping: boolean;
-  billingFirstName: string;
-  billingLastName: string;
+  billingFullName: string;
   billingEmail: string;
   billingPhone: string;
   isAddNewAddress: boolean;
@@ -269,10 +268,10 @@ export function applyGuestAuthFromOrderResponse(data: unknown): boolean {
 export function buildCreateOrderPayload(
   values: CreateOrderFormValues,
 ): CreateOrderPayload {
-  const fullName = `${values.firstName.trim()} ${values.lastName.trim()}`.trim();
+  const fullName = values.fullName.trim();
   const billingFullName = values.billingSameAsShipping
     ? fullName
-    : `${values.billingFirstName.trim()} ${values.billingLastName.trim()}`.trim();
+    : values.billingFullName.trim();
 
   return {
     IsGiftOrder: values.isGiftOrder,
@@ -614,6 +613,22 @@ export function clearPendingPaymentOrderId(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(PENDING_PAYMENT_ORDER_KEY);
   localStorage.removeItem(PENDING_PAYMENT_TRANSACTION_KEY);
+}
+
+/**
+ * Clears checkout/payment leftovers so browser-back does not keep stale
+ * pending payment / shipping / promo data after an order was created.
+ */
+export function clearOrderFlowStorage(options?: {
+  keepPendingPromo?: boolean;
+}): void {
+  if (typeof window === "undefined") return;
+  clearPendingPaymentOrderId();
+  clearCartShippingPref();
+  if (!options?.keepPendingPromo) {
+    clearPendingPromoCode();
+  }
+  sessionStorage.removeItem("clear_cart_after_order");
 }
 
 export function getDeliveryOptionLabel(option: number): string {

@@ -13,6 +13,7 @@ import { formatRsPrice } from "@/lib/cart";
 import { useRouter } from "next/navigation";
 import {
   cancelCustomerOrder,
+  clearOrderFlowStorage,
   fetchCustomerOrderDetails,
   fetchSelectPayment,
   formatOrderDate,
@@ -39,13 +40,16 @@ import {
   saveOrderCampaignId,
 } from "@/lib/promo";
 import toast from "react-hot-toast";
+import { useCart } from "@/context/CartContext";
+
+const ORDER_CART_CLEAR_KEY = "clear_cart_after_order";
 
 const OrderDetailsPage = () => {
   const params = useParams();
   const searchParams = useSearchParams();
   const orderId = Number(params.orderId);
-  const autopayTriggered = useRef(false);
   const promoAutoApplied = useRef(false);
+  const { clearCart } = useCart();
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -94,10 +98,7 @@ const OrderDetailsPage = () => {
       try {
         paymentOptions = await fetchSelectPayment(orderId);
         setPaymentData(paymentOptions);
-
-        if (paymentOptions.PaymentGateways.length > 0) {
-          setSelectedGateway(paymentOptions.PaymentGateways[0].PGId);
-        }
+        setSelectedGateway(null);
       } catch (paymentErr) {
         console.error("Failed to load payment options:", paymentErr);
         toast.error(
@@ -127,6 +128,13 @@ const OrderDetailsPage = () => {
   useEffect(() => {
     void loadOrder();
   }, [orderId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(ORDER_CART_CLEAR_KEY) !== "1") return;
+    sessionStorage.removeItem(ORDER_CART_CLEAR_KEY);
+    clearCart();
+  }, [clearCart]);
 
   const handleApplyPromo = useCallback(
     async (codeOverride?: string) => {
@@ -250,6 +258,7 @@ const OrderDetailsPage = () => {
       toast.success(message);
       setIsCancelled(true);
       setShowCancelModal(false);
+      clearOrderFlowStorage();
       await loadOrder();
       router.push("/");
     } catch (err) {
@@ -265,87 +274,70 @@ const OrderDetailsPage = () => {
 
   const handleSelectPayment = (gateway: PaymentGateway) => {
     setSelectedGateway(gateway.PGId);
-    toast.success(`${gateway.Name} selected as payment method.`);
   };
 
-  const processPayment = useCallback(
-    async (gatewayId?: number | null) => {
-      const currentOrder = paymentData?.OrderDto ?? order;
-      const gatewayList = paymentData?.PaymentGateways ?? [];
-      const resolvedGatewayId =
-        gatewayId ?? selectedGateway ?? gatewayList[0]?.PGId ?? null;
+  const processPayment = useCallback(async () => {
+    const currentOrder = paymentData?.OrderDto ?? order;
 
-      if (!currentOrder) {
-        toast.error("Order details are not available.");
-        return;
-      }
+    if (!currentOrder) {
+      toast.error("Order details are not available.");
+      return;
+    }
 
-      if (!resolvedGatewayId) {
-        toast.error("Please select a payment method first.");
-        return;
-      }
+    if (!selectedGateway) {
+      toast.error("Please select a payment method first.");
+      return;
+    }
 
-      if (!selectedGateway) {
-        setSelectedGateway(resolvedGatewayId);
-      }
+    setPaying(true);
+    try {
+      const paymentResult = await payInvoice({
+        OrderId: currentOrder.OrderId,
+        OrderAmount: currentOrder.NetAmount,
+        TenantPaymentGatewayId: selectedGateway,
+        PaymentGateway: selectedGateway,
+        ReturnUrl: getStripePaymentReturnUrl(),
+      });
 
-      setPaying(true);
-      try {
-        const paymentResult = await payInvoice({
-          OrderId: currentOrder.OrderId,
-          OrderAmount: currentOrder.NetAmount,
-          TenantPaymentGatewayId: resolvedGatewayId,
-          PaymentGateway: resolvedGatewayId,
-          ReturnUrl: getStripePaymentReturnUrl(),
-        });
-
-        const paymentUrl = getPaymentPortalUrl(paymentResult);
-        if (!paymentUrl) {
-          toast.error("Payment URL not received. Please try again.");
-          return;
-        }
-
-        savePendingPaymentOrderId(currentOrder.OrderId);
-        const transactionId = paymentResult.Transaction?.TransactionID?.trim();
-        if (transactionId) {
-          savePendingPaymentTransactionId(transactionId);
-        }
-        window.open(paymentUrl, "_blank", "noopener,noreferrer");
-        toast.success("Redirecting to payment gateway...");
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, "Failed to process payment."));
-      } finally {
+      const paymentUrl = getPaymentPortalUrl(paymentResult);
+      if (!paymentUrl) {
+        toast.error("Payment URL not received. Please try again.");
         setPaying(false);
+        return;
       }
-    },
-    [order, paymentData, selectedGateway],
-  );
+
+      savePendingPaymentOrderId(currentOrder.OrderId);
+      const transactionId = paymentResult.Transaction?.TransactionID?.trim();
+      if (transactionId) {
+        savePendingPaymentTransactionId(transactionId);
+      }
+
+      toast.success("Redirecting to payment gateway...");
+
+      // Same-tab navigation after async payinvoice — window.open is often blocked.
+      if (paymentResult.IsOpenNewTab) {
+        const popup = window.open(paymentUrl, "_blank", "noopener,noreferrer");
+        if (!popup) {
+          window.location.assign(paymentUrl);
+        } else {
+          setPaying(false);
+        }
+        return;
+      }
+
+      window.location.assign(paymentUrl);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to process payment."));
+      setPaying(false);
+    }
+  }, [order, paymentData, selectedGateway]);
 
   const handlePayNow = () => {
     void processPayment();
   };
 
-  useEffect(() => {
-    const shouldAutopay = searchParams.get("pay") === "1";
-    if (
-      !shouldAutopay ||
-      autopayTriggered.current ||
-      loading ||
-      paying ||
-      !(paymentData?.OrderDto ?? order)
-    ) {
-      return;
-    }
-
-    const gatewayList = paymentData?.PaymentGateways ?? [];
-    if (gatewayList.length === 0) return;
-
-    autopayTriggered.current = true;
-    void processPayment(gatewayList[0].PGId);
-  }, [loading, paying, order, paymentData, processPayment, searchParams]);
-
   const isFromCheckout = searchParams.get("pay") === "1";
-  const canPay = gateways.length > 0 && !isCancelled;
+  const canPay = gateways.length > 0 && selectedGateway !== null && !isCancelled;
 
   return (
     <>
@@ -620,32 +612,6 @@ const OrderDetailsPage = () => {
                     </div>
                   )}
 
-                  <div className="order-actions">
-                    <button
-                      type="button"
-                      onClick={handlePayNow}
-                      disabled={paying || !canPay}
-                      className="button-main bg-black"
-                    >
-                      <Icon.CreditCard size={18} />
-                      {paying ? "Processing Payment..." : "Pay Now"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openCancelModal}
-                      disabled={cancelling || isCancelled}
-                      className="order-action-btn is-danger"
-                    >
-                      {cancelling
-                        ? "Cancelling..."
-                        : isCancelled
-                          ? "Order Cancelled"
-                          : "Cancel Order"}
-                    </button>
-                    <Link href="/" className="order-action-btn">
-                      Continue Shopping
-                    </Link>
-                  </div>
                 </div>
 
                 <aside className="order-card order-summary-card">
@@ -767,17 +733,28 @@ const OrderDetailsPage = () => {
                       type="button"
                       onClick={handlePayNow}
                       disabled={paying || !canPay}
-                      className="button-main bg-black"
+                      className="button-main bg-black w-full"
                     >
                       {paying ? "Processing Payment..." : "Proceed to Payment"}
                     </button>
                   </div>
 
-                  {!selectedGateway && gateways.length > 0 && (
-                    <p className="caption2 text-secondary text-center mt-2">
-                      Select a payment method to continue
-                    </p>
-                  )}
+                 
+
+                  <div className="order-actions mt-4">
+                    <button
+                      type="button"
+                      onClick={openCancelModal}
+                      disabled={cancelling || isCancelled}
+                      className="order-action-btn is-danger"
+                    >
+                      {cancelling
+                        ? "Cancelling..."
+                        : isCancelled
+                          ? "Order Cancelled"
+                          : "Cancel Order"}
+                    </button>
+                  </div>
                 </aside>
               </div>
             </>

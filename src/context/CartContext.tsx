@@ -24,6 +24,7 @@ import {
   getCartItemVariantsLabel,
   removeCartItemById,
   updateCartItemQuantity,
+  clearCartSessionId,
 } from "@/lib/cart";
 import { RelatedProduct } from "@/lib/product-details";
 import { getApiErrorMessage } from "@/lib/api";
@@ -49,6 +50,7 @@ interface CartState {
 
 type CartAction =
   | { type: "SET_CART"; payload: CartSummary }
+  | { type: "CLEAR_CART" }
   | {
       type: "UPDATE_CART";
       payload: {
@@ -72,6 +74,7 @@ interface CartContextProps {
     selectedColor: string,
   ) => Promise<void>;
   fetchCart: () => Promise<void>;
+  clearCart: () => void;
 }
 
 const CartContext = createContext<CartContextProps | undefined>(undefined);
@@ -162,6 +165,8 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case "SET_CART":
       return mapSummaryToCartState(action.payload);
+    case "CLEAR_CART":
+      return { ...initialState };
     case "UPDATE_CART": {
       const cartArray = state.cartArray.map((item) => {
         if (
@@ -227,6 +232,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         setCartLoading(false);
       }
     }
+  }, []);
+
+  const clearCart = useCallback(() => {
+    // Invalidate any in-flight fetch so it cannot restore old items
+    fetchGenerationRef.current += 1;
+    clearCartSessionId();
+    dispatch({ type: "CLEAR_CART" });
+    setCartLoading(false);
   }, []);
 
   useEffect(() => {
@@ -327,6 +340,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         removeFromCart,
         updateCart,
         fetchCart,
+        clearCart,
       }}
     >
       {children}

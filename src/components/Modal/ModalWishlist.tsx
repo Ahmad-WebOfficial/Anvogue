@@ -87,7 +87,7 @@ const ModalWishlist = () => {
                       <div className="name text-button">{product.name}</div>
                       <div className="flex items-center gap-2 mt-2">
                         <div className="product-price text-title">
-                          ₨{getWishlistPrice(product)}
+                          Rs. {getWishlistPrice(product)}
                         </div>
                       </div>
                     </div>

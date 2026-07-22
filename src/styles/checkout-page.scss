@@ -601,4 +601,12 @@
     gap: 6px;
     border-radius: 12px !important;
     padding: 0 16px !important;
+    background: #000 !important;
+    color: #fff !important;
+    border-color: #000 !important;
+
+    &:hover {
+        background: #c4eb94 !important;
+        color: #fff !important;
+    }
 }

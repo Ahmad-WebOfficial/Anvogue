@@ -160,7 +160,7 @@ const Product: React.FC<ProductProps> = ({
   let percentSold = Math.floor((data.sold / data.quantity) * 100);
 
   const formatProductPrice = (amount: number) =>
-    `₨${amount.toLocaleString("en-PK")}`;
+    `Rs. ${amount.toLocaleString("en-PK")}`;
 
   return (
     <>

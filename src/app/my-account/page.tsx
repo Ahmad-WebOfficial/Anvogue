@@ -205,7 +205,7 @@ const formatOrderStatusLabel = (status?: string) => {
   if (normalized.includes("cancel")) return "Cancelled";
   if (normalized.includes("process")) return "In Progress";
   if (normalized.includes("pending") || normalized.includes("await")) {
-    return "In Progress";
+    return "Pending";
   }
   if (normalized.includes("complete")) return "Completed";
   if (normalized.includes("deliver")) return "Delivered";
@@ -213,11 +213,59 @@ const formatOrderStatusLabel = (status?: string) => {
   return raw || "—";
 };
 
+const ORDER_HISTORY_TABS = [
+  "all",
+  "pending",
+  "delivered",
+  "completed",
+  "canceled",
+] as const;
+
+type OrderHistoryTab = (typeof ORDER_HISTORY_TABS)[number];
+
+const getOrderStatusValue = (order: {
+  OrderStatus?: unknown;
+  OrderStatusDisplayName?: unknown;
+  StatusName?: unknown;
+  Status?: unknown;
+}) =>
+  order.OrderStatus ??
+  order.OrderStatusDisplayName ??
+  order.StatusName ??
+  order.Status ??
+  "";
+
+const matchesOrderHistoryTab = (status: unknown, tab: OrderHistoryTab) => {
+  if (tab === "all") return true;
+
+  const normalized = String(status || "").toLowerCase();
+  if (!normalized) return false;
+
+  if (tab === "pending") {
+    return (
+      normalized.includes("pending") ||
+      normalized.includes("await") ||
+      normalized.includes("process")
+    );
+  }
+  if (tab === "delivered") {
+    return normalized.includes("deliver");
+  }
+  if (tab === "completed") {
+    return normalized.includes("complete");
+  }
+  if (tab === "canceled") {
+    return normalized.includes("cancel");
+  }
+
+  return false;
+};
+
 const MyAccount = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string | undefined>("dashboard");
   const [activeAddress, setActiveAddress] = useState<string | null>("billing");
-  const [activeOrders, setActiveOrders] = useState<string | undefined>("all");
+  const [activeOrders, setActiveOrders] = useState<OrderHistoryTab>("all");
   const [openDetail, setOpenDetail] = useState(false);
   const [showAllOrdersModal, setShowAllOrdersModal] = useState(false);
   const [selectedOrderDetail, setSelectedOrderDetail] =
@@ -236,9 +284,6 @@ const MyAccount = () => {
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const reviewsPageSize = 10;
 
-  const [trackingInfo, setTrackingInfo] = useState<any>(null);
-  const [loadingTracking, setLoadingTracking] = useState(false);
-  const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingChangePassword, setLoadingChangePassword] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -265,25 +310,6 @@ const MyAccount = () => {
     }));
   };
 
-  const handleTrackOrder = async (orderId) => {
-    setLoadingTracking(true);
-    try {
-      const res = await api.get(
-        `/api/v1/OrderTracking/track-order?orderId=${orderId}`,
-      );
-      if (res.status === 200) {
-        setTrackingInfo(res.data.Data);
-
-        closeOrderDetailModal();
-
-        setShowTrackingModal(true);
-      }
-    } catch (error) {
-      toast.error("Tracking details nahi mil saki.");
-    } finally {
-      setLoadingTracking(false);
-    }
-  };
   const handleDeleteAccount = async () => {
     setLoadingProfile(true);
     try {
@@ -458,7 +484,7 @@ const MyAccount = () => {
     setActiveAddress((prevOrder) => (prevOrder === order ? null : order));
   };
 
-  const handleActiveOrders = (order: string) => {
+  const handleActiveOrders = (order: OrderHistoryTab) => {
     setActiveOrders(order);
   };
 
@@ -523,17 +549,17 @@ const MyAccount = () => {
 
   const totalOrders = orders.length;
   const cancelledOrders = orders.filter((o) =>
-    String(o.OrderStatus || "")
-      .toLowerCase()
-      .includes("cancel"),
+    matchesOrderHistoryTab(getOrderStatusValue(o), "canceled"),
   ).length;
-  const awaitingOrders = orders.filter((o) => {
-    const status = String(o.OrderStatus || "").toLowerCase();
-    return status.includes("pending") || status.includes("await");
-  }).length;
+  const awaitingOrders = orders.filter((o) =>
+    matchesOrderHistoryTab(getOrderStatusValue(o), "pending"),
+  ).length;
   const completedOrders = orders.filter((o) => {
-    const status = String(o.OrderStatus || "").toLowerCase();
-    return status.includes("complete") || status.includes("deliver");
+    const status = getOrderStatusValue(o);
+    return (
+      matchesOrderHistoryTab(status, "completed") ||
+      matchesOrderHistoryTab(status, "delivered")
+    );
   }).length;
   const dashboardOrders = orders.slice(0, DASHBOARD_ORDERS_LIMIT);
   const hasMoreOrders = orders.length > DASHBOARD_ORDERS_LIMIT;
@@ -733,9 +759,11 @@ const MyAccount = () => {
                               </td>
                               <td className="account-status-col">
                                 <span
-                                  className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
+                                  className={`account-status-tag ${getOrderStatusClass(getOrderStatusValue(order))}`}
                                 >
-                                  {formatOrderStatusLabel(order.OrderStatus)}
+                                  {formatOrderStatusLabel(
+                                    getOrderStatusValue(order),
+                                  )}
                                 </span>
                               </td>
                             </tr>
@@ -776,13 +804,7 @@ const MyAccount = () => {
 
                 <div className="w-full overflow-x-auto">
                   <div className="menu-tab grid grid-cols-5 max-lg:w-[500px] border-b border-line mt-3">
-                    {[
-                      "all",
-                      "pending",
-                      "delivery",
-                      "completed",
-                      "canceled",
-                    ].map((item) => (
+                    {ORDER_HISTORY_TABS.map((item) => (
                       <button
                         key={item}
                         className={`item relative px-3 py-2.5 text-secondary text-center duration-300 hover:text-black border-b-2 capitalize ${activeOrders === item ? "active border-black text-black" : "border-transparent"}`}
@@ -798,13 +820,12 @@ const MyAccount = () => {
 
                 <div className="list_order">
                   {orders
-                    .filter((order) => {
-                      if (activeOrders === "all") return true;
-                      return (
-                        order.OrderStatus.toLowerCase() ===
-                        activeOrders.toLowerCase()
-                      );
-                    })
+                    .filter((order) =>
+                      matchesOrderHistoryTab(
+                        getOrderStatusValue(order),
+                        activeOrders,
+                      ),
+                    )
                     .map((order) => (
                       <div
                         key={order.OrderId}
@@ -822,9 +843,9 @@ const MyAccount = () => {
                           <div className="flex items-center gap-2">
                             <strong className="text-title">Status:</strong>
                             <span
-                              className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
+                              className={`account-status-tag ${getOrderStatusClass(getOrderStatusValue(order))}`}
                             >
-                              {formatOrderStatusLabel(order.OrderStatus)}
+                              {formatOrderStatusLabel(getOrderStatusValue(order))}
                             </span>
                           </div>
                         </div>
@@ -850,17 +871,20 @@ const MyAccount = () => {
                             className="button-main bg-surface border border-line text-black disabled:opacity-50"
                             disabled={
                               cancellingOrderId === Number(order.OrderId) ||
-                              formatOrderStatusLabel(order.OrderStatus) ===
-                                "Cancelled" ||
-                              formatOrderStatusLabel(order.OrderStatus) ===
-                                "Completed" ||
-                              formatOrderStatusLabel(order.OrderStatus) ===
-                                "Delivered"
+                              formatOrderStatusLabel(
+                                getOrderStatusValue(order),
+                              ) === "Cancelled" ||
+                              formatOrderStatusLabel(
+                                getOrderStatusValue(order),
+                              ) === "Completed" ||
+                              formatOrderStatusLabel(
+                                getOrderStatusValue(order),
+                              ) === "Delivered"
                             }
                             onClick={() =>
                               void handleCancelHistoryOrder(
                                 Number(order.OrderId),
-                                order.OrderStatus,
+                                String(getOrderStatusValue(order)),
                               )
                             }
                           >
@@ -872,9 +896,16 @@ const MyAccount = () => {
                       </div>
                     ))}
 
-                  {orders.length === 0 && (
+                  {orders.filter((order) =>
+                    matchesOrderHistoryTab(
+                      getOrderStatusValue(order),
+                      activeOrders,
+                    ),
+                  ).length === 0 && (
                     <div className="py-10 text-center text-secondary">
-                      No orders history found.
+                      {orders.length === 0
+                        ? "No orders history found."
+                        : `No ${activeOrders} orders found.`}
                     </div>
                   )}
                 </div>
@@ -1268,9 +1299,9 @@ const MyAccount = () => {
                       </div>
                     </div>
                     <span
-                      className={`account-status-tag ${getOrderStatusClass(order.OrderStatus)}`}
+                      className={`account-status-tag ${getOrderStatusClass(getOrderStatusValue(order))}`}
                     >
-                      {formatOrderStatusLabel(order.OrderStatus)}
+                      {formatOrderStatusLabel(getOrderStatusValue(order))}
                     </span>
                   </div>
                 ))
@@ -1524,108 +1555,12 @@ const MyAccount = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="account-order-detail-main">
-                    {trackingInfo && (
-                      <div
-                        className="tracking-status-box"
-                        style={{
-                          marginTop: "15px",
-                          padding: "10px",
-                          backgroundColor: "#f9f9f9",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <h4 style={{ fontWeight: "bold", marginBottom: "5px" }}>
-                          Tracking Information:
-                        </h4>
-                        <p>Status: {trackingInfo.Status}</p>
-                        <p>Location: {trackingInfo.CurrentLocation}</p>
-                      </div>
-                    )}
-
-                    <div className="account-order-detail-actions mb-3">
-                      <Link
-                        href={`/order/${selectedOrderDetail.OrderId}`}
-                        className="button-main bg-black account-order-detail-btn"
-                        onClick={closeOrderDetailModal}
-                      >
-                        Full Order Page
-                      </Link>
-
-                      <button
-                        type="button"
-                        className="account-order-detail-btn bg-green hover:bg-black hover:text-white"
-                        onClick={() =>
-                          handleTrackOrder(selectedOrderDetail.OrderId)
-                        }
-                        disabled={loadingTracking}
-                      >
-                        {loadingTracking ? "Loading..." : "Track Order"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="account-order-detail-btn is-secondary"
-                        onClick={closeOrderDetailModal}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <p className="text-center text-secondary py-10">
                   Order details not available.
                 </p>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-      {showTrackingModal && trackingInfo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-4 border-b shrink-0">
-              <h3 className="text-xl font-bold">Order Tracking</h3>
-              <button
-                onClick={() => setShowTrackingModal(false)}
-                className="text-gray-500 hover:text-black transition-colors"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto">
-              <div className="space-y-0">
-                {trackingInfo.Pipeline.map((step) => (
-                  <div
-                    key={step.WorkflowStatusId}
-                    className={`flex justify-between items-center p-3 border-b last:border-b-0 ${
-                      step.WorkflowStatusId <= trackingInfo.CurrentStatusId
-                        ? "text-green-600 font-bold"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    <span>{step.StatusName}</span>
-                    {step.WorkflowStatusId <= trackingInfo.CurrentStatusId && (
-                      <span>✓</span>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>

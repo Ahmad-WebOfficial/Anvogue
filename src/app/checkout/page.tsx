@@ -12,7 +12,7 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import api from "@/lib/api";
 import { formatRsPrice, getCartShippingPref } from "@/lib/cart";
-import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse } from "@/lib/order";
+import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse, clearOrderFlowStorage } from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { getPendingPromoCode } from "@/lib/promo";
@@ -33,7 +33,7 @@ const Checkout = () => {
   const discount = Number(searchParams.get("discount")) || 0;
   const ship = Number(searchParams.get("ship")) || 0;
 
-  const { cartState, fetchCart } = useCart();
+  const { cartState, fetchCart, clearCart } = useCart();
 
   const [countries, setCountries] = useState<SelectOption[]>([]);
   const [states, setStates] = useState<SelectOption[]>([]);
@@ -50,8 +50,7 @@ const Checkout = () => {
   );
 
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
     phone: "",
     phoneCode: "+92",
@@ -70,8 +69,7 @@ const Checkout = () => {
     isoCode: "PK",
     deliveryDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
     billingSameAsShipping: true,
-    billingFirstName: "",
-    billingLastName: "",
+    billingFullName: "",
     billingEmail: "",
     billingPhone: "",
     isAddNewAddress: true,
@@ -99,14 +97,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
         if (!profile) return;
 
         const fullName = String(profile.FullName || "").trim();
-        const nameParts = fullName.split(/\s+/).filter(Boolean);
-        const firstName = nameParts[0] || "";
-        const lastName = nameParts.slice(1).join(" ");
 
         setForm((prev) => ({
           ...prev,
-          firstName: prev.firstName || firstName,
-          lastName: prev.lastName || lastName,
+          fullName: prev.fullName || fullName,
           email: prev.email || profile.Email || "",
           phone: prev.phone || profile.PhoneNumber || "",
           phoneCode: profile.PhoneCode || prev.phoneCode,
@@ -152,6 +146,14 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
           params: { CountryId: pref.countryId },
         });
         setStates(Array.isArray(res.data?.Data) ? res.data.Data : []);
+        if (pref.stateId) {
+          const citiesRes = await api.get("/api/v1/Common/cities", {
+            params: { StateId: pref.stateId },
+          });
+          setCities(
+            Array.isArray(citiesRes.data?.Data) ? citiesRes.data.Data : [],
+          );
+        }
       } catch (error) {
         console.error("Failed to prefill checkout states:", error);
       }
@@ -330,8 +332,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     }
 
     if (
-      !form.firstName ||
-      !form.lastName ||
+      !form.fullName ||
       !form.email ||
       !form.phone ||
       !form.address ||
@@ -345,10 +346,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
 
     if (
       !form.billingSameAsShipping &&
-      (!form.billingFirstName ||
-        !form.billingLastName ||
-        !form.billingEmail ||
-        !form.billingPhone)
+      (!form.billingFullName || !form.billingEmail || !form.billingPhone)
     ) {
       toast.error("Please fill all billing details.");
       return;
@@ -406,7 +404,13 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
           ? "Order created successfully! You're now logged in."
           : response.Message || "Order created successfully!",
       );
-      await fetchCart();
+
+      // Clear UI + guest session immediately so back navigation cannot show old cart
+      clearCart();
+      clearOrderFlowStorage({ keepPendingPromo: true });
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("clear_cart_after_order", "1");
+      }
 
       if (newOrderId) {
         router.push(`/order/${newOrderId}?pay=1`);
@@ -455,31 +459,17 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     Contact Information
                   </h2>
                   <div className="checkout-field-grid cols-2">
-                    <div className="checkout-field">
-                      <label className="checkout-label" htmlFor="firstName">
-                        First Name *
+                    <div className="checkout-field full-width">
+                      <label className="checkout-label" htmlFor="fullName">
+                        Full Name *
                       </label>
                       <input
-                        id="firstName"
+                        id="fullName"
                         className="checkout-input"
                         type="text"
-                        placeholder="John"
-                        value={form.firstName}
-                        onChange={(e) => updateForm("firstName", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="checkout-field">
-                      <label className="checkout-label" htmlFor="lastName">
-                        Last Name *
-                      </label>
-                      <input
-                        id="lastName"
-                        className="checkout-input"
-                        type="text"
-                        placeholder="Doe"
-                        value={form.lastName}
-                        onChange={(e) => updateForm("lastName", e.target.value)}
+                        placeholder="John Doe"
+                        value={form.fullName}
+                        onChange={(e) => updateForm("fullName", e.target.value)}
                         required
                       />
                     </div>
@@ -579,7 +569,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         >
                           <option value="">Choose Country</option>
                           {countries.map((country) => (
-                            <option key={country.Value} value={country.Value}>
+                            <option
+                              key={String(country.Value)}
+                              value={String(country.Value)}
+                            >
                               {country.Text}
                             </option>
                           ))}
@@ -611,7 +604,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         >
                           <option value="">Choose State</option>
                           {states.map((state) => (
-                            <option key={state.Value} value={state.Value}>
+                            <option
+                              key={String(state.Value)}
+                              value={String(state.Value)}
+                            >
                               {state.Text}
                             </option>
                           ))}
@@ -631,7 +627,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           value={form.cityId}
                           onChange={(e) => {
                             const cityId = e.target.value;
-                            const city = cities.find((c) => c.Value === cityId);
+                            const city = cities.find(
+                              (c) => String(c.Value) === cityId,
+                            );
                             updateForm("cityId", cityId);
                             updateForm("cityName", city?.Text || "");
                             setAreas([]);
@@ -643,7 +641,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         >
                           <option value="">Choose City</option>
                           {cities.map((city) => (
-                            <option key={city.Value} value={city.Value}>
+                            <option
+                              key={String(city.Value)}
+                              value={String(city.Value)}
+                            >
                               {city.Text}
                             </option>
                           ))}
@@ -764,8 +765,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           setForm((prev) => ({
                             ...prev,
                             billingSameAsShipping: false,
-                            billingFirstName: prev.billingFirstName || prev.firstName,
-                            billingLastName: prev.billingLastName || prev.lastName,
+                            billingFullName: prev.billingFullName || prev.fullName,
                             billingEmail: prev.billingEmail || prev.email,
                             billingPhone: prev.billingPhone || prev.phone,
                           }));
@@ -776,34 +776,18 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
 
                     {!form.billingSameAsShipping && (
                       <>
-                        <div className="checkout-field">
-                          <label className="checkout-label" htmlFor="billingFirstName">
-                            Billing First Name *
+                        <div className="checkout-field full-width">
+                          <label className="checkout-label" htmlFor="billingFullName">
+                            Billing Full Name *
                           </label>
                           <input
-                            id="billingFirstName"
+                            id="billingFullName"
                             className="checkout-input"
                             type="text"
-                            placeholder="John"
-                            value={form.billingFirstName}
+                            placeholder="John Doe"
+                            value={form.billingFullName}
                             onChange={(e) =>
-                              updateForm("billingFirstName", e.target.value)
-                            }
-                            required
-                          />
-                        </div>
-                        <div className="checkout-field">
-                          <label className="checkout-label" htmlFor="billingLastName">
-                            Billing Last Name *
-                          </label>
-                          <input
-                            id="billingLastName"
-                            className="checkout-input"
-                            type="text"
-                            placeholder="Doe"
-                            value={form.billingLastName}
-                            onChange={(e) =>
-                              updateForm("billingLastName", e.target.value)
+                              updateForm("billingFullName", e.target.value)
                             }
                             required
                           />

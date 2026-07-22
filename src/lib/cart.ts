@@ -83,6 +83,17 @@ export function getCartSessionId(): string {
   return sessionId;
 }
 
+/** Drop guest cart session so a new empty session is created next time. */
+export function clearCartSessionId(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+export function clearCartShippingPref(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(SHIPPING_PREF_KEY);
+}
+
 export function saveCartShippingPref(pref: CartShippingPref): void {
   if (typeof window === "undefined") return;
 

@@ -195,3 +195,54 @@ export async function submitContactUs(
     response.data?.Message?.trim() || "Your message has been sent successfully."
   );
 }
+
+export interface TenantBranch {
+  RowNumber?: number;
+  BranchId: number;
+  BranchCode?: string | null;
+  Phone?: string | null;
+  Email?: string | null;
+  ContactPerson?: string | null;
+  Timing?: string | null;
+  OpeningTiming?: string | null;
+  ClosingTiming?: string | null;
+  State?: string | null;
+  City?: string | null;
+  Status?: string | null;
+  Address?: string | null;
+  Name?: string | null;
+  Latitude?: number | string | null;
+  Longitude?: number | string | null;
+}
+
+interface TenantBranchesResponse {
+  Data?: {
+    TotalRecords?: number;
+    Branches?: TenantBranch[];
+  };
+  Message?: string;
+}
+
+export async function fetchTenantBranches(params?: {
+  PageNumber?: number;
+  PageSize?: number;
+}): Promise<{ branches: TenantBranch[]; totalRecords: number }> {
+  const response = await api.get<TenantBranchesResponse>(
+    "/api/v1/TenantLanding/branches",
+    {
+      params: {
+        PageNumber: params?.PageNumber ?? 1,
+        PageSize: params?.PageSize ?? 20,
+      },
+    },
+  );
+
+  const branches = Array.isArray(response.data?.Data?.Branches)
+    ? response.data.Data.Branches
+    : [];
+
+  return {
+    branches,
+    totalRecords: Number(response.data?.Data?.TotalRecords) || branches.length,
+  };
+}

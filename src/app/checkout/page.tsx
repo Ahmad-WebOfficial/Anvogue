@@ -16,6 +16,13 @@ import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFro
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { getPendingPromoCode } from "@/lib/promo";
+import {
+  buildSaveAddressPayloadFromCheckout,
+  CustomerAddress,
+  fetchCustomerAddresses,
+  saveCustomerAddress,
+} from "@/lib/customer-address";
+import ModalSavedAddresses from "@/components/Modal/ModalSavedAddresses";
 import toast from "react-hot-toast";
 
 type SelectOption = { Value: string; Text: string };
@@ -35,6 +42,12 @@ const Checkout = () => {
   const [branches, setBranches] = useState<SelectOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [pendingPromo, setPendingPromo] = useState<string | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(
+    null,
+  );
 
   const [form, setForm] = useState({
     fullName: "",
@@ -60,6 +73,7 @@ const Checkout = () => {
     billingEmail: "",
     billingPhone: "",
     isAddNewAddress: true,
+    addressBookId: 0,
     longitude: "",
     latitude: "",
   });
@@ -200,6 +214,100 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     }
   };
 
+  const applySavedAddress = async (address: CustomerAddress) => {
+    setSelectedAddressId(address.AddressBookId);
+    setAddressModalOpen(false);
+
+    const countryId = address.CountryId ? String(address.CountryId) : "";
+    const stateId = address.StateId ? String(address.StateId) : "";
+    const cityId = address.CityId ? String(address.CityId) : "";
+    const areaId = address.AreaId ? String(address.AreaId) : "";
+    const nameParts = String(address.FullName || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    setForm((prev) => ({
+      ...prev,
+      firstName: nameParts[0] || prev.firstName,
+      lastName: nameParts.slice(1).join(" ") || prev.lastName,
+      phone: address.PhoneNumber || prev.phone,
+      address: address.Address || "",
+      countryId,
+      stateId,
+      cityId,
+      cityName: address.CityName || prev.cityName,
+      areaId,
+      addressBookId: address.AddressBookId || 0,
+      isAddNewAddress: false,
+      longitude: address.Longitude || "0",
+      latitude: address.Latitude || "0",
+    }));
+
+    if (countryId) await fetchStates(countryId);
+    if (stateId) await fetchCities(stateId);
+    if (cityId) {
+      await fetchAreas(cityId);
+      await fetchBranches(cityId);
+    }
+
+    toast.success("Address filled in the form.");
+  };
+
+  const startNewAddress = () => {
+    setSelectedAddressId(null);
+    setAddressModalOpen(false);
+    setForm((prev) => ({
+      ...prev,
+      address: "",
+      postalCode: "",
+      areaId: "",
+      addressBookId: 0,
+      isAddNewAddress: true,
+      longitude: "",
+      latitude: "",
+    }));
+  };
+
+  useEffect(() => {
+    const loadAddressesForCheckout = async () => {
+      if (!isAuthenticated()) {
+        setSavedAddresses([]);
+        setAddressModalOpen(false);
+        return;
+      }
+
+      setLoadingAddresses(true);
+      try {
+        const list = await fetchCustomerAddresses({
+          pageSize: 50,
+          pageNumber: 1,
+        });
+        setSavedAddresses(list);
+
+        if (list.length > 0) {
+          setAddressModalOpen(true);
+        }
+      } catch (error) {
+        console.error("Failed to load checkout addresses:", error);
+        setSavedAddresses([]);
+        setAddressModalOpen(false);
+        toast.error(
+          getApiErrorMessage(error, "Could not load saved addresses."),
+        );
+      } finally {
+        setLoadingAddresses(false);
+      }
+    };
+
+    // Small delay so auth cookies are ready after navigation
+    const timer = window.setTimeout(() => {
+      void loadAddressesForCheckout();
+    }, 50);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const updateForm = (field: string, value: string | boolean | number) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -254,6 +362,41 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       let guestLoggedIn = false;
       if (!isAuthenticated()) {
         guestLoggedIn = applyGuestAuthFromOrderResponse(response);
+      }
+
+      const canSaveAddress =
+        (isAuthenticated() || guestLoggedIn) &&
+        form.addressBookId === 0 &&
+        form.isAddNewAddress;
+
+      if (canSaveAddress) {
+        try {
+          await saveCustomerAddress(
+            buildSaveAddressPayloadFromCheckout({
+              addressBookId: 0,
+              firstName: form.firstName,
+              lastName: form.lastName,
+              phone: form.phone,
+              address: form.address,
+              postalCode: form.postalCode,
+              cityId: form.cityId,
+              countryId: form.countryId,
+              stateId: form.stateId,
+              areaId: form.areaId,
+              longitude: form.longitude,
+              latitude: form.latitude,
+              isDefault: savedAddresses.length === 0,
+            }),
+          );
+        } catch (addressError) {
+          console.error("Failed to save customer address:", addressError);
+          toast.error(
+            getApiErrorMessage(
+              addressError,
+              "Order placed, but address could not be saved.",
+            ),
+          );
+        }
       }
 
       toast.success(
@@ -381,6 +524,25 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     </span>
                     Shipping Address
                   </h2>
+
+                  {isAuthenticated() && savedAddresses.length > 0 && (
+                    <div className="checkout-address-toolbar">
+                      <p className="checkout-address-hint">
+                        {selectedAddressId
+                          ? "Saved address applied. You can change it anytime."
+                          : "You have saved addresses available."}
+                      </p>
+                      <button
+                        type="button"
+                        className="checkout-address-new-btn"
+                        onClick={() => setAddressModalOpen(true)}
+                      >
+                        <Icon.MapPin size={14} weight="bold" />
+                        Choose Address
+                      </button>
+                    </div>
+                  )}
+
                   <div className="checkout-field-grid cols-2">
                     <div className="checkout-field full-width">
                       <label className="checkout-label" htmlFor="countryId">
@@ -568,11 +730,16 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                       <input
                         type="checkbox"
                         checked={form.isAddNewAddress}
+                        disabled={form.addressBookId > 0}
                         onChange={(e) =>
                           updateForm("isAddNewAddress", e.target.checked)
                         }
                       />
-                      <span>Save this address for future orders</span>
+                      <span>
+                        {form.addressBookId > 0
+                          ? "Using a saved address"
+                          : "Save this address for future orders"}
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -875,6 +1042,18 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       </div>
 
       <Footer />
+
+      <ModalSavedAddresses
+        open={addressModalOpen && savedAddresses.length > 0}
+        addresses={savedAddresses}
+        selectedAddressId={selectedAddressId}
+        loading={loadingAddresses}
+        onClose={() => setAddressModalOpen(false)}
+        onSelect={(address) => {
+          void applySavedAddress(address);
+        }}
+        onUseNew={startNewAddress}
+      />
     </>
   );
 };

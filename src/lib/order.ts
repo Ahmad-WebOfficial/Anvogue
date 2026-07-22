@@ -67,6 +67,7 @@ export interface CreateOrderFormValues {
   billingEmail: string;
   billingPhone: string;
   isAddNewAddress: boolean;
+  addressBookId: number;
   longitude: string;
   latitude: string;
 }
@@ -287,7 +288,7 @@ export function buildCreateOrderPayload(
         .join(", "),
       ISOCode: values.isoCode || "PK",
       City: values.cityName || "",
-      AddressBookId: 0,
+      AddressBookId: Number(values.addressBookId) || 0,
       AreaId: Number(values.areaId) || 0,
       Longitude: values.longitude.trim() || "0",
       Latitude: values.latitude.trim() || "0",

@@ -53,6 +53,8 @@ const Product: React.FC<ProductProps> = ({
       ? `-${Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)}%`
       : null);
   const productBadges = buildProductBadges({
+    isNew: Boolean(data.new),
+    isFeatured: Boolean(data.isFeatured),
     isPromotional: data.isPromotional,
     discountLabel,
     inventoryManagement: data.inventoryManagement,

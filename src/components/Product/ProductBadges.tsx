@@ -5,7 +5,7 @@ import React from "react";
 export type ProductBadgeItem = {
   key: string;
   label: string;
-  tone: "promo" | "discount" | "stock" | "coming" | "unavailable";
+  tone: "new" | "featured" | "promo" | "discount" | "stock" | "coming" | "unavailable";
 };
 
 type ProductBadgesProps = {
@@ -15,6 +15,8 @@ type ProductBadgesProps = {
 };
 
 const TONE_CLASS: Record<ProductBadgeItem["tone"], string> = {
+  new: "product-badge is-new",
+  featured: "product-badge is-featured",
   promo: "product-badge is-promo",
   discount: "product-badge is-discount",
   stock: "product-badge is-stock",
@@ -23,6 +25,8 @@ const TONE_CLASS: Record<ProductBadgeItem["tone"], string> = {
 };
 
 export function buildProductBadges(input: {
+  isNew?: boolean;
+  isFeatured?: boolean;
   isPromotional?: boolean;
   discount?: number;
   discountType?: number;
@@ -37,6 +41,14 @@ export function buildProductBadges(input: {
 
   if (input.comingSoon) {
     badges.push({ key: "coming", label: "Coming Soon", tone: "coming" });
+  }
+
+  if (input.isNew) {
+    badges.push({ key: "new", label: "New", tone: "new" });
+  }
+
+  if (input.isFeatured) {
+    badges.push({ key: "featured", label: "Featured", tone: "featured" });
   }
 
   if (input.isPromotional) {

@@ -88,6 +88,8 @@ export interface ProductDetailData {
   IsCampaignApplied: boolean;
   IsPromotional: boolean;
   IsCustomProduct: boolean;
+  IsFeaturedProduct?: boolean;
+  IsNewProduct?: boolean;
   Status: number;
   ProductVariantGroups: ProductVariantGroup[];
   MinPrice: number;

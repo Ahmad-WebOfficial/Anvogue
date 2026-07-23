@@ -10,7 +10,7 @@ import { countdownTime } from "@/store/countdownTime";
 import CountdownTimeType from "@/type/CountdownType";
 import api from "@/lib/api";
 import toaster from "react-hot-toast";
-import { formatRsPrice, getCartShippingPref, saveCartShippingPref } from "@/lib/cart";
+import { formatRsPrice, getCartShippingPref, resolveCartDisplayTotals, saveCartShippingPref } from "@/lib/cart";
 import {
   getPendingPromoCode,
   savePendingPromoCode,
@@ -148,7 +148,22 @@ const ModalCart = ({
   };
 
   const moneyForFreeship = 150;
-  const displayTotal = cartState.netTotal || cartState.subTotal || 0;
+  const linesNet = cartState.cartArray.reduce(
+    (sum, item) => sum + (item.lineTotal || 0),
+    0,
+  );
+  const linesGross = cartState.cartArray.reduce((sum, item) => {
+    const originUnit = item.originPrice || item.price || 0;
+    return sum + originUnit * (item.quantity || 1);
+  }, 0);
+  const displayTotals = resolveCartDisplayTotals({
+    linesNet,
+    linesGross,
+    subTotal: cartState.subTotal,
+    totalDiscount: cartState.totalDiscount,
+    netTotal: cartState.netTotal,
+  });
+  const displayTotal = displayTotals.netTotal;
   const relatedProducts = cartState.relatedProducts ?? [];
   const hasItems = cartState.cartArray.length > 0;
   const shippingProgress = Math.min((displayTotal / moneyForFreeship) * 100, 100);
@@ -413,6 +428,13 @@ const ModalCart = ({
                             <div className="product-price text-title font-semibold">
                               {formatRsPrice(product.lineTotal)}
                             </div>
+                            {product.originPrice > product.price && (
+                              <div className="caption2 text-secondary line-through">
+                                {formatRsPrice(
+                                  product.originPrice * product.quantity,
+                                )}
+                              </div>
+                            )}
                             {product.quantity > 1 && (
                               <div className="caption2 text-secondary">
                                 {formatRsPrice(product.price)} each
@@ -477,17 +499,17 @@ const ModalCart = ({
               <div className="modal-cart-summary">
                 <div className="modal-cart-summary-row">
                   <span className="text-secondary">Subtotal</span>
-                  <span>{formatRsPrice(cartState.subTotal)}</span>
+                  <span>{formatRsPrice(displayTotals.subTotal)}</span>
                 </div>
-                {(cartState.totalDiscount > 0 || savedPromoCode) && (
+                {(displayTotals.discount > 0 || savedPromoCode) && (
                   <div className="modal-cart-summary-row">
                     <span className="text-secondary">
                       Discount
                       {savedPromoCode ? ` (${savedPromoCode})` : ""}
                     </span>
                     <span className="text-green font-semibold">
-                      {cartState.totalDiscount > 0
-                        ? `-${formatRsPrice(cartState.totalDiscount)}`
+                      {displayTotals.discount > 0
+                        ? `-${formatRsPrice(displayTotals.discount)}`
                         : "At checkout"}
                     </span>
                   </div>

@@ -173,20 +173,37 @@ function extractCartSummary(data: unknown, items: ApiCartItem[]): CartSummary {
       ? (body.Data as Record<string, unknown>)
       : null;
 
-  const calculatedSubTotal = items.reduce((total, item) => {
+  const calculatedNetTotal = items.reduce((total, item) => {
     return total + getCartItemLineTotal(item);
   }, 0);
+  const calculatedGrossTotal = items.reduce((total, item) => {
+    return total + getCartItemOriginLineTotal(item);
+  }, 0);
 
-  const subTotal = Number(nested?.TotalPrice ?? calculatedSubTotal);
-  const totalDiscount = Number(nested?.TotalDiscount ?? 0);
-  const netTotal = Number(nested?.NetTotal ?? subTotal - totalDiscount);
+  const apiSubTotal = Number(nested?.TotalPrice);
+  const apiDiscount = Number(nested?.TotalDiscount ?? 0);
+  const apiNetTotal = Number(nested?.NetTotal);
+
+  const resolved = resolveCartDisplayTotals({
+    linesNet: calculatedNetTotal,
+    linesGross: calculatedGrossTotal,
+    subTotal:
+      Number.isFinite(apiSubTotal) && apiSubTotal > 0
+        ? apiSubTotal
+        : calculatedGrossTotal || calculatedNetTotal,
+    totalDiscount: Number.isFinite(apiDiscount) ? apiDiscount : 0,
+    netTotal:
+      Number.isFinite(apiNetTotal) && apiNetTotal > 0
+        ? apiNetTotal
+        : calculatedNetTotal,
+  });
 
   return {
     items,
-    subTotal,
-    totalDiscount,
-    netTotal,
-    totalAmount: netTotal,
+    subTotal: resolved.subTotal,
+    totalDiscount: resolved.discount,
+    netTotal: resolved.netTotal,
+    totalAmount: resolved.netTotal,
     totalItems: items.reduce((count, item) => count + (item.Quantity ?? 1), 0),
     relatedProducts: collectRelatedProductsFromCart(items),
     homeDeliveryEnable: Boolean(nested?.HomeDeliveryEnable),
@@ -315,16 +332,113 @@ export function getCartItemUnitPrice(item: ApiCartItem): number {
   return item.Price ?? item.UnitPrice ?? 0;
 }
 
+/** Pre-discount unit price (for strikethrough / gross subtotal). */
+export function getCartItemOriginUnitPrice(item: ApiCartItem): number {
+  const sale = getCartItemUnitPrice(item);
+  const origin = item.Price ?? item.UnitPrice ?? sale;
+  return Math.max(origin, sale);
+}
+
 export function getCartItemQuantity(item: ApiCartItem): number {
   return item.Quantity ?? 1;
 }
 
 export function getCartItemLineTotal(item: ApiCartItem, quantity?: number): number {
   const qty = quantity ?? getCartItemQuantity(item);
-  if (item.TotalAmount && item.Quantity && quantity === undefined) {
-    return item.TotalAmount;
+  if (item.TotalAmount != null && item.TotalAmount >= 0 && quantity === undefined) {
+    return Number(item.TotalAmount);
   }
   return getCartItemUnitPrice(item) * qty;
+}
+
+export function getCartItemOriginLineTotal(
+  item: ApiCartItem,
+  quantity?: number,
+): number {
+  const qty = quantity ?? getCartItemQuantity(item);
+  return getCartItemOriginUnitPrice(item) * qty;
+}
+
+export type CartDisplayTotals = {
+  subTotal: number;
+  discount: number;
+  netTotal: number;
+};
+
+/**
+ * Keep cart summary math consistent with visible line prices.
+ * Handles API TotalPrice (gross) + TotalDiscount vs line totals that are already net.
+ */
+export function resolveCartDisplayTotals(input: {
+  linesNet: number;
+  linesGross?: number;
+  subTotal: number;
+  totalDiscount: number;
+  netTotal: number;
+}): CartDisplayTotals {
+  const linesNet = Number(input.linesNet) || 0;
+  const linesGross = Number(input.linesGross) || 0;
+  let subTotal = Number(input.subTotal) || 0;
+  let discount = Number(input.totalDiscount) || 0;
+  let netTotal = Number(input.netTotal) || 0;
+
+  const nearly = (a: number, b: number) => Math.abs(a - b) < 0.02;
+
+  // Prefer API when Subtotal - Discount = NetTotal
+  if (subTotal > 0 && nearly(subTotal - discount, netTotal)) {
+    return { subTotal, discount, netTotal };
+  }
+
+  // Lines already show payable amounts and match net
+  if (linesNet > 0 && (nearly(linesNet, netTotal) || netTotal <= 0)) {
+    if (discount > 0) {
+      const gross =
+        subTotal > linesNet
+          ? subTotal
+          : linesGross > linesNet
+            ? linesGross
+            : linesNet + discount;
+      return {
+        subTotal: gross,
+        discount,
+        netTotal: netTotal > 0 ? netTotal : Math.max(gross - discount, 0),
+      };
+    }
+    return {
+      subTotal: linesNet,
+      discount: 0,
+      netTotal: linesNet,
+    };
+  }
+
+  // Lines match gross subtotal
+  if (linesNet > 0 && nearly(linesNet, subTotal)) {
+    const resolvedNet =
+      netTotal > 0 ? netTotal : Math.max(linesNet - discount, 0);
+    return { subTotal: linesNet, discount, netTotal: resolvedNet };
+  }
+
+  // Fallback from lines
+  if (linesNet > 0) {
+    if (discount > 0 && linesGross > linesNet) {
+      return {
+        subTotal: linesGross,
+        discount,
+        netTotal: netTotal > 0 ? netTotal : Math.max(linesGross - discount, 0),
+      };
+    }
+    return {
+      subTotal: linesNet,
+      discount: 0,
+      netTotal: linesNet,
+    };
+  }
+
+  return {
+    subTotal,
+    discount,
+    netTotal: netTotal || Math.max(subTotal - discount, 0),
+  };
 }
 
 export function getCartItemVariantsLabel(item: ApiCartItem): string {

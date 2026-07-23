@@ -11,7 +11,7 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import api from "@/lib/api";
-import { formatRsPrice, getCartShippingPref } from "@/lib/cart";
+import { formatRsPrice, getCartShippingPref, resolveCartDisplayTotals } from "@/lib/cart";
 import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse, clearOrderFlowStorage } from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
@@ -24,15 +24,34 @@ import {
 } from "@/lib/customer-address";
 import ModalSavedAddresses from "@/components/Modal/ModalSavedAddresses";
 import toast from "react-hot-toast";
+import PhoneInput from "react-phone-input-2";
+import "react-phone-input-2/lib/style.css";
 
 type SelectOption = { Value: string; Text: string };
+
+/** PhoneInput stores dial-code + number; API wants local number only. */
+function toLocalPhoneNumber(fullPhone: string, dialCode: string): string {
+  let digits = fullPhone.replace(/\D/g, "");
+  const code = dialCode.replace(/\D/g, "");
+
+  if (code && digits.startsWith(code)) {
+    digits = digits.slice(code.length);
+  }
+
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  return digits;
+}
+
+function normalizeDialCode(code: unknown): string {
+  return String(code ?? "").replace(/\D/g, "") || "92";
+}
 
 const Checkout = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const discount = Number(searchParams.get("discount")) || 0;
-  const ship = Number(searchParams.get("ship")) || 0;
-
   const { cartState, fetchCart, clearCart } = useCart();
 
   const [countries, setCountries] = useState<SelectOption[]>([]);
@@ -53,7 +72,7 @@ const Checkout = () => {
     fullName: "",
     email: "",
     phone: "",
-    phoneCode: "+92",
+    phoneCode: "92",
     address: "",
     postalCode: "",
     countryId: "",
@@ -78,9 +97,29 @@ const Checkout = () => {
     latitude: "",
   });
 
-  const subTotal = cartState.subTotal || 0;
-  const netTotal = cartState.netTotal || subTotal;
-  const orderTotal = netTotal - discount + ship;
+  const linesNet = cartState.cartArray.reduce(
+    (sum, item) => sum + (item.lineTotal || 0),
+    0,
+  );
+  const linesGross = cartState.cartArray.reduce((sum, item) => {
+    const originUnit = item.originPrice || item.price || 0;
+    return sum + originUnit * (item.quantity || 1);
+  }, 0);
+  const displayTotals = resolveCartDisplayTotals({
+    linesNet,
+    linesGross,
+    subTotal: cartState.subTotal || 0,
+    totalDiscount:
+      cartState.totalItems > 0 || cartState.subTotal > 0
+        ? cartState.totalDiscount || 0
+        : Number(searchParams.get("discount")) || 0,
+    netTotal: cartState.netTotal || 0,
+  });
+  const subTotal = displayTotals.subTotal;
+  const discount = displayTotals.discount;
+  const netTotal = displayTotals.netTotal;
+  const ship = Number(searchParams.get("ship")) || 0;
+  const orderTotal = netTotal + ship;
 
   useEffect(() => {
     void fetchCart();
@@ -103,7 +142,8 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
           fullName: prev.fullName || fullName,
           email: prev.email || profile.Email || "",
           phone: prev.phone || profile.PhoneNumber || "",
-          phoneCode: profile.PhoneCode || prev.phoneCode,
+          phoneCode: normalizeDialCode(profile.PhoneCode || prev.phoneCode),
+          isoCode: String(profile.ISOCode || prev.isoCode || "PK").toUpperCase(),
         }));
       } catch (error) {
         console.error("Failed to prefill checkout profile:", error);
@@ -214,7 +254,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     }
   };
 
-  const applySavedAddress = async (address: CustomerAddress) => {
+  const applySavedAddress = async (
+    address: CustomerAddress,
+    options?: { silent?: boolean },
+  ) => {
     setSelectedAddressId(address.AddressBookId);
     setAddressModalOpen(false);
 
@@ -222,15 +265,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     const stateId = address.StateId ? String(address.StateId) : "";
     const cityId = address.CityId ? String(address.CityId) : "";
     const areaId = address.AreaId ? String(address.AreaId) : "";
-    const nameParts = String(address.FullName || "")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
 
     setForm((prev) => ({
       ...prev,
-      firstName: nameParts[0] || prev.firstName,
-      lastName: nameParts.slice(1).join(" ") || prev.lastName,
+      fullName: address.FullName || prev.fullName,
       phone: address.PhoneNumber || prev.phone,
       address: address.Address || "",
       countryId,
@@ -251,7 +289,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
       await fetchBranches(cityId);
     }
 
-    toast.success("Address filled in the form.");
+    if (!options?.silent) {
+      toast.success("Address filled in the form.");
+    }
   };
 
   const startNewAddress = () => {
@@ -286,7 +326,11 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
         setSavedAddresses(list);
 
         if (list.length > 0) {
-          setAddressModalOpen(true);
+          const defaultAddress =
+            list.find((address) => address.IsDefault) || list[0];
+          await applySavedAddress(defaultAddress, { silent: true });
+          // Modal stays closed — user can open "Choose Address" if needed.
+          setAddressModalOpen(false);
         }
       } catch (error) {
         console.error("Failed to load checkout addresses:", error);
@@ -371,11 +415,17 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
 
       if (canSaveAddress) {
         try {
+          const nameParts = String(form.fullName || "")
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+
           await saveCustomerAddress(
             buildSaveAddressPayloadFromCheckout({
               addressBookId: 0,
-              firstName: form.firstName,
-              lastName: form.lastName,
+              fullName: form.fullName,
+              firstName: nameParts[0] || form.fullName,
+              lastName: nameParts.slice(1).join(" "),
               phone: form.phone,
               address: form.address,
               postalCode: form.postalCode,
@@ -487,31 +537,40 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         required
                       />
                     </div>
-                    <div className="checkout-field">
-                      <label className="checkout-label" htmlFor="phoneCode">
-                        Phone Code
-                      </label>
-                      <input
-                        id="phoneCode"
-                        className="checkout-input"
-                        type="text"
-                        placeholder="+92"
-                        value={form.phoneCode}
-                        onChange={(e) => updateForm("phoneCode", e.target.value)}
-                      />
-                    </div>
-                    <div className="checkout-field">
+                    <div className="checkout-field checkout-phone-field full-width">
                       <label className="checkout-label" htmlFor="phone">
                         Phone Number *
                       </label>
-                      <input
-                        id="phone"
-                        className="checkout-input"
-                        type="tel"
-                        placeholder="0300 1234567"
-                        value={form.phone}
-                        onChange={(e) => updateForm("phone", e.target.value)}
-                        required
+                      <PhoneInput
+                        country={String(form.isoCode || "PK").toLowerCase()}
+                        value={`${normalizeDialCode(form.phoneCode)}${String(form.phone || "").replace(/\D/g, "")}`}
+                        onChange={(value: string, country: object) => {
+                          if (
+                            !("dialCode" in country) ||
+                            !("countryCode" in country)
+                          ) {
+                            return;
+                          }
+                          const data = country as {
+                            dialCode: string;
+                            countryCode: string;
+                          };
+                          setForm((prev) => ({
+                            ...prev,
+                            phoneCode: normalizeDialCode(data.dialCode),
+                            isoCode: data.countryCode.toUpperCase(),
+                            phone: toLocalPhoneNumber(value || "", data.dialCode),
+                          }));
+                        }}
+                        inputProps={{
+                          id: "phone",
+                          name: "phone",
+                          required: true,
+                        }}
+                        containerClass="w-full"
+                        enableSearch
+                        disableSearchIcon
+                        searchPlaceholder="Search country"
                       />
                     </div>
                   </div>
@@ -529,7 +588,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     <div className="checkout-address-toolbar">
                       <p className="checkout-address-hint">
                         {selectedAddressId
-                          ? "Saved address applied. You can change it anytime."
+                          ? "Default/saved address applied. Choose another if needed."
                           : "You have saved addresses available."}
                       </p>
                       <button

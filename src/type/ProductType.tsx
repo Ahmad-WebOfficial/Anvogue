@@ -30,6 +30,7 @@ export interface ProductType {
     slug: string,
     /** API commerce flags */
     isPromotional?: boolean,
+    isFeatured?: boolean,
     discount?: number,
     discountType?: number,
     inventoryManagement?: boolean,

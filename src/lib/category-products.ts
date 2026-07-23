@@ -170,6 +170,7 @@ export function mapLandingProductToProductType(
     action: "add to cart",
     slug: String(product.ProductId),
     isPromotional: Boolean(product.IsPromotionalProduct),
+    isFeatured: Boolean(product.IsFeaturedProduct),
     discount: product.Discount ?? 0,
     discountType: product.DiscountValueType ?? 0,
     inventoryManagement: Boolean(product.InventoryManagement),

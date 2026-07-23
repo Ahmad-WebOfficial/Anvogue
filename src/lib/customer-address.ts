@@ -221,16 +221,16 @@ export async function saveCustomerAddress(
 ): Promise<CustomerAddress | null> {
   const response = await api.post("/api/v1/Customer/address/save", {
     AddressBookId: payload.AddressBookId || 0,
-    FullName: payload.FullName.trim(),
-    PhoneNumber: payload.PhoneNumber.trim(),
+    FullName: String(payload.FullName ?? "").trim(),
+    PhoneNumber: String(payload.PhoneNumber ?? "").trim(),
     IsDefault: Boolean(payload.IsDefault),
-    Address: payload.Address.trim(),
+    Address: String(payload.Address ?? "").trim(),
     CityId: Number(payload.CityId) || 0,
     CountryId: Number(payload.CountryId) || 0,
     StateId: Number(payload.StateId) || 0,
     AreaId: Number(payload.AreaId) || 0,
-    Longitude: payload.Longitude?.trim() || "0",
-    Latitude: payload.Latitude?.trim() || "0",
+    Longitude: String(payload.Longitude ?? "").trim() || "0",
+    Latitude: String(payload.Latitude ?? "").trim() || "0",
   });
 
   const body = getResponseBody(response);
@@ -253,8 +253,9 @@ export async function saveCustomerAddress(
 
 export function buildSaveAddressPayloadFromCheckout(input: {
   addressBookId?: number;
-  firstName: string;
-  lastName: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
   phone: string;
   address: string;
   postalCode?: string;
@@ -266,22 +267,29 @@ export function buildSaveAddressPayloadFromCheckout(input: {
   latitude?: string;
   isDefault?: boolean;
 }): SaveCustomerAddressPayload {
-  const fullName = `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
-  const addressLine = [input.address.trim(), input.postalCode?.trim()]
+  const firstName = String(input.firstName ?? "").trim();
+  const lastName = String(input.lastName ?? "").trim();
+  const fromParts = `${firstName} ${lastName}`.trim();
+  const fullName =
+    String(input.fullName ?? "").trim() || fromParts || "Customer";
+  const addressLine = [
+    String(input.address ?? "").trim(),
+    String(input.postalCode ?? "").trim(),
+  ]
     .filter(Boolean)
     .join(", ");
 
   return {
     AddressBookId: Number(input.addressBookId) || 0,
     FullName: fullName,
-    PhoneNumber: input.phone.trim(),
+    PhoneNumber: String(input.phone ?? "").trim(),
     IsDefault: Boolean(input.isDefault),
-    Address: addressLine,
+    Address: addressLine || "N/A",
     CityId: Number(input.cityId) || 0,
     CountryId: Number(input.countryId) || 0,
     StateId: Number(input.stateId) || 0,
     AreaId: Number(input.areaId) || 0,
-    Longitude: input.longitude?.trim() || "0",
-    Latitude: input.latitude?.trim() || "0",
+    Longitude: String(input.longitude ?? "").trim() || "0",
+    Latitude: String(input.latitude ?? "").trim() || "0",
   };
 }

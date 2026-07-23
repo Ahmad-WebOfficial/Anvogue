@@ -223,7 +223,7 @@ function normalizeCreateOrderPayload(
     ...payload,
     SessionId: sessionId,
     ISOCode: payload.ISOCode?.trim() || "PK",
-    PhoneCode: payload.PhoneCode?.trim() || "+92",
+    PhoneCode: payload.PhoneCode?.trim() || "92",
     SpecialInstructions: payload.SpecialInstructions?.trim() || "N/A",
     DeliveryInstructions: payload.DeliveryInstructions?.trim() || "N/A",
     ShippingDetail: {
@@ -269,37 +269,39 @@ export function applyGuestAuthFromOrderResponse(data: unknown): boolean {
 export function buildCreateOrderPayload(
   values: CreateOrderFormValues,
 ): CreateOrderPayload {
-  const fullName = values.fullName.trim();
+  const str = (value: unknown) => String(value ?? "").trim();
+  const fullName = str(values.fullName);
   const billingFullName = values.billingSameAsShipping
     ? fullName
-    : values.billingFullName.trim();
+    : str(values.billingFullName);
+  const phoneCode = str(values.phoneCode).replace(/\D/g, "") || "92";
 
   return {
     IsGiftOrder: values.isGiftOrder,
     ShippingDetail: {
       FullName: fullName,
-      EmailAddress: values.email.trim(),
-      Phone: values.phone.trim(),
+      EmailAddress: str(values.email),
+      Phone: str(values.phone),
       CityId: Number(values.cityId) || 0,
       CountryId: Number(values.countryId) || 0,
       StateId: Number(values.stateId) || 0,
-      Address: [values.address.trim(), values.postalCode.trim()]
+      Address: [str(values.address), str(values.postalCode)]
         .filter(Boolean)
         .join(", "),
-      ISOCode: values.isoCode || "PK",
-      City: values.cityName || "",
+      ISOCode: str(values.isoCode) || "PK",
+      City: str(values.cityName),
       AddressBookId: Number(values.addressBookId) || 0,
       AreaId: Number(values.areaId) || 0,
-      Longitude: values.longitude.trim() || "0",
-      Latitude: values.latitude.trim() || "0",
+      Longitude: str(values.longitude) || "0",
+      Latitude: str(values.latitude) || "0",
     },
     BillingDetail: {
       EmailAddress: values.billingSameAsShipping
-        ? values.email.trim()
-        : values.billingEmail.trim(),
+        ? str(values.email)
+        : str(values.billingEmail),
       Phone: values.billingSameAsShipping
-        ? values.phone.trim()
-        : values.billingPhone.trim(),
+        ? str(values.phone)
+        : str(values.billingPhone),
       FullName: billingFullName,
     },
     SessionId: getCartSessionId(),
@@ -307,12 +309,12 @@ export function buildCreateOrderPayload(
     DeliveryDate: values.deliveryDate
       ? new Date(values.deliveryDate).toISOString()
       : new Date().toISOString(),
-    ISOCode: values.isoCode || "PK",
-    PhoneCode: values.phoneCode || "+92",
+    ISOCode: str(values.isoCode) || "PK",
+    PhoneCode: phoneCode,
     IsAddNewAddress: values.isAddNewAddress,
     DeliveryOption: values.deliveryOption || 1,
-    SpecialInstructions: values.specialInstructions.trim() || "N/A",
-    DeliveryInstructions: values.deliveryInstructions.trim() || "N/A",
+    SpecialInstructions: str(values.specialInstructions) || "N/A",
+    DeliveryInstructions: str(values.deliveryInstructions) || "N/A",
     OrderSource: 1,
     CityId: Number(values.cityId) || 0,
     CountryId: Number(values.countryId) || 0,

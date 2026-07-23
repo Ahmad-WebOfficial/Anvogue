@@ -10,7 +10,7 @@ import Breadcrumb from "@/components/Breadcrumb/Breadcrumb";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
-import { formatRsPrice } from "@/lib/cart";
+import { formatRsPrice, resolveCartDisplayTotals } from "@/lib/cart";
 import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { fetchProductDetails, RelatedProduct } from "@/lib/product-details";
 import {
@@ -38,9 +38,24 @@ const Cart = () => {
   }, [fetchCart]);
 
   const moneyForFreeship = 150;
-  const subTotal = cartState.subTotal || 0;
-  const netTotal = cartState.netTotal || subTotal;
-  const totalDiscount = cartState.totalDiscount || 0;
+  const linesNet = cartState.cartArray.reduce(
+    (sum, item) => sum + (item.lineTotal || 0),
+    0,
+  );
+  const linesGross = cartState.cartArray.reduce((sum, item) => {
+    const originUnit = item.originPrice || item.price || 0;
+    return sum + originUnit * (item.quantity || 1);
+  }, 0);
+  const displayTotals = resolveCartDisplayTotals({
+    linesNet,
+    linesGross,
+    subTotal: cartState.subTotal || 0,
+    totalDiscount: cartState.totalDiscount || 0,
+    netTotal: cartState.netTotal || 0,
+  });
+  const subTotal = displayTotals.subTotal;
+  const netTotal = displayTotals.netTotal;
+  const totalDiscount = displayTotals.discount;
   const relatedProducts = cartState.relatedProducts ?? [];
   const freeShippingRemaining = Math.max(moneyForFreeship - subTotal, 0);
   const qualifiesForFreeShipping = subTotal >= moneyForFreeship;
@@ -249,7 +264,12 @@ const Cart = () => {
                             </div>
 
                             <div className="cart-item-price-col">
-                              {formatRsPrice(product.price)}
+                              <div>{formatRsPrice(product.price)}</div>
+                              {product.originPrice > product.price && (
+                                <div className="caption2 text-secondary line-through">
+                                  {formatRsPrice(product.originPrice)}
+                                </div>
+                              )}
                             </div>
 
                             <div className="cart-item-qty-col">
@@ -290,7 +310,14 @@ const Cart = () => {
                             </div>
 
                             <div className="cart-item-total-col">
-                              {formatRsPrice(product.lineTotal)}
+                              <div>{formatRsPrice(product.lineTotal)}</div>
+                              {product.originPrice > product.price && (
+                                <div className="caption2 text-secondary line-through">
+                                  {formatRsPrice(
+                                    product.originPrice * product.quantity,
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             <div className="hidden md:flex items-center justify-center">

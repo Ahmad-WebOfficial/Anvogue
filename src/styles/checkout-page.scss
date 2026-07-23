@@ -118,6 +118,45 @@
     min-width: 0;
 }
 
+.checkout-phone-field {
+    .react-tel-input {
+        width: 100%;
+        font-family: inherit;
+    }
+
+    .form-control {
+        width: 100% !important;
+        height: 48px !important;
+        padding-left: 52px !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 12px !important;
+        font-size: 15px !important;
+        color: var(--black) !important;
+        background: var(--white) !important;
+
+        &:focus {
+            border-color: var(--black) !important;
+            box-shadow: 0 0 0 3px rgba(31, 31, 31, 0.06) !important;
+        }
+    }
+
+    .flag-dropdown {
+        border: 1px solid var(--line) !important;
+        border-radius: 12px 0 0 12px !important;
+        background: var(--white) !important;
+    }
+
+    .selected-flag {
+        border-radius: 12px 0 0 12px !important;
+        background: var(--white) !important;
+    }
+
+    .country-list {
+        border-radius: 12px !important;
+        max-height: 240px;
+    }
+}
+
 .checkout-label {
     display: block;
     margin-bottom: 8px;

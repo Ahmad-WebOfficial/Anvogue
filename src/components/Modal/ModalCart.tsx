@@ -10,15 +10,14 @@ import { countdownTime } from "@/store/countdownTime";
 import CountdownTimeType from "@/type/CountdownType";
 import api from "@/lib/api";
 import toaster from "react-hot-toast";
-import { formatRsPrice, getCartShippingPref, resolveCartDisplayTotals, saveCartShippingPref } from "@/lib/cart";
 import {
-  getPendingPromoCode,
-  savePendingPromoCode,
-} from "@/lib/promo";
-import {
-  fetchProductDetails,
-  RelatedProduct,
-} from "@/lib/product-details";
+  formatRsPrice,
+  getCartShippingPref,
+  resolveCartDisplayTotals,
+  saveCartShippingPref,
+} from "@/lib/cart";
+import { getPendingPromoCode, savePendingPromoCode } from "@/lib/promo";
+import { fetchProductDetails, RelatedProduct } from "@/lib/product-details";
 import {
   getProductDetailUrl,
   mapProductDetailToProductType,
@@ -134,19 +133,25 @@ const ModalCart = ({
     void getStates(pref.countryId);
   }, []);
 
-  const handleSaveShipping = () => {
-    saveCartShippingPref({
-      countryId: selectedCountry,
-      stateId: selectedState,
-    });
+ const handleSaveShipping = () => {
+  if (!selectedCountry) {
+    toaster.error("Please select a country.");
+    return;
+  }
 
-    if (selectedCountry) {
-      toaster.success("Shipping preference saved for checkout.");
-    }
+  if (!selectedState) {
+    toaster.error("Please select a state.");
+    return;
+  }
 
-    setActiveTab("");
-  };
+  saveCartShippingPref({
+    countryId: selectedCountry,
+    stateId: selectedState,
+  });
 
+  toaster.success("Shipping preference saved for checkout.");
+  setActiveTab("");
+};
   const moneyForFreeship = 150;
   const linesNet = cartState.cartArray.reduce(
     (sum, item) => sum + (item.lineTotal || 0),
@@ -166,7 +171,10 @@ const ModalCart = ({
   const displayTotal = displayTotals.netTotal;
   const relatedProducts = cartState.relatedProducts ?? [];
   const hasItems = cartState.cartArray.length > 0;
-  const shippingProgress = Math.min((displayTotal / moneyForFreeship) * 100, 100);
+  const shippingProgress = Math.min(
+    (displayTotal / moneyForFreeship) * 100,
+    100,
+  );
   const amountToFreeShipping = Math.max(moneyForFreeship - displayTotal, 0);
 
   return (
@@ -186,7 +194,7 @@ const ModalCart = ({
               relatedProducts.map((related) => {
                 const image =
                   related.ThumbnailImagePath &&
-                    !related.ThumbnailImagePath.includes("noImage")
+                  !related.ThumbnailImagePath.includes("noImage")
                     ? related.ThumbnailImagePath
                     : "/images/product/1000x1000.png";
 
@@ -257,16 +265,16 @@ const ModalCart = ({
               </span>
               <div>
                 <div className="heading5">Shopping Cart</div>
-                {cartState.totalItems > 0 && (
+                {cartState.cartArray.length > 0 && (
                   <p className="caption2 text-secondary mt-0.5">
-                    {cartState.totalItems}{" "}
-                    {cartState.totalItems === 1 ? "item" : "items"}
+                    {cartState.cartArray.length}{" "}
+                    {cartState.cartArray.length === 1 ? "item" : "items"}
                   </p>
                 )}
               </div>
-              {cartState.totalItems > 0 && (
+              {cartState.cartArray.length > 0 && (
                 <span className="modal-cart-count-badge">
-                  {cartState.totalItems}
+                  {cartState.cartArray.length}
                 </span>
               )}
             </div>
@@ -284,8 +292,6 @@ const ModalCart = ({
           <div className="modal-cart-body">
             {hasItems && (
               <div className="modal-cart-top-banners">
-
-
                 <div className="modal-cart-shipping modal-cart-shipping-compact">
                   <p className="modal-cart-shipping-text">
                     {amountToFreeShipping > 0 ? (
@@ -322,9 +328,9 @@ const ModalCart = ({
                     "/images/product/1000x1000.png";
                   const variantsLabel = product.apiItem
                     ? product.apiItem.ProductVariants?.replace(/,/g, ", ") ||
-                    product.apiItem.cartItemVariantList
-                      ?.map((v) => `${v.VariantGroup}: ${v.VariantName}`)
-                      .join(" · ")
+                      product.apiItem.cartItemVariantList
+                        ?.map((v) => `${v.VariantGroup}: ${v.VariantName}`)
+                        .join(" · ")
                     : "";
 
                   return (
@@ -379,7 +385,9 @@ const ModalCart = ({
                         </div>
 
                         {variantsLabel && (
-                          <div className="modal-cart-variant">{variantsLabel}</div>
+                          <div className="modal-cart-variant">
+                            {variantsLabel}
+                          </div>
                         )}
 
                         <div className="modal-cart-item-foot">
@@ -445,11 +453,11 @@ const ModalCart = ({
 
                         {product.apiItem?.IsProductAvailableInStock ===
                           false && (
-                            <div className="caption2 text-red mt-2 flex items-center gap-1">
-                              <Icon.WarningCircle size={14} />
-                              Limited stock
-                            </div>
-                          )}
+                          <div className="caption2 text-red mt-2 flex items-center gap-1">
+                            <Icon.WarningCircle size={14} />
+                            Limited stock
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

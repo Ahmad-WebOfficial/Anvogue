@@ -506,7 +506,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     <span className="checkout-section-icon">
                       <Icon.User size={18} weight="bold" />
                     </span>
-                    Contact Information
+                    Contact Informatio
                   </h2>
                   <div className="checkout-field-grid cols-2">
                     <div className="checkout-field full-width">

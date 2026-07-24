@@ -320,7 +320,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         currentQuantity: previousQuantity,
         nextQuantity: quantity,
       });
-      await fetchCart();
     } catch (error) {
       toast.error(
         getApiErrorMessage(error, "Failed to update cart quantity."),

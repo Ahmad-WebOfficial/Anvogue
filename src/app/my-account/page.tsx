@@ -400,7 +400,10 @@ const MyAccount = () => {
       }));
     } catch (error) {
       toast.error(
-        getApiErrorMessage(error, "Failed to change password. Please try again."),
+        getApiErrorMessage(
+          error,
+          "Failed to change password. Please try again.",
+        ),
       );
     } finally {
       setLoadingChangePassword(false);
@@ -845,7 +848,9 @@ const MyAccount = () => {
                             <span
                               className={`account-status-tag ${getOrderStatusClass(getOrderStatusValue(order))}`}
                             >
-                              {formatOrderStatusLabel(getOrderStatusValue(order))}
+                              {formatOrderStatusLabel(
+                                getOrderStatusValue(order),
+                              )}
                             </span>
                           </div>
                         </div>
@@ -1377,16 +1382,35 @@ const MyAccount = () => {
                           "—"}
                       </p>
                       <p className="caption1 text-secondary mt-1">
-                        {selectedOrderDetail.OrderBillingDetails?.Phone ||
-                          selectedOrderDetail.OrderShippingDetails?.Phone ||
-                          "—"}
+                        {(() => {
+                          const details =
+                            selectedOrderDetail.OrderBillingDetails ||
+                            selectedOrderDetail.OrderShippingDetails;
+                          const phoneVal =
+                            selectedOrderDetail.OrderBillingDetails?.Phone ||
+                            selectedOrderDetail.OrderShippingDetails?.Phone;
+                          if (!phoneVal) return "—";
+
+                          const phoneCode = String(
+                            details?.PhoneCode || details?.phoneCode || "92",
+                          ).replace(/\D/g, "");
+                          let phone = String(phoneVal).replace(/\D/g, "");
+
+                          if (phone.startsWith(phoneCode)) {
+                            phone = phone.slice(phoneCode.length);
+                          }
+                          if (phone.startsWith("0")) {
+                            phone = phone.replace(/^0+/, "");
+                          }
+
+                          return `+${phoneCode} ${phone}`;
+                        })()}
                       </p>
                       <p className="caption1 text-secondary mt-1 break-all">
                         {selectedOrderDetail.OrderBillingDetails
                           ?.EmailAddress || "—"}
                       </p>
                     </div>
-
                     <div className="account-order-detail-card">
                       <h3 className="account-order-detail-section-title">
                         <Icon.CreditCard size={16} weight="bold" />

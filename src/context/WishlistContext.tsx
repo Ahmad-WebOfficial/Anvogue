@@ -1,6 +1,11 @@
 "use client";
-
-import React, { createContext, useContext, useReducer, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useCallback,
+} from "react";
 import { ProductType } from "@/type/ProductType";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
@@ -114,7 +119,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   };
 
-  const fetchWishlist = async () => {
+  const fetchWishlist = useCallback(async () => {
     try {
       const res = await api.get("/api/v1/Customer/wishlist", {
         params: { PageNumber: 1, PageSize: 10 },
@@ -125,15 +130,17 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
           normalizeWishlistItem,
         ).filter((item) => item.id);
         dispatch({ type: "LOAD_WISHLIST", payload: normalized });
-      } else {
       }
     } catch (error) {
       console.error("Fetch: Error occurred:", error);
     }
-  };
+  }, []);
 
- 
-useEffect(() => {
+  useEffect(() => {
+    void fetchWishlist();
+  }, [fetchWishlist]);
+
+  useEffect(() => {
     fetchWishlist();
   }, [fetchWishlist]);
   const addToWishlist = async (item: ProductType) => {
@@ -161,12 +168,10 @@ useEffect(() => {
   const removeFromWishlist = async (product: ProductType) => {
     const idToDelete = product.productDetailId || product.id;
 
-
     try {
       const res = await api.delete(
         `/api/v1/Customer/RemoveFromWishlistByProduct/wishlist/items/product/${idToDelete}`,
       );
-
 
       if (res.data.HttpStatusCode === 200) {
         toast.success("Removed from wishlist!");

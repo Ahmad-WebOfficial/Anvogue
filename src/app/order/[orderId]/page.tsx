@@ -337,7 +337,8 @@ const OrderDetailsPage = () => {
   };
 
   const isFromCheckout = searchParams.get("pay") === "1";
-  const canPay = gateways.length > 0 && selectedGateway !== null && !isCancelled;
+  const canPay =
+    gateways.length > 0 && selectedGateway !== null && !isCancelled;
 
   return (
     <>
@@ -359,7 +360,10 @@ const OrderDetailsPage = () => {
             </div>
           ) : error ? (
             <div className="order-error">
-              <Icon.WarningCircle size={40} className="text-red-600 mx-auto mb-4" />
+              <Icon.WarningCircle
+                size={40}
+                className="text-red-600 mx-auto mb-4"
+              />
               <p className="text-red-600 mb-6">{error}</p>
               <Link href="/" className="button-main inline-block bg-black">
                 Back to Home
@@ -373,10 +377,12 @@ const OrderDetailsPage = () => {
                     <Icon.CheckCircle size={22} weight="fill" />
                   </span>
                   <div>
-                    <p className="text-button font-semibold">Order placed successfully!</p>
+                    <p className="text-button font-semibold">
+                      Order placed successfully!
+                    </p>
                     <p className="caption1 text-secondary mt-1">
-                      Complete payment below to confirm your order. A confirmation will be sent
-                      to your email.
+                      Complete payment below to confirm your order. A
+                      confirmation will be sent to your email.
                     </p>
                   </div>
                 </div>
@@ -388,7 +394,9 @@ const OrderDetailsPage = () => {
                     <div className="order-header-top">
                       <div>
                         <span className="order-badge">Order Confirmation</span>
-                        <h1 className="heading3 mt-3">{displayOrder.OrderNumber}</h1>
+                        <h1 className="heading3 mt-3">
+                          {displayOrder.OrderNumber}
+                        </h1>
                         <p className="caption1 text-secondary mt-2">
                           Review your order details and complete payment below.
                         </p>
@@ -401,7 +409,9 @@ const OrderDetailsPage = () => {
                           {displayOrder.PaymentStatusDisplayName}
                         </span>
                         {displayOrder.IsGiftOrder && (
-                          <span className="order-status-badge is-gift">Gift Order</span>
+                          <span className="order-status-badge is-gift">
+                            Gift Order
+                          </span>
                         )}
                       </div>
                     </div>
@@ -412,7 +422,9 @@ const OrderDetailsPage = () => {
                           <Icon.CalendarBlank size={18} weight="bold" />
                         </span>
                         <div>
-                          <div className="caption2 text-secondary">Delivery Date</div>
+                          <div className="caption2 text-secondary">
+                            Delivery Date
+                          </div>
                           <div className="text-button mt-0.5">
                             {formatOrderDate(displayOrder.DeliveryDate)}
                           </div>
@@ -423,9 +435,13 @@ const OrderDetailsPage = () => {
                           <Icon.Truck size={18} weight="bold" />
                         </span>
                         <div>
-                          <div className="caption2 text-secondary">Delivery Option</div>
+                          <div className="caption2 text-secondary">
+                            Delivery Option
+                          </div>
                           <div className="text-button mt-0.5">
-                            {getDeliveryOptionLabel(displayOrder.DeliveryOption)}
+                            {getDeliveryOptionLabel(
+                              displayOrder.DeliveryOption,
+                            )}
                           </div>
                         </div>
                       </div>
@@ -434,7 +450,9 @@ const OrderDetailsPage = () => {
                           <Icon.User size={18} weight="bold" />
                         </span>
                         <div>
-                          <div className="caption2 text-secondary">Customer</div>
+                          <div className="caption2 text-secondary">
+                            Customer
+                          </div>
                           <div className="text-button mt-0.5">
                             {displayOrder.CustomerFullName ||
                               displayOrder.OrderShippingDetails?.FullName}
@@ -446,8 +464,12 @@ const OrderDetailsPage = () => {
                           <Icon.Package size={18} weight="bold" />
                         </span>
                         <div>
-                          <div className="caption2 text-secondary">Total Items</div>
-                          <div className="text-button mt-0.5">{displayOrder.TotalItems}</div>
+                          <div className="caption2 text-secondary">
+                            Total Items
+                          </div>
+                          <div className="text-button mt-0.5">
+                            {displayOrder.TotalItems}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -533,7 +555,29 @@ const OrderDetailsPage = () => {
                           {displayOrder.OrderShippingDetails?.FullName}
                         </p>
                         <div className="order-address-lines">
-                          <p>{displayOrder.OrderShippingDetails?.Phone}</p>
+                          <p>
+                            {(() => {
+                              const details = displayOrder.OrderShippingDetails;
+                              const phoneCode = String(
+                                details?.PhoneCode ||
+                                  details?.phoneCode ||
+                                  "92",
+                              ).replace(/\D/g, "");
+                              let phone = String(
+                                details?.Phone || details?.phone || "",
+                              ).replace(/\D/g, "");
+
+                              // Agar local number ke shuru mein phoneCode ya extra 0 aa jaye toh clean kar dein
+                              if (phone.startsWith(phoneCode)) {
+                                phone = phone.slice(phoneCode.length);
+                              }
+                              if (phone.startsWith("0")) {
+                                phone = phone.replace(/^0+/, "");
+                              }
+
+                              return `+${phoneCode} ${phone}`;
+                            })()}
+                          </p>
                           <p>{displayOrder.OrderShippingDetails?.Address}</p>
                           <p>
                             {displayOrder.OrderShippingDetails?.City},{" "}
@@ -555,8 +599,33 @@ const OrderDetailsPage = () => {
                             displayOrder.OrderShippingDetails?.FullName}
                         </p>
                         <div className="order-address-lines">
-                          <p>{displayOrder.OrderBillingDetails?.EmailAddress}</p>
-                          <p>{displayOrder.OrderBillingDetails?.Phone}</p>
+                          <p>
+                            {displayOrder.OrderBillingDetails?.EmailAddress}
+                          </p>
+                          <p>
+                            {(() => {
+                              const details =
+                                displayOrder.OrderBillingDetails ||
+                                displayOrder.OrderShippingDetails;
+                              const phoneCode = String(
+                                details?.PhoneCode ||
+                                  details?.phoneCode ||
+                                  "92",
+                              ).replace(/\D/g, "");
+                              let phone = String(
+                                details?.Phone || details?.phone || "",
+                              ).replace(/\D/g, "");
+
+                              if (phone.startsWith(phoneCode)) {
+                                phone = phone.slice(phoneCode.length);
+                              }
+                              if (phone.startsWith("0")) {
+                                phone = phone.replace(/^0+/, "");
+                              }
+
+                              return `+${phoneCode} ${phone}`;
+                            })()}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -573,14 +642,22 @@ const OrderDetailsPage = () => {
                       </h3>
                       {displayOrder.SpecialInstructions && (
                         <div className="order-instructions">
-                          <div className="caption2 text-secondary">Special Instructions</div>
-                          <p className="caption1 mt-2">{displayOrder.SpecialInstructions}</p>
+                          <div className="caption2 text-secondary">
+                            Special Instructions
+                          </div>
+                          <p className="caption1 mt-2">
+                            {displayOrder.SpecialInstructions}
+                          </p>
                         </div>
                       )}
                       {displayOrder.DeliveryInstructions && (
                         <div className="order-instructions">
-                          <div className="caption2 text-secondary">Delivery Instructions</div>
-                          <p className="caption1 mt-2">{displayOrder.DeliveryInstructions}</p>
+                          <div className="caption2 text-secondary">
+                            Delivery Instructions
+                          </div>
+                          <p className="caption1 mt-2">
+                            {displayOrder.DeliveryInstructions}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -611,7 +688,6 @@ const OrderDetailsPage = () => {
                       </div>
                     </div>
                   )}
-
                 </div>
 
                 <aside className="order-card order-summary-card">
@@ -635,15 +711,15 @@ const OrderDetailsPage = () => {
                     </div>
                     <div className="order-total-row">
                       <span className="text-secondary">POS Charges</span>
-                      <span>
-                        {formatRsPrice(displayOrder.POSCharges ?? 0)}
-                      </span>
+                      <span>{formatRsPrice(displayOrder.POSCharges ?? 0)}</span>
                     </div>
                     <div className="order-total-row">
                       <span className="text-secondary">Discount</span>
                       <span
                         className={
-                          displayOrder.NetDiscount > 0 ? "text-green" : undefined
+                          displayOrder.NetDiscount > 0
+                            ? "text-green"
+                            : undefined
                         }
                       >
                         {displayOrder.NetDiscount > 0
@@ -682,7 +758,8 @@ const OrderDetailsPage = () => {
                           applyingPromo ||
                           cancellingPromo ||
                           Boolean(
-                            displayOrder.PromoCode || displayOrder.NetDiscount > 0,
+                            displayOrder.PromoCode ||
+                            displayOrder.NetDiscount > 0,
                           )
                         }
                       />
@@ -739,8 +816,6 @@ const OrderDetailsPage = () => {
                     </button>
                   </div>
 
-                 
-
                   <div className="order-actions mt-4">
                     <button
                       type="button"
@@ -794,8 +869,8 @@ const OrderDetailsPage = () => {
             </h2>
             <p className="caption1 text-secondary text-center mt-3">
               Are you sure you want to cancel order{" "}
-              <strong>{displayOrder?.OrderNumber}</strong>? This action cannot be
-              undone.
+              <strong>{displayOrder?.OrderNumber}</strong>? This action cannot
+              be undone.
             </p>
 
             <div className="order-cancel-modal-actions">

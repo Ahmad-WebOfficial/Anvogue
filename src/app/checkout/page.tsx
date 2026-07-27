@@ -11,8 +11,18 @@ import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from "@/context/CartContext";
 import api from "@/lib/api";
-import { formatRsPrice, getCartShippingPref, resolveCartDisplayTotals } from "@/lib/cart";
-import { buildCreateOrderPayload, createOrder, extractOrderId, applyGuestAuthFromOrderResponse, clearOrderFlowStorage } from "@/lib/order";
+import {
+  formatRsPrice,
+  getCartShippingPref,
+  resolveCartDisplayTotals,
+} from "@/lib/cart";
+import {
+  buildCreateOrderPayload,
+  createOrder,
+  extractOrderId,
+  applyGuestAuthFromOrderResponse,
+  clearOrderFlowStorage,
+} from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { getPendingPromoCode } from "@/lib/promo";
@@ -131,7 +141,7 @@ const Checkout = () => {
       if (!isAuthenticated()) return;
 
       try {
-const res = await api.get<any>("/api/v1/Customer/GetProfile");
+        const res = await api.get<any>("/api/v1/Customer/GetProfile");
         const profile = (res.data as any)?.Data;
         if (!profile) return;
 
@@ -143,7 +153,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
           email: prev.email || profile.Email || "",
           phone: prev.phone || profile.PhoneNumber || "",
           phoneCode: normalizeDialCode(profile.PhoneCode || prev.phoneCode),
-          isoCode: String(profile.ISOCode || prev.isoCode || "PK").toUpperCase(),
+          isoCode: String(
+            profile.ISOCode || prev.isoCode || "PK",
+          ).toUpperCase(),
         }));
       } catch (error) {
         console.error("Failed to prefill checkout profile:", error);
@@ -157,9 +169,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
     const getCountries = async () => {
       try {
         const res = await api.get("/api/v1/Common/countries");
-        setCountries(
-          Array.isArray(res.data?.Data) ? res.data.Data : [],
-        );
+        setCountries(Array.isArray(res.data?.Data) ? res.data.Data : []);
       } catch (error) {
         console.error("Failed to fetch countries:", error);
       }
@@ -494,9 +504,12 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
             <div className="checkout-form-card">
               <div className="checkout-form-head">
                 <span className="checkout-badge">Secure Checkout</span>
-                <h1 className="heading3 checkout-form-title">Shipping Information</h1>
+                <h1 className="heading3 checkout-form-title">
+                  Shipping Information
+                </h1>
                 <p className="text-secondary checkout-form-subtitle">
-                  Complete your details below. Required fields are marked with *.
+                  Complete your details below. Required fields are marked with
+                  *.
                 </p>
               </div>
 
@@ -506,7 +519,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     <span className="checkout-section-icon">
                       <Icon.User size={18} weight="bold" />
                     </span>
-                    Contact Informatio
+                    Contact Information
                   </h2>
                   <div className="checkout-field-grid cols-2">
                     <div className="checkout-field full-width">
@@ -537,13 +550,13 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         required
                       />
                     </div>
-                    <div className="checkout-field checkout-phone-field full-width">
+                    <div className="checkout-field checkout-phone-field">
                       <label className="checkout-label" htmlFor="phone">
                         Phone Number *
                       </label>
                       <PhoneInput
                         country={String(form.isoCode || "PK").toLowerCase()}
-                        value={`${normalizeDialCode(form.phoneCode)}${String(form.phone || "").replace(/\D/g, "")}`}
+                        value={`+${form.phoneCode || "92"}${form.phone || ""}`}
                         onChange={(value: string, country: object) => {
                           if (
                             !("dialCode" in country) ||
@@ -555,11 +568,30 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             dialCode: string;
                             countryCode: string;
                           };
+
+                          const dial = data.dialCode;
+                          let localNum = value;
+
+                          // Remove dial code if present in the input value
+                          if (localNum.startsWith(dial)) {
+                            localNum = localNum.slice(dial.length);
+                          } else if (localNum.startsWith("+" + dial)) {
+                            localNum = localNum.slice(dial.length + 1);
+                          }
+
+                          // Sanitize to numbers only
+                          localNum = localNum.replace(/\D/g, "");
+
+                          // Remove leading zero if user typed it
+                          if (localNum.startsWith("0")) {
+                            localNum = localNum.replace(/^0+/, "");
+                          }
+
                           setForm((prev) => ({
                             ...prev,
-                            phoneCode: normalizeDialCode(data.dialCode),
+                            phoneCode: normalizeDialCode(dial),
                             isoCode: data.countryCode.toUpperCase(),
-                            phone: toLocalPhoneNumber(value || "", data.dialCode),
+                            phone: localNum,
                           }));
                         }}
                         inputProps={{
@@ -636,7 +668,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
@@ -671,7 +706,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
@@ -708,7 +746,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
@@ -730,7 +771,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
@@ -743,7 +787,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           id="branchId"
                           className="checkout-select"
                           value={form.branchId}
-                          onChange={(e) => updateForm("branchId", e.target.value)}
+                          onChange={(e) =>
+                            updateForm("branchId", e.target.value)
+                          }
                         >
                           <option value="">Select Branch</option>
                           {branches.map((branch) => (
@@ -752,7 +798,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             </option>
                           ))}
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
@@ -781,7 +830,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         type="text"
                         placeholder="54000"
                         value={form.postalCode}
-                        onChange={(e) => updateForm("postalCode", e.target.value)}
+                        onChange={(e) =>
+                          updateForm("postalCode", e.target.value)
+                        }
                       />
                     </div>
 
@@ -824,9 +875,13 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           setForm((prev) => ({
                             ...prev,
                             billingSameAsShipping: false,
-                            billingFullName: prev.billingFullName || prev.fullName,
+                            billingFullName:
+                              prev.billingFullName || prev.fullName,
                             billingEmail: prev.billingEmail || prev.email,
                             billingPhone: prev.billingPhone || prev.phone,
+                            billingPhoneCode:
+                              prev.billingPhoneCode || prev.phoneCode,
+                            billingIsoCode: prev.billingIsoCode || prev.isoCode,
                           }));
                         }}
                       />
@@ -836,7 +891,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     {!form.billingSameAsShipping && (
                       <>
                         <div className="checkout-field full-width">
-                          <label className="checkout-label" htmlFor="billingFullName">
+                          <label
+                            className="checkout-label"
+                            htmlFor="billingFullName"
+                          >
                             Billing Full Name *
                           </label>
                           <input
@@ -852,7 +910,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           />
                         </div>
                         <div className="checkout-field">
-                          <label className="checkout-label" htmlFor="billingEmail">
+                          <label
+                            className="checkout-label"
+                            htmlFor="billingEmail"
+                          >
                             Billing Email *
                           </label>
                           <input
@@ -867,20 +928,61 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             required
                           />
                         </div>
-                        <div className="checkout-field">
-                          <label className="checkout-label" htmlFor="billingPhone">
+                        <div className="checkout-field checkout-phone-field">
+                          <label
+                            className="checkout-label"
+                            htmlFor="billingPhone"
+                          >
                             Billing Phone *
                           </label>
-                          <input
-                            id="billingPhone"
-                            className="checkout-input"
-                            type="tel"
-                            placeholder="0300 1234567"
-                            value={form.billingPhone}
-                            onChange={(e) =>
-                              updateForm("billingPhone", e.target.value)
-                            }
-                            required
+                          <PhoneInput
+                            country={String(
+                              form.billingIsoCode || form.isoCode || "PK",
+                            ).toLowerCase()}
+                            value={`+${form.billingPhoneCode || form.phoneCode || "92"}${form.billingPhone || ""}`}
+                            onChange={(value: string, country: object) => {
+                              if (
+                                !("dialCode" in country) ||
+                                !("countryCode" in country)
+                              ) {
+                                return;
+                              }
+                              const data = country as {
+                                dialCode: string;
+                                countryCode: string;
+                              };
+
+                              const dial = data.dialCode;
+                              let localNum = value;
+
+                              if (localNum.startsWith(dial)) {
+                                localNum = localNum.slice(dial.length);
+                              } else if (localNum.startsWith("+" + dial)) {
+                                localNum = localNum.slice(dial.length + 1);
+                              }
+
+                              localNum = localNum.replace(/\D/g, "");
+
+                              if (localNum.startsWith("0")) {
+                                localNum = localNum.replace(/^0+/, "");
+                              }
+
+                              setForm((prev) => ({
+                                ...prev,
+                                billingPhoneCode: normalizeDialCode(dial),
+                                billingIsoCode: data.countryCode.toUpperCase(),
+                                billingPhone: localNum,
+                              }));
+                            }}
+                            inputProps={{
+                              id: "billingPhone",
+                              name: "billingPhone",
+                              required: true,
+                            }}
+                            containerClass="w-full"
+                            enableSearch
+                            disableSearchIcon
+                            searchPlaceholder="Search country"
                           />
                         </div>
                       </>
@@ -905,12 +1007,17 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         className="checkout-input"
                         type="datetime-local"
                         value={form.deliveryDate}
-                        onChange={(e) => updateForm("deliveryDate", e.target.value)}
+                        onChange={(e) =>
+                          updateForm("deliveryDate", e.target.value)
+                        }
                       />
                     </div>
 
                     <div className="checkout-field">
-                      <label className="checkout-label" htmlFor="deliveryOption">
+                      <label
+                        className="checkout-label"
+                        htmlFor="deliveryOption"
+                      >
                         Delivery Option
                       </label>
                       <div className="checkout-select-wrap">
@@ -925,12 +1032,18 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                           <option value={1}>Home Delivery</option>
                           <option value={2}>Store Pickup</option>
                         </select>
-                        <Icon.CaretDown size={14} className="checkout-select-icon" />
+                        <Icon.CaretDown
+                          size={14}
+                          className="checkout-select-icon"
+                        />
                       </div>
                     </div>
 
                     <div className="checkout-field full-width">
-                      <label className="checkout-label" htmlFor="specialInstructions">
+                      <label
+                        className="checkout-label"
+                        htmlFor="specialInstructions"
+                      >
                         Special Instructions
                       </label>
                       <textarea
@@ -946,7 +1059,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                     </div>
 
                     <div className="checkout-field full-width">
-                      <label className="checkout-label" htmlFor="deliveryInstructions">
+                      <label
+                        className="checkout-label"
+                        htmlFor="deliveryInstructions"
+                      >
                         Delivery Instructions
                       </label>
                       <textarea
@@ -965,7 +1081,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                       <input
                         type="checkbox"
                         checked={form.isGiftOrder}
-                        onChange={(e) => updateForm("isGiftOrder", e.target.checked)}
+                        onChange={(e) =>
+                          updateForm("isGiftOrder", e.target.checked)
+                        }
                       />
                       <span>This is a gift order</span>
                     </label>
@@ -988,16 +1106,23 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
             <aside className="checkout-summary-card">
               <div className="checkout-summary-title">
                 <span className="heading5">Your Order</span>
-                {cartState.totalItems > 0 && (
-                  <span className="checkout-summary-count">{cartState.totalItems}</span>
+                {cartState.cartArray.length > 0 && (
+                  <span className="checkout-summary-count">
+                    {cartState.cartArray.length}
+                  </span>
                 )}
               </div>
 
               <div className="checkout-items">
                 {cartState.cartArray.length === 0 ? (
                   <div className="checkout-empty">
-                    <p className="text-secondary text-button">No products in cart.</p>
-                    <Link href="/" className="text-button underline mt-2 inline-block">
+                    <p className="text-secondary text-button">
+                      No products in cart.
+                    </p>
+                    <Link
+                      href="/"
+                      className="text-button underline mt-2 inline-block"
+                    >
                       Continue shopping
                     </Link>
                   </div>
@@ -1033,7 +1158,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             {product.name}
                           </div>
                           {variantsLabel && (
-                            <span className="checkout-item-variant">{variantsLabel}</span>
+                            <span className="checkout-item-variant">
+                              {variantsLabel}
+                            </span>
                           )}
                           <div className="checkout-item-foot">
                             <span className="caption1 text-secondary">
@@ -1089,7 +1216,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
               </div>
 
               <p className="checkout-summary-note">
-                {cartState.totalItems} item(s) · All prices in PKR (Rs.)
+                {cartState.cartArray.length} item(s) · All prices in PKR (Rs.)
               </p>
 
               <Link href="/cart" className="checkout-back-cart">

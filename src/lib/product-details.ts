@@ -343,11 +343,7 @@ export function getComparePrice(
 
   return 0;
 }
-
-export function parseVariantGroupOptions(detail: ProductDetailData): {
-  groupName: string;
-  options: string[];
-}[] {
+export function parseVariantGroupOptions(detail: ProductDetailData): { groupName: string; options: string[] }[] {
   const variants =
     detail.ProductVariantDetail?.productVariantCombinationList ?? [];
   const groups = detail.ProductVariantGroups ?? [];
@@ -361,7 +357,8 @@ export function parseVariantGroupOptions(detail: ProductDetailData): {
       new Set(
         variants
           .map((variant) => {
-            const parts = variant.VariantName.split(",").map((part) =>
+            if (!variant || !variant.VariantName) return "";
+            const parts = String(variant.VariantName).split(",").map((part) =>
               part.trim(),
             );
             return parts[groupIndex] ?? parts[parts.length - 1] ?? variant.VariantName;
@@ -376,7 +373,6 @@ export function parseVariantGroupOptions(detail: ProductDetailData): {
     };
   });
 }
-
 export function findVariantByGroupSelection(
   detail: ProductDetailData,
   selections: Record<string, string>,

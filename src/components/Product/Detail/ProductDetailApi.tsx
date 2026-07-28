@@ -574,7 +574,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                               SKU: {variant.SKU}
                             </div>
                             <div
-                              className={`caption2 mt-0.5 ${variant.InStock ? "text-green" : "text-red"}`}
+                              className={`caption2 font-semibold mt-0.5 ${variant.InStock ? "text-yellow" : "text-red"}`}
                             >
                               {variant.InStock ? "In Stock" : "Out of Stock"}
                             </div>
@@ -672,7 +672,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                 <div className="flex gap-2">
                   <span className="text-title">Stock:</span>
                   <span
-                    className={`${inStock ? "text-green" : "text-red"} font-medium`}
+                    className={`${inStock ? "text-yellow" : "text-red"} font-semibold`}
                   >
                     {inStock ? "In Stock" : "Out of Stock"}
                   </span>

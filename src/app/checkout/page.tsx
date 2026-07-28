@@ -1190,7 +1190,12 @@ const Checkout = () => {
 
                 <div className="checkout-total-row">
                   <span>Discount</span>
-                  <span className={discount > 0 ? "text-green" : undefined}>
+                  <span
+                    style={{
+                      color: discount > 0 ? "#16a34a" : undefined,
+                    }}
+                    className="font-semibold"
+                  >
                     {discount > 0
                       ? `-${formatRsPrice(discount)}`
                       : formatRsPrice(0)}
@@ -1204,10 +1209,10 @@ const Checkout = () => {
                   </div>
                 )}
 
-                <div className="checkout-total-row">
+                {/* <div className="checkout-total-row">
                   <span>Delivery Charges</span>
                   <span>{formatRsPrice(ship)}</span>
-                </div>
+                </div> */}
 
                 <div className="checkout-total-row is-grand">
                   <span>Total</span>

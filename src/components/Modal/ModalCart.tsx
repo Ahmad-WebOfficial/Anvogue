@@ -133,25 +133,25 @@ const ModalCart = ({
     void getStates(pref.countryId);
   }, []);
 
- const handleSaveShipping = () => {
-  if (!selectedCountry) {
-    toaster.error("Please select a country.");
-    return;
-  }
+  const handleSaveShipping = () => {
+    if (!selectedCountry) {
+      toaster.error("Please select a country.");
+      return;
+    }
 
-  if (!selectedState) {
-    toaster.error("Please select a state.");
-    return;
-  }
+    if (!selectedState) {
+      toaster.error("Please select a state.");
+      return;
+    }
 
-  saveCartShippingPref({
-    countryId: selectedCountry,
-    stateId: selectedState,
-  });
+    saveCartShippingPref({
+      countryId: selectedCountry,
+      stateId: selectedState,
+    });
 
-  toaster.success("Shipping preference saved for checkout.");
-  setActiveTab("");
-};
+    toaster.success("Shipping preference saved for checkout.");
+    setActiveTab("");
+  };
   const moneyForFreeship = 150;
   const linesNet = cartState.cartArray.reduce(
     (sum, item) => sum + (item.lineTotal || 0),
@@ -515,7 +515,13 @@ const ModalCart = ({
                       Discount
                       {savedPromoCode ? ` (${savedPromoCode})` : ""}
                     </span>
-                    <span className="text-green font-semibold">
+                    <span
+                      style={{
+                        color:
+                          displayTotals.discount > 0 ? "#16a34a" : undefined,
+                      }}
+                      className="font-semibold"
+                    >
                       {displayTotals.discount > 0
                         ? `-${formatRsPrice(displayTotals.discount)}`
                         : "At checkout"}

@@ -716,11 +716,13 @@ const OrderDetailsPage = () => {
                     <div className="order-total-row">
                       <span className="text-secondary">Discount</span>
                       <span
-                        className={
-                          displayOrder.NetDiscount > 0
-                            ? "text-green"
-                            : undefined
-                        }
+                        style={{
+                          color:
+                            displayOrder.NetDiscount > 0
+                              ? "#16a34a"
+                              : undefined,
+                        }}
+                        className="font-semibold"
                       >
                         {displayOrder.NetDiscount > 0
                           ? `-${formatRsPrice(displayOrder.NetDiscount)}`

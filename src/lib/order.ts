@@ -66,6 +66,8 @@ export interface CreateOrderFormValues {
   billingFullName: string;
   billingEmail: string;
   billingPhone: string;
+  billingPhoneCode?: string;
+  billingIsoCode?: string;
   isAddNewAddress: boolean;
   addressBookId: number;
   longitude: string;
@@ -88,6 +90,7 @@ export interface OrderItem {
 export interface OrderShippingDetails {
   FullName: string;
   Phone: string;
+  PhoneCode?: string | null;
   Country: string;
   City: string;
   Area: string | null;
@@ -101,6 +104,7 @@ export interface OrderShippingDetails {
 export interface OrderBillingDetails {
   EmailAddress: string;
   Phone: string;
+  PhoneCode?: string | null;
   FullName: string | null;
 }
 
@@ -133,6 +137,7 @@ export interface OrderDetailData {
   PaymentStatus: number;
   PaymentMethodName: string;
   CustomerFullName: string;
+  PhoneCode?: string | null;
   PromoCode: string | null;
   NetDiscount: number;
   CampaignId?: number | null;
@@ -232,6 +237,21 @@ function normalizeCreateOrderPayload(
       Longitude: payload.ShippingDetail.Longitude?.trim() || "0",
       Latitude: payload.ShippingDetail.Latitude?.trim() || "0",
       Address: payload.ShippingDetail.Address?.trim() || "N/A",
+      Phone: normalizeLocalPhone(
+        payload.ShippingDetail.Phone,
+        payload.PhoneCode,
+      ),
+      FullName: payload.ShippingDetail.FullName?.trim() || "N/A",
+      EmailAddress: payload.ShippingDetail.EmailAddress?.trim() || "N/A",
+    },
+    BillingDetail: {
+      ...payload.BillingDetail,
+      FullName: payload.BillingDetail.FullName?.trim() || "N/A",
+      EmailAddress: payload.BillingDetail.EmailAddress?.trim() || "N/A",
+      Phone: normalizeLocalPhone(
+        payload.BillingDetail.Phone,
+        payload.PhoneCode,
+      ),
     },
   };
 }
@@ -266,6 +286,36 @@ export function applyGuestAuthFromOrderResponse(data: unknown): boolean {
   });
 }
 
+/** Strip non-digits, country dial code, and leading 0 from local numbers. */
+export function normalizeLocalPhone(
+  phone: unknown,
+  dialCode?: unknown,
+): string {
+  let digits = String(phone ?? "").replace(/\D/g, "");
+  const code = String(dialCode ?? "").replace(/\D/g, "");
+
+  if (code && digits.startsWith(code) && digits.length > code.length + 5) {
+    digits = digits.slice(code.length);
+  }
+
+  while (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  return digits;
+}
+
+/** Display phone as +92 3226928694 (no leading 0). */
+export function formatOrderPhone(
+  phone?: string | null,
+  phoneCode?: string | null,
+): string {
+  const code = String(phoneCode ?? "92").replace(/\D/g, "") || "92";
+  const local = normalizeLocalPhone(phone, code);
+  if (!local) return "—";
+  return `+${code} ${local}`;
+}
+
 export function buildCreateOrderPayload(
   values: CreateOrderFormValues,
 ): CreateOrderPayload {
@@ -275,19 +325,31 @@ export function buildCreateOrderPayload(
     ? fullName
     : str(values.billingFullName);
   const phoneCode = str(values.phoneCode).replace(/\D/g, "") || "92";
+  const billingPhoneCode =
+    str(values.billingPhoneCode).replace(/\D/g, "") || phoneCode;
+
+  const shippingPhone = normalizeLocalPhone(values.phone, phoneCode);
+  const billingPhone = values.billingSameAsShipping
+    ? shippingPhone
+    : normalizeLocalPhone(values.billingPhone, billingPhoneCode);
+
+  const address = str(values.address);
+  const postalCode = str(values.postalCode);
+  const shippingAddress =
+    postalCode && !address.includes(postalCode)
+      ? [address, postalCode].filter(Boolean).join(", ")
+      : address;
 
   return {
     IsGiftOrder: values.isGiftOrder,
     ShippingDetail: {
       FullName: fullName,
       EmailAddress: str(values.email),
-      Phone: str(values.phone),
+      Phone: shippingPhone,
       CityId: Number(values.cityId) || 0,
       CountryId: Number(values.countryId) || 0,
       StateId: Number(values.stateId) || 0,
-      Address: [str(values.address), str(values.postalCode)]
-        .filter(Boolean)
-        .join(", "),
+      Address: shippingAddress || "N/A",
       ISOCode: str(values.isoCode) || "PK",
       City: str(values.cityName),
       AddressBookId: Number(values.addressBookId) || 0,
@@ -299,9 +361,7 @@ export function buildCreateOrderPayload(
       EmailAddress: values.billingSameAsShipping
         ? str(values.email)
         : str(values.billingEmail),
-      Phone: values.billingSameAsShipping
-        ? str(values.phone)
-        : str(values.billingPhone),
+      Phone: billingPhone,
       FullName: billingFullName,
     },
     SessionId: getCartSessionId(),

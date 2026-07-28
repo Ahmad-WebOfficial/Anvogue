@@ -5,7 +5,7 @@ export interface ProductVariantCombination {
   ProductDetailId: number;
   VariantId: number;
   VariantGroupId: number;
-  VariantName: string;
+  VariantName: string | null;
   Price: number;
   DiscountedPrice: number;
   SKU: string;
@@ -344,6 +344,16 @@ export function getComparePrice(
   return 0;
 }
 
+export function splitVariantName(
+  variantName: string | null | undefined,
+): string[] {
+  if (!variantName || typeof variantName !== "string") return [];
+  return variantName
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export function parseVariantGroupOptions(detail: ProductDetailData): {
   groupName: string;
   options: string[];
@@ -361,10 +371,14 @@ export function parseVariantGroupOptions(detail: ProductDetailData): {
       new Set(
         variants
           .map((variant) => {
-            const parts = variant.VariantName.split(",").map((part) =>
-              part.trim(),
+            const parts = splitVariantName(variant.VariantName);
+            if (parts.length === 0) return "";
+            return (
+              parts[groupIndex] ??
+              parts[parts.length - 1] ??
+              variant.VariantName ??
+              ""
             );
-            return parts[groupIndex] ?? parts[parts.length - 1] ?? variant.VariantName;
           })
           .filter(Boolean),
       ),
@@ -389,11 +403,12 @@ export function findVariantByGroupSelection(
 
   return (
     variants.find((variant) => {
-      const parts = variant.VariantName.split(",").map((part) => part.trim());
+      const parts = splitVariantName(variant.VariantName);
 
       return groups.every((group, index) => {
         const selected = selections[group.VariantGroupName];
         if (!selected) return true;
+        if (parts.length === 0) return false;
         const part = parts[index] ?? parts[parts.length - 1];
         return part === selected;
       });

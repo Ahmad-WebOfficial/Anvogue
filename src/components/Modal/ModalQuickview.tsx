@@ -27,6 +27,7 @@ import {
   canAddProductToCart,
   parseVariantGroupOptions,
   findVariantByGroupSelection,
+  splitVariantName,
   ProductDetailData,
   ProductVariantCombination,
   RelatedProduct,
@@ -132,7 +133,7 @@ const ModalQuickview = () => {
       return;
     }
 
-    const parts = variant.VariantName.split(",").map((part) => part.trim());
+    const parts = splitVariantName(variant.VariantName);
     const nextSelections: Record<string, string> = {};
     detail.ProductVariantGroups.forEach((group, index) => {
       const value = parts[index] ?? parts[parts.length - 1];

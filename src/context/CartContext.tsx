@@ -74,7 +74,7 @@ interface CartContextProps {
     selectedSize: string,
     selectedColor: string,
   ) => Promise<void>;
-  fetchCart: () => Promise<void>;
+  fetchCart: (options?: { silent?: boolean }) => Promise<void>;
   clearCart: () => void;
 }
 
@@ -219,9 +219,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const [updatingCartId, setUpdatingCartId] = useState<string | null>(null);
   const fetchGenerationRef = useRef(0);
 
-  const fetchCart = useCallback(async () => {
+  const fetchCart = useCallback(async (options?: { silent?: boolean }) => {
     const generation = ++fetchGenerationRef.current;
-    setCartLoading(true);
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setCartLoading(true);
+    }
     try {
       const summary = await fetchCurrentCart();
       if (generation !== fetchGenerationRef.current) return;
@@ -229,7 +232,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (error) {
       console.error("Fetch cart error:", error);
     } finally {
-      if (generation === fetchGenerationRef.current) {
+      if (!silent && generation === fetchGenerationRef.current) {
         setCartLoading(false);
       }
     }
@@ -320,12 +323,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         currentQuantity: previousQuantity,
         nextQuantity: quantity,
       });
-      await fetchCart();
+      // Silent refresh keeps amounts in sync without remounting the modal list
+      await fetchCart({ silent: true });
     } catch (error) {
       toast.error(
         getApiErrorMessage(error, "Failed to update cart quantity."),
       );
-      await fetchCart();
+      await fetchCart({ silent: true });
     } finally {
       setUpdatingCartId(null);
     }

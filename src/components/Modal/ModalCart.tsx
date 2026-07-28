@@ -165,7 +165,8 @@ const ModalCart = ({
   });
   const displayTotal = displayTotals.netTotal;
   const relatedProducts = cartState.relatedProducts ?? [];
-  const hasItems = cartState.cartArray.length > 0;
+  const lineItemCount = cartState.cartArray.length;
+  const hasItems = lineItemCount > 0;
   const shippingProgress = Math.min((displayTotal / moneyForFreeship) * 100, 100);
   const amountToFreeShipping = Math.max(moneyForFreeship - displayTotal, 0);
 
@@ -257,16 +258,16 @@ const ModalCart = ({
               </span>
               <div>
                 <div className="heading5">Shopping Cart</div>
-                {cartState.totalItems > 0 && (
+                {lineItemCount > 0 && (
                   <p className="caption2 text-secondary mt-0.5">
-                    {cartState.totalItems}{" "}
-                    {cartState.totalItems === 1 ? "item" : "items"}
+                    {lineItemCount}{" "}
+                    {lineItemCount === 1 ? "item" : "items"}
                   </p>
                 )}
               </div>
-              {cartState.totalItems > 0 && (
+              {lineItemCount > 0 && (
                 <span className="modal-cart-count-badge">
-                  {cartState.totalItems}
+                  {lineItemCount}
                 </span>
               )}
             </div>

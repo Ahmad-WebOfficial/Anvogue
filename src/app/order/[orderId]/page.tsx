@@ -17,6 +17,7 @@ import {
   fetchCustomerOrderDetails,
   fetchSelectPayment,
   formatOrderDate,
+  formatOrderPhone,
   getDeliveryOptionLabel,
   getPaymentPortalUrl,
   getStripePaymentReturnUrl,
@@ -268,7 +269,24 @@ const OrderDetailsPage = () => {
     }
   };
 
-  const displayOrder = paymentData?.OrderDto ?? order;
+  // Prefer full order details for customer info; overlay payment totals from SelectPayment.
+  const displayOrder = (() => {
+    if (!order && !paymentData?.OrderDto) return null;
+    if (!order) return paymentData?.OrderDto ?? null;
+    if (!paymentData?.OrderDto) return order;
+
+    const dto = paymentData.OrderDto;
+    return {
+      ...order,
+      ...dto,
+      // Never let a thin payment DTO wipe shipping/billing entered at checkout
+      OrderShippingDetails:
+        order.OrderShippingDetails ?? dto.OrderShippingDetails,
+      OrderBillingDetails: order.OrderBillingDetails ?? dto.OrderBillingDetails,
+      CustomerFullName: order.CustomerFullName || dto.CustomerFullName,
+      PhoneCode: order.PhoneCode ?? dto.PhoneCode,
+    };
+  })();
   const gateways = paymentData?.PaymentGateways ?? [];
   const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
 
@@ -533,11 +551,24 @@ const OrderDetailsPage = () => {
                           {displayOrder.OrderShippingDetails?.FullName}
                         </p>
                         <div className="order-address-lines">
-                          <p>{displayOrder.OrderShippingDetails?.Phone}</p>
-                          <p>{displayOrder.OrderShippingDetails?.Address}</p>
                           <p>
-                            {displayOrder.OrderShippingDetails?.City},{" "}
-                            {displayOrder.OrderShippingDetails?.Country}
+                            {formatOrderPhone(
+                              displayOrder.OrderShippingDetails?.Phone,
+                              displayOrder.OrderShippingDetails?.PhoneCode ||
+                                displayOrder.PhoneCode,
+                            )}
+                          </p>
+                          <p>{displayOrder.OrderShippingDetails?.Address}</p>
+                          {displayOrder.OrderShippingDetails?.Area && (
+                            <p>{displayOrder.OrderShippingDetails.Area}</p>
+                          )}
+                          <p>
+                            {[
+                              displayOrder.OrderShippingDetails?.City,
+                              displayOrder.OrderShippingDetails?.Country,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}
                           </p>
                         </div>
                       </div>
@@ -555,8 +586,18 @@ const OrderDetailsPage = () => {
                             displayOrder.OrderShippingDetails?.FullName}
                         </p>
                         <div className="order-address-lines">
-                          <p>{displayOrder.OrderBillingDetails?.EmailAddress}</p>
-                          <p>{displayOrder.OrderBillingDetails?.Phone}</p>
+                          <p>
+                            {displayOrder.OrderBillingDetails?.EmailAddress ||
+                              "—"}
+                          </p>
+                          <p>
+                            {formatOrderPhone(
+                              displayOrder.OrderBillingDetails?.Phone ||
+                                displayOrder.OrderShippingDetails?.Phone,
+                              displayOrder.OrderBillingDetails?.PhoneCode ||
+                                displayOrder.PhoneCode,
+                            )}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -739,14 +780,12 @@ const OrderDetailsPage = () => {
                     </button>
                   </div>
 
-                 
-
-                  <div className="order-actions mt-4">
+                  <div className="order-summary-pay-btn mt-3">
                     <button
                       type="button"
                       onClick={openCancelModal}
                       disabled={cancelling || isCancelled}
-                      className="order-action-btn is-danger"
+                      className="button-main bg-red w-full"
                     >
                       {cancelling
                         ? "Cancelling..."

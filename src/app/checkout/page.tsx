@@ -91,6 +91,8 @@ const Checkout = () => {
     billingFullName: "",
     billingEmail: "",
     billingPhone: "",
+    billingPhoneCode: "92",
+    billingIsoCode: "PK",
     isAddNewAddress: true,
     addressBookId: 0,
     longitude: "",
@@ -537,7 +539,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                         required
                       />
                     </div>
-                    <div className="checkout-field checkout-phone-field full-width">
+                    <div className="checkout-field checkout-phone-field">
                       <label className="checkout-label" htmlFor="phone">
                         Phone Number *
                       </label>
@@ -756,7 +758,7 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                       </div>
                     </div>
 
-                    <div className="checkout-field full-width">
+                    <div className="checkout-field">
                       <label className="checkout-label" htmlFor="address">
                         Street Address *
                       </label>
@@ -827,6 +829,10 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             billingFullName: prev.billingFullName || prev.fullName,
                             billingEmail: prev.billingEmail || prev.email,
                             billingPhone: prev.billingPhone || prev.phone,
+                            billingPhoneCode:
+                              prev.billingPhoneCode || prev.phoneCode || "92",
+                            billingIsoCode:
+                              prev.billingIsoCode || prev.isoCode || "PK",
                           }));
                         }}
                       />
@@ -867,20 +873,45 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
                             required
                           />
                         </div>
-                        <div className="checkout-field">
+                        <div className="checkout-field checkout-phone-field">
                           <label className="checkout-label" htmlFor="billingPhone">
                             Billing Phone *
                           </label>
-                          <input
-                            id="billingPhone"
-                            className="checkout-input"
-                            type="tel"
-                            placeholder="0300 1234567"
-                            value={form.billingPhone}
-                            onChange={(e) =>
-                              updateForm("billingPhone", e.target.value)
-                            }
-                            required
+                          <PhoneInput
+                            country={String(
+                              form.billingIsoCode || form.isoCode || "PK",
+                            ).toLowerCase()}
+                            value={`${normalizeDialCode(form.billingPhoneCode || form.phoneCode)}${String(form.billingPhone || "").replace(/\D/g, "")}`}
+                            onChange={(value: string, country: object) => {
+                              if (
+                                !("dialCode" in country) ||
+                                !("countryCode" in country)
+                              ) {
+                                return;
+                              }
+                              const data = country as {
+                                dialCode: string;
+                                countryCode: string;
+                              };
+                              setForm((prev) => ({
+                                ...prev,
+                                billingPhoneCode: normalizeDialCode(data.dialCode),
+                                billingIsoCode: data.countryCode.toUpperCase(),
+                                billingPhone: toLocalPhoneNumber(
+                                  value || "",
+                                  data.dialCode,
+                                ),
+                              }));
+                            }}
+                            inputProps={{
+                              id: "billingPhone",
+                              name: "billingPhone",
+                              required: true,
+                            }}
+                            containerClass="w-full"
+                            enableSearch
+                            disableSearchIcon
+                            searchPlaceholder="Search country"
                           />
                         </div>
                       </>
@@ -988,9 +1019,9 @@ const res = await api.get<any>("/api/v1/Customer/GetProfile");
             <aside className="checkout-summary-card">
               <div className="checkout-summary-title">
                 <span className="heading5">Your Order</span>
-                {cartState.totalItems > 0 && (
+                {/* {cartState.totalItems > 0 && (
                   <span className="checkout-summary-count">{cartState.totalItems}</span>
-                )}
+                )} */}
               </div>
 
               <div className="checkout-items">

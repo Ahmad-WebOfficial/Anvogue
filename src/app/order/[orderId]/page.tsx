@@ -314,7 +314,6 @@ const OrderDetailsPage = () => {
 
       toast.success("Redirecting to payment gateway...");
 
-      // Same-tab navigation after async payinvoice — window.open is often blocked.
       if (paymentResult.IsOpenNewTab) {
         const popup = window.open(paymentUrl, "_blank", "noopener,noreferrer");
         if (!popup) {
@@ -567,7 +566,6 @@ const OrderDetailsPage = () => {
                                 details?.Phone || details?.phone || "",
                               ).replace(/\D/g, "");
 
-                              // Agar local number ke shuru mein phoneCode ya extra 0 aa jaye toh clean kar dein
                               if (phone.startsWith(phoneCode)) {
                                 phone = phone.slice(phoneCode.length);
                               }

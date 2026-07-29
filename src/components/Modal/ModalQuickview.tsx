@@ -38,7 +38,9 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
-import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
+import ProductBadges, {
+  buildProductBadges,
+} from "@/components/Product/ProductBadges";
 import toast from "react-hot-toast";
 
 const ModalQuickview = () => {
@@ -131,8 +133,9 @@ const ModalQuickview = () => {
       setGroupSelections({});
       return;
     }
-
-    const parts = variant.VariantName.split(",").map((part) => part.trim());
+    const parts = (variant.VariantName || "")
+      .split(",")
+      .map((part) => part.trim());
     const nextSelections: Record<string, string> = {};
     detail.ProductVariantGroups.forEach((group, index) => {
       const value = parts[index] ?? parts[parts.length - 1];
@@ -306,7 +309,11 @@ const ModalQuickview = () => {
           ) : error ? (
             <div className="modal-quickview-scroll flex flex-col items-center justify-center min-h-[420px] px-6 py-10 text-center">
               <p className="text-red-600 mb-4">{error}</p>
-              <button type="button" className="button-main" onClick={closeQuickview}>
+              <button
+                type="button"
+                className="button-main"
+                onClick={closeQuickview}
+              >
                 Close
               </button>
             </div>
@@ -365,26 +372,33 @@ const ModalQuickview = () => {
                   )}
                 </div>
 
-                {/* Product info */}
                 <div className="w-full lg:w-[58%] min-w-0">
                   <div className="flex justify-between gap-3">
                     <div className="min-w-0">
                       <div className="caption2 text-secondary font-semibold uppercase">
                         {productDetail.Category}
                       </div>
-                      <h2 className="heading4 mt-1 break-words">{productDetail.Name}</h2>
+                      <h2 className="heading4 mt-1 break-words">
+                        {productDetail.Name}
+                      </h2>
                     </div>
-                    <button 
-  onClick={handleAddToCart}
-  disabled={productDetail.Status === 0}
->
-  {productDetail.Status === 0 ? "Currently Unavailable" : "Add to Cart"}
-</button>
+                    <span
+                      className={`text-sm font-medium ${
+                        productDetail.Status === 0
+                          ? "text-gray-400"
+                          : "text-gray-900"
+                      }`}
+                    >
+                      {productDetail.Status === 0 ? "Unavailable" : "Available"}
+                    </span>
                   </div>
 
                   {productDetail.AverageRating > 0 && (
                     <div className="flex items-center mt-3">
-                      <Rate currentRate={productDetail.AverageRating} size={14} />
+                      <Rate
+                        currentRate={productDetail.AverageRating}
+                        size={14}
+                      />
                       <span className="caption1 text-secondary ml-2">
                         ({productDetail.AverageRating} rating)
                       </span>
@@ -435,7 +449,9 @@ const ModalQuickview = () => {
                   </div>
 
                   {productDetail.Description && (
-                    <p className="desc text-secondary mt-4">{productDetail.Description}</p>
+                    <p className="desc text-secondary mt-4">
+                      {productDetail.Description}
+                    </p>
                   )}
 
                   {productDetail.LongDescription && (
@@ -503,11 +519,13 @@ const ModalQuickview = () => {
                                 <div className="text-button line-clamp-2 leading-tight">
                                   {variant.VariantName}
                                 </div>
-                            <div className="caption1 font-semibold mt-1.5">
-                              {formatRsPrice(getVariantPrice(variant))}
-                            </div>
+                                <div className="caption1 font-semibold mt-1.5">
+                                  {formatRsPrice(getVariantPrice(variant))}
+                                </div>
                                 <div className="caption2 text-secondary mt-0.5">
-                                  {variant.InStock ? "In Stock" : "Out of Stock"}
+                                  {variant.InStock
+                                    ? "In Stock"
+                                    : "Out of Stock"}
                                 </div>
                               </div>
                             </button>
@@ -594,7 +612,9 @@ const ModalQuickview = () => {
                     </div>
                     <div className="flex flex-wrap gap-x-2">
                       <span className="text-title">Category:</span>
-                      <span className="text-secondary">{productDetail.Category}</span>
+                      <span className="text-secondary">
+                        {productDetail.Category}
+                      </span>
                     </div>
                     <div className="flex flex-wrap gap-x-2">
                       <span className="text-title">Brand:</span>
@@ -611,7 +631,9 @@ const ModalQuickview = () => {
                     {productDetail.Tags && (
                       <div className="flex flex-wrap gap-x-2">
                         <span className="text-title">Tags:</span>
-                        <span className="text-secondary">{productDetail.Tags}</span>
+                        <span className="text-secondary">
+                          {productDetail.Tags}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -674,7 +696,9 @@ const ModalQuickview = () => {
                               <button
                                 type="button"
                                 className="caption2 px-3 py-1 rounded-full border border-line hover:bg-black hover:text-white transition-colors"
-                                onClick={() => handleRelatedProductClick(related)}
+                                onClick={() =>
+                                  handleRelatedProductClick(related)
+                                }
                               >
                                 Quick View
                               </button>

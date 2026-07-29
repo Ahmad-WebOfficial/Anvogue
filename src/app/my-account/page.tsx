@@ -1412,77 +1412,87 @@ const MyAccount = () => {
                       </p>
                     </div>
                     <div className="account-order-detail-card">
-  <h3 className="account-order-detail-section-title">
-    <Icon.CreditCard size={16} weight="bold" />
-    Payment
-  </h3>
-  <p className="text-button font-semibold">
-    {selectedOrderDetail.PaymentMethodName}
-  </p>
+                      <h3 className="account-order-detail-section-title">
+                        <Icon.CreditCard size={16} weight="bold" />
+                        Payment
+                      </h3>
+                      <p className="text-button font-semibold">
+                        {selectedOrderDetail.PaymentMethodName}
+                      </p>
 
-  {/* Payment Status Tag & Verify Button Logic */}
-  {(() => {
-    const payStatus = String(
-      selectedOrderDetail.PaymentStatusDisplayName ||
-        selectedOrderDetail.PaymentStatus ||
-        selectedOrderDetail.PaymentState ||
-        "",
-    ).toLowerCase();
+                      {/* Payment Status Tag & Verify Button Logic */}
+                      {(() => {
+                        const payStatus = String(
+                          selectedOrderDetail.PaymentStatusDisplayName ||
+                            selectedOrderDetail.PaymentStatus ||
+                            selectedOrderDetail.PaymentState ||
+                            "",
+                        ).toLowerCase();
 
-    const isCancelled =
-      formatOrderStatusLabel(selectedOrderDetail.OrderStatusDisplayName) ===
-      "Cancelled";
+                        const isCancelled =
+                          formatOrderStatusLabel(
+                            selectedOrderDetail.OrderStatusDisplayName,
+                          ) === "Cancelled";
 
-    if (isCancelled || payStatus.includes("cancel")) {
-      return (
-        <span className="account-status-tag mt-3 is-canceled">
-          Cancelled
-        </span>
-      );
-    }
+                        if (isCancelled || payStatus.includes("cancel")) {
+                          return (
+                            <span className="account-status-tag mt-3 is-canceled">
+                              Cancelled
+                            </span>
+                          );
+                        }
 
-    if (
-      payStatus.includes("complete") ||
-      payStatus.includes("paid") ||
-      payStatus.includes("success")
-    ) {
-      return (
-        <span className="account-status-tag mt-3 is-completed">
-          Payment Completed
-        </span>
-      );
-    }
+                        if (
+                          payStatus.includes("complete") ||
+                          payStatus.includes("paid") ||
+                          payStatus.includes("success")
+                        ) {
+                          return (
+                            <span className="account-status-tag mt-3 is-completed">
+                              Payment Completed
+                            </span>
+                          );
+                        }
 
-    // Unverified / Incomplete State with Direct Payment URL or Order ID Redirect
-    const paymentUrl =
-      selectedOrderDetail.PaymentUrl ||
-      selectedOrderDetail.CheckoutUrl ||
-      selectedOrderDetail.RedirectUrl;
+                        // Unverified / Incomplete State with Direct Payment URL or Order ID Redirect
+                        const paymentUrl =
+                          selectedOrderDetail.PaymentUrl ||
+                          selectedOrderDetail.CheckoutUrl ||
+                          selectedOrderDetail.RedirectUrl;
 
-    return (
-      <div className="mt-3 flex flex-col gap-2">
-        <button
-          type="button"
-          className="button-main bg-black text-xs py-3 mt-3 px-3 w-full"
-          onClick={() => {
-            if (paymentUrl) {
-              toast.success("Redirecting to payment page...");
-              window.location.href = String(paymentUrl);
-            } else if (selectedOrderDetail.OrderId || selectedOrderDetail.OrderNumber) {
-              const orderId = selectedOrderDetail.OrderId || selectedOrderDetail.OrderNumber;
-              toast.success("Redirecting to payment verification...");
-              router.push(`/order/${orderId}?pay=1`);
-            } else {
-              toast.error("Payment details not available.");
-            }
-          }}
-        >
-          Verify Your Payment
-        </button>
-      </div>
-    );
-  })()}
-</div>
+                        return (
+                          <div className="mt-3 flex flex-col gap-2">
+                            <button
+                              type="button"
+                              className="button-main bg-black text-xs py-3 mt-3 px-3 w-full"
+                              onClick={() => {
+                                if (paymentUrl) {
+                                  toast.success(
+                                    "Redirecting to payment page...",
+                                  );
+                                  window.location.href = String(paymentUrl);
+                                } else if (
+                                  selectedOrderDetail.OrderId ||
+                                  selectedOrderDetail.OrderNumber
+                                ) {
+                                  const orderId =
+                                    selectedOrderDetail.OrderId ||
+                                    selectedOrderDetail.OrderNumber;
+                                  toast.success(
+                                    "Redirecting to payment verification...",
+                                  );
+                                  router.push(`/order/${orderId}?pay=1`);
+                                } else {
+                                  toast.error("Payment details not available.");
+                                }
+                              }}
+                            >
+                              Verify Your Payment
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
 
                     <div className="account-order-detail-card">
                       <h3 className="account-order-detail-section-title">
@@ -1620,7 +1630,7 @@ const MyAccount = () => {
                     {selectedOrderDetail.NetDiscount > 0 && (
                       <div className="account-order-detail-total-row">
                         <span>Discount</span>
-                        <span className="text-green">
+                        <span style={{ color: "#28a745" }}>
                           -{formatRsPrice(selectedOrderDetail.NetDiscount)}
                         </span>
                       </div>

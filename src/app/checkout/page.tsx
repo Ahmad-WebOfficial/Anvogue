@@ -805,7 +805,7 @@ const Checkout = () => {
                       </div>
                     </div>
 
-                    <div className="checkout-field full-width">
+                    <div className="checkout-field">
                       <label className="checkout-label" htmlFor="address">
                         Street Address *
                       </label>

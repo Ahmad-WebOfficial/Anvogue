@@ -42,7 +42,9 @@ import {
 } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
-import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
+import ProductBadges, {
+  buildProductBadges,
+} from "@/components/Product/ProductBadges";
 import { toast } from "react-hot-toast";
 
 interface Props {
@@ -192,8 +194,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     availableStock !== null ? Math.max(1, availableStock) : 999;
   const detailBadges = buildProductBadges({
     isPromotional:
-      productDetail.IsPromotional ||
-      Boolean(selectedVariant?.IsPromotional),
+      productDetail.IsPromotional || Boolean(selectedVariant?.IsPromotional),
     discountLabel,
     inventoryManagement:
       selectedVariant?.InventoryManagement ?? productDetail.InventoryManagement,
@@ -314,13 +315,14 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
     setProductDetail(detail);
   };
 
-  const handleSubmitRating = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitRating = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     if (!productDetail) return;
 
     if (!productDetail.EnableSubmitRatingReviews) {
-      const message =
-        "Reviews are not available for this product right now.";
+      const message = "Reviews are not available for this product right now.";
       setRatingError(message);
       toast.error(message);
       return;
@@ -381,7 +383,9 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
               <ProductBadges badges={detailBadges} className="z-[3]" />
               <Swiper
                 onSwiper={setMainSwiper}
-                onSlideChange={(swiper) => setActiveImageIndex(swiper.activeIndex)}
+                onSlideChange={(swiper) =>
+                  setActiveImageIndex(swiper.activeIndex)
+                }
                 slidesPerView={1}
                 spaceBetween={0}
                 modules={[Navigation]}
@@ -432,7 +436,9 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                   <div className="caption2 text-secondary font-semibold uppercase tracking-wide">
                     {productDetail.Category}
                   </div>
-                  <h1 className="heading3 mt-2 break-words">{productDetail.Name}</h1>
+                  <h1 className="heading3 mt-2 break-words">
+                    {productDetail.Name}
+                  </h1>
                 </div>
                 <button
                   type="button"
@@ -491,11 +497,15 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                       <span className="text-secondary">
                         {formatRsPrice(unitPrice)} × {quantity}
                       </span>
-                      <span className="heading5">{formatRsPrice(totalPrice)}</span>
+                      <span className="heading5">
+                        {formatRsPrice(totalPrice)}
+                      </span>
                     </div>
                     {totalComparePrice > totalPrice && (
                       <div className="flex items-center justify-between mt-1">
-                        <span className="caption2 text-secondary">You save</span>
+                        <span className="caption2 text-secondary">
+                          You save
+                        </span>
                         <span className="caption2 text-green font-semibold">
                           {formatRsPrice(totalComparePrice - totalPrice)}
                         </span>
@@ -667,7 +677,9 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                 </div>
                 <div className="flex gap-2">
                   <span className="text-title">Category:</span>
-                  <span className="text-secondary">{productDetail.Category}</span>
+                  <span className="text-secondary">
+                    {productDetail.Category}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-title">Stock:</span>
@@ -713,7 +725,8 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                 <div className="desc-block mt-5 text-secondary leading-relaxed">
                   {activeTab === "description" ? (
                     <p className="whitespace-pre-line">
-                      {productDetail.LongDescription || productDetail.Description}
+                      {productDetail.LongDescription ||
+                        productDetail.Description}
                     </p>
                   ) : (
                     <div id="form-review" className="form-review">
@@ -732,7 +745,10 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                         </div>
                         {productDetail.AverageRating > 0 && (
                           <div className="flex items-center gap-2">
-                            <Rate currentRate={productDetail.AverageRating} size={16} />
+                            <Rate
+                              currentRate={productDetail.AverageRating}
+                              size={16}
+                            />
                             <span className="caption1 text-secondary">
                               ({productDetail.AverageRating} avg)
                             </span>
@@ -759,7 +775,9 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                                     aria-label={`Rate ${starValue} star${starValue > 1 ? "s" : ""}`}
                                     className="p-1 transition-transform hover:scale-110"
                                     onClick={() => setRatingValue(starValue)}
-                                    onMouseEnter={() => setHoverRating(starValue)}
+                                    onMouseEnter={() =>
+                                      setHoverRating(starValue)
+                                    }
                                     onMouseLeave={() => setHoverRating(0)}
                                     disabled={submittingRating}
                                   >

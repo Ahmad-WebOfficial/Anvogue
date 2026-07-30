@@ -94,10 +94,9 @@ const Checkout = () => {
     specialInstructions: "",
     deliveryInstructions: "",
     isGiftOrder: false,
-    deliveryOption: 1,
+    deliveryOption: "",
     isoCode: "PK",
     deliveryDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-    billingSameAsShipping: true,
     billingFullName: "",
     billingEmail: "",
     billingPhone: "",
@@ -386,19 +385,6 @@ const Checkout = () => {
     }
 
     if (
-      !form.fullName ||
-      !form.email ||
-      !form.phone ||
-      !form.address ||
-      !form.countryId ||
-      !form.stateId ||
-      !form.cityId
-    ) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
-
-    if (
       !form.billingSameAsShipping &&
       (!form.billingFullName || !form.billingEmail || !form.billingPhone)
     ) {
@@ -465,7 +451,6 @@ const Checkout = () => {
           : response.Message || "Order created successfully!",
       );
 
-      // Clear UI + guest session immediately so back navigation cannot show old cart
       clearCart();
       clearOrderFlowStorage({ keepPendingPromo: true });
       if (typeof window !== "undefined") {
@@ -572,17 +557,14 @@ const Checkout = () => {
                           const dial = data.dialCode;
                           let localNum = value;
 
-                          // Remove dial code if present in the input value
                           if (localNum.startsWith(dial)) {
                             localNum = localNum.slice(dial.length);
                           } else if (localNum.startsWith("+" + dial)) {
                             localNum = localNum.slice(dial.length + 1);
                           }
 
-                          // Sanitize to numbers only
                           localNum = localNum.replace(/\D/g, "");
 
-                          // Remove leading zero if user typed it
                           if (localNum.startsWith("0")) {
                             localNum = localNum.replace(/^0+/, "");
                           }
@@ -755,7 +737,7 @@ const Checkout = () => {
 
                     <div className="checkout-field">
                       <label className="checkout-label" htmlFor="areaId">
-                        Area
+                        Area <span className="text-red-500">*</span>
                       </label>
                       <div className="checkout-select-wrap">
                         <select
@@ -763,6 +745,7 @@ const Checkout = () => {
                           className="checkout-select"
                           value={form.areaId}
                           onChange={(e) => updateForm("areaId", e.target.value)}
+                          required
                         >
                           <option value="">Choose Area</option>
                           {areas.map((area) => (
@@ -777,10 +760,9 @@ const Checkout = () => {
                         />
                       </div>
                     </div>
-
                     <div className="checkout-field">
                       <label className="checkout-label" htmlFor="branchId">
-                        Branch
+                        Branch <span className="text-red-500">*</span>
                       </label>
                       <div className="checkout-select-wrap">
                         <select
@@ -790,6 +772,7 @@ const Checkout = () => {
                           onChange={(e) =>
                             updateForm("branchId", e.target.value)
                           }
+                          required
                         >
                           <option value="">Select Branch</option>
                           {branches.map((branch) => (
@@ -804,7 +787,6 @@ const Checkout = () => {
                         />
                       </div>
                     </div>
-
                     <div className="checkout-field">
                       <label className="checkout-label" htmlFor="address">
                         Street Address *
@@ -822,17 +804,18 @@ const Checkout = () => {
 
                     <div className="checkout-field">
                       <label className="checkout-label" htmlFor="postalCode">
-                        Postal Code
+                        Postal Code *
                       </label>
                       <input
+                        type="text"
                         id="postalCode"
                         className="checkout-input"
-                        type="text"
-                        placeholder="54000"
                         value={form.postalCode}
                         onChange={(e) =>
                           updateForm("postalCode", e.target.value)
                         }
+                        placeholder="Postal Code"
+                        required
                       />
                     </div>
 
@@ -989,7 +972,6 @@ const Checkout = () => {
                     )}
                   </div>
                 </div>
-
                 <div className="checkout-section">
                   <h2 className="checkout-section-title">
                     <span className="checkout-section-icon">
@@ -1000,7 +982,8 @@ const Checkout = () => {
                   <div className="checkout-field-grid cols-2">
                     <div className="checkout-field">
                       <label className="checkout-label" htmlFor="deliveryDate">
-                        Preferred Delivery Date
+                        Preferred Delivery Date{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <input
                         id="deliveryDate"
@@ -1010,6 +993,7 @@ const Checkout = () => {
                         onChange={(e) =>
                           updateForm("deliveryDate", e.target.value)
                         }
+                        required
                       />
                     </div>
 
@@ -1018,7 +1002,7 @@ const Checkout = () => {
                         className="checkout-label"
                         htmlFor="deliveryOption"
                       >
-                        Delivery Option
+                        Delivery Option <span className="text-red-500">*</span>
                       </label>
                       <div className="checkout-select-wrap">
                         <select
@@ -1026,9 +1010,16 @@ const Checkout = () => {
                           className="checkout-select"
                           value={form.deliveryOption}
                           onChange={(e) =>
-                            updateForm("deliveryOption", Number(e.target.value))
+                            updateForm(
+                              "deliveryOption",
+                              e.target.value ? Number(e.target.value) : "",
+                            )
                           }
+                          required
                         >
+                          <option value="" disabled>
+                            Please select your delivery option
+                          </option>
                           <option value={1}>Home Delivery</option>
                           <option value={2}>Store Pickup</option>
                         </select>

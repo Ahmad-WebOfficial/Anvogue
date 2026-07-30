@@ -153,7 +153,10 @@ const OrderDetailsPage = () => {
         saveOrderSaleCampaignId(orderId, resolvedSaleCampaignId);
       }
       const savedCode = (activeOrder.PromoCode ?? "").trim();
-      const savedNetDiscount = Math.max(0, Number(activeOrder.NetDiscount) || 0);
+      const savedNetDiscount = Math.max(
+        0,
+        Number(activeOrder.NetDiscount) || 0,
+      );
       const itemDiscount = (
         activeOrder.OrderDetails?.OrderItemList ?? []
       ).reduce(
@@ -406,7 +409,7 @@ const OrderDetailsPage = () => {
           ...campaign,
           amount:
             Math.round(
-              ((campaign.amount / itemCampaignTotal) * productDiscount) * 100,
+              (campaign.amount / itemCampaignTotal) * productDiscount * 100,
             ) / 100,
         }))
       : [];
@@ -423,7 +426,8 @@ const OrderDetailsPage = () => {
       ? [
           ...classifiedProductDiscounts,
           {
-            campaignType: Number(displayOrder?.CampaignType) || CampaignType.Sale,
+            campaignType:
+              Number(displayOrder?.CampaignType) || CampaignType.Sale,
             campaignTypeDisplayName:
               displayOrder?.CampaignTypeDisplayName ?? null,
             amount: unclassifiedProductDiscount,
@@ -434,7 +438,11 @@ const OrderDetailsPage = () => {
   // Visible rows must always reconcile: Order + Delivery + POS - discounts.
   const computedNetAmount = Math.max(
     0,
-    orderAmount + deliveryCharges + posCharges - productDiscount - promoDiscount,
+    orderAmount +
+      deliveryCharges +
+      posCharges -
+      productDiscount -
+      promoDiscount,
   );
   // Prefer API when it already matches; otherwise show the reconciled total.
   const displayNetAmount =
@@ -533,14 +541,7 @@ const OrderDetailsPage = () => {
       toast.error(getApiErrorMessage(err, "Failed to process payment."));
       setPaying(false);
     }
-  }, [
-    order,
-    paymentData,
-    selectedGateway,
-    saleCampaignId,
-    clearCart,
-    router,
-  ]);
+  }, [order, paymentData, selectedGateway, saleCampaignId, clearCart, router]);
 
   const handlePayNow = () => {
     void processPayment();
@@ -947,7 +948,9 @@ const OrderDetailsPage = () => {
                     ) : (
                       <div className="order-total-row">
                         <span className="text-secondary">Discount</span>
-                        <span className="font-semibold">{formatRsPrice(0)}</span>
+                        <span className="font-semibold">
+                          {formatRsPrice(0)}
+                        </span>
                       </div>
                     )}
                     {(isPromoApplied || promoDiscount > 0) && (

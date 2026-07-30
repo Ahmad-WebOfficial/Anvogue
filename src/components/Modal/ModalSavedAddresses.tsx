@@ -1,8 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import { CustomerAddress } from "@/lib/customer-address";
+import {
+  CustomerAddress,
+  deleteCustomerAddress,
+} from "@/lib/customer-address";
+import { getApiErrorMessage } from "@/lib/api";
+import toast from "react-hot-toast";
 
 type ModalSavedAddressesProps = {
   open: boolean;
@@ -12,6 +17,7 @@ type ModalSavedAddressesProps = {
   onClose: () => void;
   onSelect: (address: CustomerAddress) => void;
   onUseNew: () => void;
+  onDeleted: (addressBookId: number) => void;
 };
 
 const ModalSavedAddresses = ({
@@ -22,8 +28,39 @@ const ModalSavedAddresses = ({
   onClose,
   onSelect,
   onUseNew,
+  onDeleted,
 }: ModalSavedAddressesProps) => {
+  const [deletingAddressId, setDeletingAddressId] = useState<number | null>(
+    null,
+  );
+
   if (!open || addresses.length === 0) return null;
+
+  const handleDelete = async (address: CustomerAddress) => {
+    const addressBookId = Number(address.AddressBookId);
+    if (!addressBookId) {
+      toast.error("This address cannot be removed because its ID is missing.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${address.FullName || "this saved address"}?`,
+    );
+    if (!confirmed) return;
+
+    setDeletingAddressId(addressBookId);
+    try {
+      const message = await deleteCustomerAddress(addressBookId);
+      onDeleted(addressBookId);
+      toast.success(message);
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Could not remove the saved address."),
+      );
+    } finally {
+      setDeletingAddressId(null);
+    }
+  };
 
   return (
     <div className="checkout-address-modal-overlay" onClick={onClose}>
@@ -68,40 +105,71 @@ const ModalSavedAddresses = ({
                   address.CountryName,
                 ].filter(Boolean);
 
+                const isDeleting =
+                  deletingAddressId === address.AddressBookId;
+
                 return (
-                  <button
+                  <div
                     key={address.AddressBookId || address.Address}
-                    type="button"
                     className={`checkout-address-card${isSelected ? " is-selected" : ""}`}
-                    onClick={() => onSelect(address)}
                   >
-                    <div className="checkout-address-card-top">
-                      <div className="checkout-address-card-name">
-                        <Icon.MapPin size={16} weight="fill" className="shrink-0" />
-                        <span>{address.FullName || "Saved Address"}</span>
+                    <button
+                      type="button"
+                      className="checkout-address-card-select"
+                      onClick={() => onSelect(address)}
+                      disabled={isDeleting}
+                    >
+                      <div className="checkout-address-card-top">
+                        <div className="checkout-address-card-name">
+                          <Icon.MapPin
+                            size={16}
+                            weight="fill"
+                            className="shrink-0"
+                          />
+                          <span>{address.FullName || "Saved Address"}</span>
+                        </div>
+                        {address.IsDefault && (
+                          <span className="checkout-address-default">
+                            Default
+                          </span>
+                        )}
                       </div>
-                      {address.IsDefault && (
-                        <span className="checkout-address-default">Default</span>
+                      <div className="checkout-address-card-line">
+                        {address.Address}
+                      </div>
+                      {locationBits.length > 0 && (
+                        <div className="checkout-address-card-line">
+                          {locationBits.join(", ")}
+                        </div>
                       )}
+                      {address.PhoneNumber && (
+                        <div className="checkout-address-card-line">
+                          {address.PhoneNumber}
+                        </div>
+                      )}
+                    </button>
+                    <div className="checkout-address-card-actions">
+                      <button
+                        type="button"
+                        className="checkout-address-card-cta"
+                        onClick={() => onSelect(address)}
+                        disabled={isDeleting}
+                      >
+                        Use this address
+                        <Icon.ArrowRight size={14} weight="bold" />
+                      </button>
+                      <button
+                        type="button"
+                        className="checkout-address-card-delete"
+                        onClick={() => void handleDelete(address)}
+                        disabled={deletingAddressId !== null}
+                        aria-label={`Delete ${address.FullName || "saved address"}`}
+                      >
+                        <Icon.Trash size={14} weight="bold" />
+                        {isDeleting ? "Removing..." : "Delete"}
+                      </button>
                     </div>
-                    <div className="checkout-address-card-line">
-                      {address.Address}
-                    </div>
-                    {locationBits.length > 0 && (
-                      <div className="checkout-address-card-line">
-                        {locationBits.join(", ")}
-                      </div>
-                    )}
-                    {address.PhoneNumber && (
-                      <div className="checkout-address-card-line">
-                        {address.PhoneNumber}
-                      </div>
-                    )}
-                    <div className="checkout-address-card-cta">
-                      Use this address
-                      <Icon.ArrowRight size={14} weight="bold" />
-                    </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

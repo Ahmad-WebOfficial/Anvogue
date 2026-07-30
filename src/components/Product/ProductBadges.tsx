@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { formatCampaignDiscount } from "@/lib/discount";
 
 export type ProductBadgeItem = {
   key: string;
@@ -30,6 +31,8 @@ export function buildProductBadges(input: {
   isPromotional?: boolean;
   discount?: number;
   discountType?: number;
+  campaignType?: number;
+  campaignTypeDisplayName?: string | null;
   inventoryManagement?: boolean;
   availableStock?: number | null;
   comingSoon?: boolean;
@@ -58,9 +61,12 @@ export function buildProductBadges(input: {
   const discountLabel =
     input.discountLabel ??
     (input.discount && input.discount > 0
-      ? input.discountType === 1
-        ? `-Rs. ${input.discount}`
-        : `-${input.discount}%`
+      ? formatCampaignDiscount({
+          discount: input.discount,
+          discountValueType: input.discountType,
+          campaignType: input.campaignType,
+          campaignTypeDisplayName: input.campaignTypeDisplayName,
+        })
       : null);
 
   if (discountLabel) {

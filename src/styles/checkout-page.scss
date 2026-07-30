@@ -429,12 +429,13 @@
 .checkout-address-card {
     text-align: left;
     width: 100%;
-    padding: 14px;
+    padding: 0;
     border-radius: 14px;
     border: 1px solid var(--line);
     background: var(--white);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     min-width: 0;
+    overflow: hidden;
 
     &:hover {
         border-color: rgba(31, 31, 31, 0.4);
@@ -445,6 +446,19 @@
         border-color: var(--black);
         background: rgba(210, 239, 154, 0.2);
         box-shadow: 0 0 0 1px var(--black);
+    }
+}
+
+.checkout-address-card-select {
+    display: block;
+    width: 100%;
+    padding: 14px 14px 8px;
+    text-align: left;
+    color: inherit;
+
+    &:disabled {
+        opacity: 0.6;
+        cursor: wait;
     }
 }
 
@@ -493,10 +507,43 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-top: 10px;
     font-size: 12px;
     font-weight: 700;
     color: var(--black);
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.checkout-address-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px 12px;
+}
+
+.checkout-address-card-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    padding: 5px 8px;
+    border-radius: 8px;
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 700;
+
+    &:hover:not(:disabled) {
+        background: rgba(220, 38, 38, 0.08);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 }
 
 .checkout-address-loading {

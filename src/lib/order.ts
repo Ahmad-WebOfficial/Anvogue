@@ -79,6 +79,9 @@ export interface OrderItem {
   ProductDetailId: number;
   Amount: number;
   DiscountAmount: number | null;
+  CampaignType?: number | null;
+  CampaignTypeDisplayName?: string | null;
+  DiscountValueType?: number | null;
   TotalAmount: number;
   VariantName: string;
   Quantity: number;
@@ -135,8 +138,11 @@ export interface OrderDetailData {
   CustomerFullName: string;
   PromoCode: string | null;
   NetDiscount: number;
+  SaleCampaignId?: number | null;
   CampaignId?: number | null;
   AppliedCampaignId?: number | null;
+  CampaignType?: number | null;
+  CampaignTypeDisplayName?: string | null;
 }
 
 export interface PaymentGateway {
@@ -211,6 +217,54 @@ export function extractOrderId(data: unknown): number | null {
   }
 
   return null;
+}
+
+export function extractSaleCampaignId(data: unknown): number | null {
+  if (!data || typeof data !== "object") return null;
+
+  const record = data as Record<string, unknown>;
+  const direct = parsePositiveId(
+    record.SaleCampaignId ??
+      record.saleCampaignId ??
+      record.SalesCampaignId ??
+      record.salesCampaignId,
+  );
+  if (direct) return direct;
+
+  for (const value of Object.values(record)) {
+    if (value && typeof value === "object") {
+      const nested = extractSaleCampaignId(value);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
+const SALE_CAMPAIGN_STORAGE_PREFIX = "order_sale_campaign_id_";
+
+export function saveOrderSaleCampaignId(
+  orderId: number,
+  saleCampaignId: number,
+): void {
+  if (typeof window === "undefined") return;
+  if (orderId <= 0 || saleCampaignId <= 0) return;
+  sessionStorage.setItem(
+    `${SALE_CAMPAIGN_STORAGE_PREFIX}${orderId}`,
+    String(saleCampaignId),
+  );
+}
+
+export function getOrderSaleCampaignId(orderId: number): number | null {
+  if (typeof window === "undefined" || orderId <= 0) return null;
+  return parsePositiveId(
+    sessionStorage.getItem(`${SALE_CAMPAIGN_STORAGE_PREFIX}${orderId}`),
+  );
+}
+
+export function clearOrderSaleCampaignId(orderId: number): void {
+  if (typeof window === "undefined" || orderId <= 0) return;
+  sessionStorage.removeItem(`${SALE_CAMPAIGN_STORAGE_PREFIX}${orderId}`);
 }
 
 /** API rejects null/empty for several string fields even when UI treats them as optional. */
@@ -400,6 +454,54 @@ export async function cancelCustomerOrder(orderId: number): Promise<string> {
   );
 
   return response.data?.Message || "Order cancelled successfully.";
+}
+
+/** Cash on Delivery skips the gateway and is confirmed directly. */
+export function isCashOnDeliveryGateway(
+  gateway: PaymentGateway | null | undefined,
+): boolean {
+  const name = String(gateway?.Name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  if (!name) return false;
+
+  return (
+    name.includes("cashondelivery") ||
+    name.includes("cashondeliver") ||
+    name === "cod" ||
+    name.includes("cashon") ||
+    (name.includes("cash") && name.includes("delivery"))
+  );
+}
+
+export interface ConfirmOrderPayload {
+  OrderId: number;
+  RedeemPoints?: number;
+  CampaignId?: number;
+}
+
+export async function confirmOrder(
+  payload: ConfirmOrderPayload,
+): Promise<string> {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/v1/Order/ConfirmOrder",
+    {
+      OrderId: payload.OrderId,
+      RedeemPoints: payload.RedeemPoints ?? 0,
+      CampaignId: payload.CampaignId ?? 0,
+    },
+  );
+
+  const body = response.data;
+  const type = String(body?.Type ?? "").toLowerCase();
+  const status = Number(body?.HttpStatusCode ?? 200);
+  const message = String(body?.Message ?? "").trim();
+
+  if (type === "error" || type === "exception" || status >= 400) {
+    throw new Error(message || "Failed to confirm order.");
+  }
+
+  return message || "Order confirmed successfully.";
 }
 
 export interface PayInvoicePayload {

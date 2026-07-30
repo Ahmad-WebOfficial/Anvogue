@@ -116,6 +116,13 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({
       action: item.action || item.Action || "add to cart",
       slug:
         item.Slug || item.UrlSlug || String(item.ProductId ?? item.id ?? ""),
+      discount: Number(item.Discount ?? item.discount ?? 0),
+      discountType: Number(
+        item.DiscountValueType ?? item.DiscountType ?? item.discountType ?? 0,
+      ),
+      campaignType: Number(item.CampaignType ?? item.campaignType ?? 0),
+      campaignTypeDisplayName:
+        item.CampaignTypeDisplayName ?? item.campaignTypeDisplayName ?? null,
     };
   };
 

@@ -1,5 +1,10 @@
 import api from "@/lib/api";
 import { fetchFeaturedProducts } from "@/lib/featured-products";
+import {
+  applyDiscount,
+  formatCampaignDiscount,
+  formatDiscountValue,
+} from "@/lib/discount";
 
 export interface ProductVariantCombination {
   ProductDetailId: number;
@@ -15,6 +20,8 @@ export interface ProductVariantCombination {
   IsCampaignApplied: boolean;
   Discount: number;
   DiscountType: number;
+  CampaignType?: number;
+  CampaignTypeDisplayName?: string | null;
   SortOrder: number;
   InStock: boolean;
   ImageName: string;
@@ -85,6 +92,8 @@ export interface ProductDetailData {
   ProductImageCount: number;
   DiscountValueType: number;
   Discount: number;
+  CampaignType?: number;
+  CampaignTypeDisplayName?: string | null;
   IsCampaignApplied: boolean;
   IsPromotional: boolean;
   IsCustomProduct: boolean;
@@ -212,10 +221,11 @@ export function getDetailSalePrice(detail: ProductDetailData): number {
   const discountValueType = detail.DiscountValueType ?? 0;
 
   if (discount > 0 && detail.MinPrice > 0) {
-    const discounted =
-      discountValueType === 1
-        ? Math.max(0, detail.MinPrice - discount)
-        : Math.round(detail.MinPrice * (1 - discount / 100));
+    const discounted = applyDiscount(
+      detail.MinPrice,
+      discount,
+      discountValueType,
+    );
 
     if (discounted > 0 && discounted < detail.MinPrice) {
       return discounted;
@@ -229,32 +239,49 @@ export function formatRsPrice(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-PK")}`;
 }
 
-/** DiscountType 1 = fixed amount, otherwise percentage. */
 export function formatDiscountBadge(
   discount: number,
   discountType = 0,
+  campaignType = 0,
+  campaignTypeDisplayName?: string | null,
 ): string | null {
-  if (!discount || discount <= 0) return null;
-  if (discountType === 1) {
-    return `-${formatRsPrice(discount)}`;
-  }
-  return `-${discount}%`;
+  return (
+    formatCampaignDiscount({
+      discount,
+      discountValueType: discountType,
+      campaignType,
+      campaignTypeDisplayName,
+    }) ?? formatDiscountValue(discount, discountType)
+  );
 }
 
 export function getActiveDiscount(
   detail: ProductDetailData,
   selectedVariant?: ProductVariantCombination | null,
-): { discount: number; discountType: number } {
+): {
+  discount: number;
+  discountType: number;
+  campaignType: number;
+  campaignTypeDisplayName?: string | null;
+} {
   if (selectedVariant && (selectedVariant.Discount ?? 0) > 0) {
     return {
       discount: selectedVariant.Discount,
       discountType: selectedVariant.DiscountType ?? 0,
+      campaignType:
+        selectedVariant.CampaignType ?? detail.CampaignType ?? 0,
+      campaignTypeDisplayName:
+        selectedVariant.CampaignTypeDisplayName ??
+        detail.CampaignTypeDisplayName ??
+        null,
     };
   }
 
   return {
     discount: detail.Discount ?? 0,
     discountType: detail.DiscountValueType ?? 0,
+    campaignType: detail.CampaignType ?? 0,
+    campaignTypeDisplayName: detail.CampaignTypeDisplayName ?? null,
   };
 }
 
@@ -395,6 +422,113 @@ export function findVariantByGroupSelection(
       });
     }) ?? null
   );
+}
+
+/** Numbers inside a variant name, e.g. "10MG, 100ML" -> [10, 100]. */
+function parseVariantMagnitudes(variantName: string): number[] {
+  return (String(variantName ?? "").match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+}
+
+function isVariantPurchasable(variant: ProductVariantCombination): boolean {
+  if (variant.InStock === false) return false;
+  if (
+    variant.InventoryManagement &&
+    variant.AvailableStock !== null &&
+    variant.AvailableStock !== undefined &&
+    Number(variant.AvailableStock) <= 0
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function compareVariantsBySize(
+  a: ProductVariantCombination,
+  b: ProductVariantCombination,
+): number {
+  const aSizes = parseVariantMagnitudes(a.VariantName);
+  const bSizes = parseVariantMagnitudes(b.VariantName);
+
+  for (let index = 0; index < Math.max(aSizes.length, bSizes.length); index++) {
+    const aValue = aSizes[index];
+    const bValue = bSizes[index];
+    if (aValue === undefined) return -1;
+    if (bValue === undefined) return 1;
+    if (aValue !== bValue) return aValue - bValue;
+  }
+
+  const sortOrder = (Number(a.SortOrder) || 0) - (Number(b.SortOrder) || 0);
+  if (sortOrder !== 0) return sortOrder;
+
+  const aPrice = a.DiscountedPrice > 0 ? a.DiscountedPrice : a.Price;
+  const bPrice = b.DiscountedPrice > 0 ? b.DiscountedPrice : b.Price;
+  return (Number(aPrice) || 0) - (Number(bPrice) || 0);
+}
+
+/** Smallest (and cheapest on ties) purchasable variant, used as the default pick. */
+export function pickSmallestVariant(
+  variants: ProductVariantCombination[] | undefined | null,
+): ProductVariantCombination | null {
+  const list = (variants ?? []).filter(
+    (variant) => variant && Number(variant.ProductDetailId) > 0,
+  );
+  if (list.length === 0) return null;
+
+  const purchasable = list.filter(isVariantPurchasable);
+  const candidates = purchasable.length > 0 ? purchasable : list;
+
+  return [...candidates].sort(compareVariantsBySize)[0] ?? null;
+}
+
+export type DefaultVariantSelection = {
+  productDetailId: number;
+  variantName: string;
+};
+
+/**
+ * Resolve a usable ProductDetailId when a listing card has none, by
+ * auto-selecting the product's smallest variant.
+ */
+export async function resolveDefaultVariantSelection(
+  productId: number,
+  preferredDetailId?: number,
+): Promise<DefaultVariantSelection> {
+  if (preferredDetailId && preferredDetailId > 0) {
+    return { productDetailId: preferredDetailId, variantName: "" };
+  }
+
+  try {
+    const response = await api.get<ProductDetailResponse>(
+      "/api/v1/Product/details",
+      {
+        params: {
+          ProductId: productId,
+          ProductDetailId: 0,
+        },
+      },
+    );
+
+    const detail = response.data?.Data;
+    const smallest = pickSmallestVariant(
+      detail?.ProductVariantDetail?.productVariantCombinationList,
+    );
+
+    if (smallest) {
+      return {
+        productDetailId: smallest.ProductDetailId,
+        variantName: smallest.VariantName ?? "",
+      };
+    }
+
+    if (detail?.ProductDetailId && detail.ProductDetailId > 0) {
+      return { productDetailId: detail.ProductDetailId, variantName: "" };
+    }
+  } catch {
+    // Fall through to the legacy lookup below.
+  }
+
+  const fallbackId = await resolveProductDetailId(productId);
+  return { productDetailId: fallbackId, variantName: "" };
 }
 
 export async function resolveProductDetailId(

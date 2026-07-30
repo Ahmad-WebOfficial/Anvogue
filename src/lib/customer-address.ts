@@ -215,6 +215,38 @@ export async function fetchCustomerAddresses(options?: {
   return extractAddressList(payload);
 }
 
+/**
+ * DELETE /api/v1/Customer/DeleteAddress/addresses/{addressBookId}
+ */
+export async function deleteCustomerAddress(
+  addressBookId: number,
+): Promise<string> {
+  const id = Number(addressBookId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("A valid saved address is required.");
+  }
+
+  const response = await api.delete(
+    `/api/v1/Customer/DeleteAddress/addresses/${id}`,
+  );
+  const envelope =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: Record<string, unknown> }).data
+      : (response as unknown as Record<string, unknown>);
+
+  const type = String(envelope?.Type ?? "").toLowerCase();
+  const status = Number(envelope?.HttpStatusCode ?? 200);
+  const message = String(
+    envelope?.Message ?? "Address removed successfully.",
+  ).trim();
+
+  if (type === "error" || type === "exception" || status >= 400) {
+    throw new Error(message || "Failed to remove address.");
+  }
+
+  return message || "Address removed successfully.";
+}
+
 /** POST /api/v1/Customer/address/save */
 export async function saveCustomerAddress(
   payload: SaveCustomerAddressPayload,

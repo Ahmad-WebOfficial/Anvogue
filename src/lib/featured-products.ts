@@ -37,6 +37,12 @@ export interface FeaturedProduct {
   InventoryManagement?: boolean;
   AvailableStock?: number | null;
   Status?: number;
+  Discount?: number;
+  DiscountValueType?: number;
+  CampaignType?: number;
+  CampaignTypeDisplayName?: string | null;
+  IsCampaignApplied?: boolean;
+  DiscountedPrice?: number;
   Category: FeaturedProductCategory;
   Seo: FeaturedProductSeo;
   Tags: string;
@@ -96,6 +102,12 @@ export function mapProductDetailToProductType(
   const discount = selectedVariant?.Discount ?? detail.Discount ?? 0;
   const discountType =
     selectedVariant?.DiscountType ?? detail.DiscountValueType ?? 0;
+  const campaignType =
+    selectedVariant?.CampaignType ?? detail.CampaignType ?? 0;
+  const campaignTypeDisplayName =
+    selectedVariant?.CampaignTypeDisplayName ??
+    detail.CampaignTypeDisplayName ??
+    null;
   const inStock = selectedVariant?.InStock ?? detail.InStock;
   const inventoryManagement = Boolean(
     selectedVariant?.InventoryManagement ?? detail.InventoryManagement,
@@ -133,6 +145,8 @@ export function mapProductDetailToProductType(
     isFeatured: Boolean(detail.IsFeaturedProduct),
     discount,
     discountType,
+    campaignType,
+    campaignTypeDisplayName,
     inventoryManagement,
     availableStock,
     comingSoon: Boolean(detail.ComingSoon),
@@ -187,6 +201,11 @@ export function mapFeaturedProductToProductType(
 ): ProductType {
   const image = getProductImage(product);
   const inStock = product.IsProductInStock !== false;
+  const discountedPrice = Number(product.DiscountedPrice) || 0;
+  const hasDiscount =
+    Boolean(product.IsCampaignApplied) &&
+    discountedPrice > 0 &&
+    discountedPrice < product.Price;
 
   return {
     id: String(product.ProductId),
@@ -196,9 +215,9 @@ export function mapFeaturedProductToProductType(
     name: product.ProductName,
     gender: "",
     new: product.IsNewProduct,
-    sale: product.IsPromotionalProduct,
+    sale: product.IsPromotionalProduct || hasDiscount,
     rate: 5,
-    price: product.Price,
+    price: hasDiscount ? discountedPrice : product.Price,
     originPrice: product.Price,
     brand: "",
     sold: 0,
@@ -213,8 +232,10 @@ export function mapFeaturedProductToProductType(
     slug: product.Seo?.UrlSlug || String(product.ProductId),
     isPromotional: product.IsPromotionalProduct,
     isFeatured: Boolean(product.IsFeaturedProduct),
-    discount: 0,
-    discountType: 0,
+    discount: product.Discount ?? 0,
+    discountType: product.DiscountValueType ?? 0,
+    campaignType: product.CampaignType ?? 0,
+    campaignTypeDisplayName: product.CampaignTypeDisplayName ?? null,
     inventoryManagement: Boolean(product.InventoryManagement),
     availableStock:
       product.InventoryManagement && product.AvailableStock != null

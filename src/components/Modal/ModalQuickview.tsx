@@ -96,10 +96,12 @@ const ModalQuickview = () => {
   const activeImage = images[activeImageIndex] ?? images[0];
   const activeDiscount = productDetail
     ? getActiveDiscount(productDetail, selectedVariant)
-    : { discount: 0, discountType: 0 };
+    : { discount: 0, discountType: 0, campaignType: 0 };
   const discountLabel = formatDiscountBadge(
     activeDiscount.discount,
     activeDiscount.discountType,
+    activeDiscount.campaignType,
+    activeDiscount.campaignTypeDisplayName,
   );
   const availableStock = productDetail
     ? getAvailableStockCount(productDetail, selectedVariant)

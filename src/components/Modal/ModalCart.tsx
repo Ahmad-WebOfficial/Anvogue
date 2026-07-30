@@ -23,6 +23,11 @@ import {
   mapProductDetailToProductType,
 } from "@/lib/featured-products";
 import ProductSkeleton from "@/components/Other/ProductSkeleton";
+import {
+  CampaignType,
+  getCampaignDiscountLabel,
+  getCartCampaignDiscounts,
+} from "@/lib/discount";
 
 type SelectOption = { Value: string; Text: string };
 
@@ -152,7 +157,6 @@ const ModalCart = ({
     toaster.success("Shipping preference saved for checkout.");
     setActiveTab("");
   };
-  const moneyForFreeship = 150;
   const linesNet = cartState.cartArray.reduce(
     (sum, item) => sum + (item.lineTotal || 0),
     0,
@@ -168,14 +172,33 @@ const ModalCart = ({
     totalDiscount: cartState.totalDiscount,
     netTotal: cartState.netTotal,
   });
-  const displayTotal = displayTotals.netTotal;
+  const campaignDiscounts = getCartCampaignDiscounts(
+    cartState.cartArray,
+    displayTotals.discount,
+  );
   const relatedProducts = cartState.relatedProducts ?? [];
   const hasItems = cartState.cartArray.length > 0;
-  const shippingProgress = Math.min(
-    (displayTotal / moneyForFreeship) * 100,
-    100,
+  const moneyForFreeship = Math.max(
+    0,
+    Number(cartState.minimumOrderValue) || 0,
   );
-  const amountToFreeShipping = Math.max(moneyForFreeship - displayTotal, 0);
+  const qualifiesForFreeShipping =
+    hasItems &&
+    moneyForFreeship > 0 &&
+    displayTotals.netTotal >= moneyForFreeship;
+  const deliveryCharges =
+    hasItems && !qualifiesForFreeShipping
+      ? Math.max(0, Number(cartState.deliveryCharges) || 0)
+      : 0;
+  const displayTotal = displayTotals.netTotal + deliveryCharges;
+  const shippingProgress =
+    moneyForFreeship > 0
+      ? Math.min((displayTotals.netTotal / moneyForFreeship) * 100, 100)
+      : 0;
+  const amountToFreeShipping = Math.max(
+    moneyForFreeship - displayTotals.netTotal,
+    0,
+  );
 
   return (
     <div className="modal-cart-block" onClick={closeModalCart}>
@@ -486,7 +509,7 @@ const ModalCart = ({
           {hasItems && (
             <div className="footer-modal bg-white">
               <div className="modal-cart-tools">
-                <button
+                {/* <button
                   type="button"
                   className="modal-cart-tool-btn"
                   onClick={() => setActiveTab("shipping")}
@@ -494,7 +517,7 @@ const ModalCart = ({
                   <Icon.Truck size={18} />
                   Shipping
                 </button>
-                {/* <button
+                <button
                   type="button"
                   className="modal-cart-tool-btn"
                   onClick={() => setActiveTab("coupon")}
@@ -509,25 +532,42 @@ const ModalCart = ({
                   <span className="text-secondary">Subtotal</span>
                   <span>{formatRsPrice(displayTotals.subTotal)}</span>
                 </div>
-                {(displayTotals.discount > 0 || savedPromoCode) && (
-                  <div className="modal-cart-summary-row">
+                {campaignDiscounts.map((campaign) => (
+                  <div
+                    key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
+                    className="modal-cart-summary-row"
+                  >
                     <span className="text-secondary">
-                      Discount
-                      {savedPromoCode ? ` (${savedPromoCode})` : ""}
+                      {getCampaignDiscountLabel(
+                        campaign.campaignType,
+                        campaign.campaignTypeDisplayName,
+                      )}
                     </span>
-                    <span
-                      style={{
-                        color:
-                          displayTotals.discount > 0 ? "#16a34a" : undefined,
-                      }}
-                      className="font-semibold"
-                    >
-                      {displayTotals.discount > 0
-                        ? `-${formatRsPrice(displayTotals.discount)}`
-                        : "At checkout"}
+                    <span style={{ color: "#16a34a" }} className="font-semibold">
+                      -{formatRsPrice(campaign.amount)}
                     </span>
                   </div>
-                )}
+                ))}
+                {savedPromoCode &&
+                  !campaignDiscounts.some(
+                    (campaign) =>
+                      campaign.campaignType === CampaignType.PromoCode,
+                  ) && (
+                    <div className="modal-cart-summary-row">
+                      <span className="text-secondary">
+                        Promo Code Discount ({savedPromoCode})
+                      </span>
+                      <span className="font-semibold">At checkout</span>
+                    </div>
+                  )}
+                <div className="modal-cart-summary-row">
+                  <span className="text-secondary">Delivery Charges</span>
+                  <span>
+                    {deliveryCharges > 0
+                      ? formatRsPrice(deliveryCharges)
+                      : "Free"}
+                  </span>
+                </div>
                 <div className="modal-cart-summary-row is-total">
                   <span>Total</span>
                   <span>{formatRsPrice(displayTotal)}</span>
@@ -544,7 +584,7 @@ const ModalCart = ({
                     View Cart
                   </Link>
                   <Link
-                    href="/checkout"
+                    href={`/checkout?discount=${displayTotals.discount}&ship=${deliveryCharges}`}
                     className="button-main modal-cart-action-btn"
                     onClick={closeModalCart}
                   >

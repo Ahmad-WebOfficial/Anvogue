@@ -14,7 +14,11 @@ import { useModalCompareContext } from "@/context/ModalCompareContext";
 import { useModalQuickviewContext } from "@/context/ModalQuickviewContext";
 import { useRouter } from "next/navigation";
 import { getProductDetailUrl } from "@/lib/featured-products";
-import { formatDiscountBadge } from "@/lib/product-details";
+import {
+  DefaultVariantSelection,
+  formatDiscountBadge,
+  resolveDefaultVariantSelection,
+} from "@/lib/product-details";
 import ProductBadges, { buildProductBadges } from "@/components/Product/ProductBadges";
 import Marquee from "react-fast-marquee";
 import Rate from "../Other/Rate";
@@ -25,6 +29,7 @@ interface ProductProps {
   type: string;
   style: string;
   hideOriginPrice?: boolean;
+  badgeMode?: "all" | "featured" | "new" | "sale";
 }
 
 const Product: React.FC<ProductProps> = ({
@@ -32,10 +37,12 @@ const Product: React.FC<ProductProps> = ({
   type,
   style,
   hideOriginPrice = false,
+  badgeMode = "all",
 }) => {
   const [activeColor, setActiveColor] = useState<string>("");
   const [activeSize, setActiveSize] = useState<string>("");
   const [openQuickShop, setOpenQuickShop] = useState<boolean>(false);
+  const [addingToCart, setAddingToCart] = useState<boolean>(false);
   const imageSrc =
     data.thumbImage?.[0] || data.images?.[0] || "/images/product/1000x1000.png";
   const thumbImages =
@@ -48,11 +55,16 @@ const Product: React.FC<ProductProps> = ({
   const showOriginPrice =
     !hideOriginPrice && data.originPrice > displayPrice && data.originPrice > 0;
   const discountLabel =
-    formatDiscountBadge(data.discount ?? 0, data.discountType ?? 0) ||
+    formatDiscountBadge(
+      data.discount ?? 0,
+      data.discountType ?? 0,
+      data.campaignType ?? 0,
+      data.campaignTypeDisplayName,
+    ) ||
     (showOriginPrice
-      ? `-${Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)}%`
+      ? `-${Math.round(((data.originPrice - displayPrice) / data.originPrice) * 100)}% Sale`
       : null);
-  const productBadges = buildProductBadges({
+  const allProductBadges = buildProductBadges({
     isNew: Boolean(data.new),
     isFeatured: Boolean(data.isFeatured),
     isPromotional: data.isPromotional,
@@ -63,6 +75,14 @@ const Product: React.FC<ProductProps> = ({
     status: data.status,
     inStock: data.inStock,
   });
+  const productBadges =
+    badgeMode === "all"
+      ? allProductBadges
+      : allProductBadges.filter((badge) => {
+          if (badgeMode === "featured") return badge.key === "featured";
+          if (badgeMode === "new") return badge.key === "new";
+          return badge.key === "discount";
+        });
   const canPurchase =
     !data.comingSoon &&
     data.status !== 0 &&
@@ -92,6 +112,8 @@ const Product: React.FC<ProductProps> = ({
   };
 
   const handleAddToCart = async () => {
+    if (addingToCart) return;
+
     if (data.comingSoon) {
       toast.error("This product is coming soon.");
       return;
@@ -114,15 +136,39 @@ const Product: React.FC<ProductProps> = ({
       return;
     }
 
+    setAddingToCart(true);
     try {
       if (!cartState.cartArray.find((item) => item.id === data.id)) {
-        await addToCart({ ...data });
+        // Listing cards often lack a variant; fall back to the smallest one.
+        let selection: DefaultVariantSelection;
+        try {
+          selection = await resolveDefaultVariantSelection(
+            Number(data.id),
+            Number(data.productDetailId) || undefined,
+          );
+        } catch {
+          toast.error(
+            "We couldn't load this product's variants. Please open the product page.",
+          );
+          return;
+        }
+
+        if (selection.variantName && !activeSize) {
+          setActiveSize(selection.variantName);
+        }
+
+        await addToCart({
+          ...data,
+          productDetailId: selection.productDetailId,
+        });
       } else {
         updateCart(data.id, data.quantityPurchase, activeSize, activeColor);
       }
       openModalCart();
     } catch {
-      // toast in context
+      // Cart errors already surface a toast from the cart context.
+    } finally {
+      setAddingToCart(false);
     }
   };
 

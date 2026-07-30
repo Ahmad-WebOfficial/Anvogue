@@ -27,7 +27,10 @@ import {
   updateCartItemQuantity,
   clearCartSessionId,
 } from "@/lib/cart";
-import { RelatedProduct } from "@/lib/product-details";
+import {
+  RelatedProduct,
+  resolveDefaultVariantSelection,
+} from "@/lib/product-details";
 import { getApiErrorMessage } from "@/lib/api";
 
 export interface CartLineItem extends ProductType {
@@ -45,6 +48,8 @@ interface CartState {
   totalDiscount: number;
   netTotal: number;
   totalAmount: number;
+  deliveryCharges: number;
+  minimumOrderValue: number;
   totalItems: number;
   relatedProducts: RelatedProduct[];
 }
@@ -86,6 +91,8 @@ const initialState: CartState = {
   totalDiscount: 0,
   netTotal: 0,
   totalAmount: 0,
+  deliveryCharges: 0,
+  minimumOrderValue: 0,
   totalItems: 0,
   relatedProducts: [],
 };
@@ -93,14 +100,20 @@ const initialState: CartState = {
 function calculateTotals(
   cartArray: CartLineItem[],
   totalDiscount: number,
+  deliveryCharges = 0,
+  minimumOrderValue = 0,
 ): Pick<CartState, "subTotal" | "netTotal" | "totalAmount" | "totalItems"> {
   const subTotal = cartArray.reduce((sum, item) => sum + item.lineTotal, 0);
   const netTotal = Math.max(subTotal - totalDiscount, 0);
+  const shipping =
+    minimumOrderValue > 0 && netTotal >= minimumOrderValue
+      ? 0
+      : deliveryCharges;
 
   return {
     subTotal,
     netTotal,
-    totalAmount: netTotal,
+    totalAmount: netTotal + shipping,
     totalItems: cartArray.reduce((count, item) => count + item.quantity, 0),
   };
 }
@@ -144,6 +157,11 @@ function mapApiItemToLineItem(apiItem: ApiCartItem): CartLineItem {
     selectedSize: sizeVariant?.VariantName || "",
     selectedColor: colorVariant?.VariantName || "",
     lineTotal: getCartItemLineTotal(apiItem),
+    isPromotional: Boolean(apiItem.IsPromotional),
+    discount: apiItem.Discount ?? 0,
+    discountType: apiItem.DiscountValueType ?? 0,
+    campaignType: apiItem.CampaignType ?? 0,
+    campaignTypeDisplayName: apiItem.CampaignTypeDisplayName ?? null,
     apiItem,
   };
 }
@@ -157,6 +175,8 @@ function mapSummaryToCartState(summary: CartSummary): CartState {
     totalDiscount: summary.totalDiscount,
     netTotal: summary.netTotal,
     totalAmount: summary.totalAmount,
+    deliveryCharges: summary.deliveryCharges,
+    minimumOrderValue: summary.minimumOrderValue,
     totalItems: summary.totalItems,
     relatedProducts: summary.relatedProducts,
   };
@@ -203,7 +223,12 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       return {
         ...state,
         cartArray,
-        ...calculateTotals(cartArray, state.totalDiscount),
+        ...calculateTotals(
+          cartArray,
+          state.totalDiscount,
+          state.deliveryCharges,
+          state.minimumOrderValue,
+        ),
       };
     }
     default:
@@ -249,7 +274,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addToCart = async (item: ProductType) => {
     const productId = Number(item.id);
-    const productDetailId = Number(item.productDetailId);
+    let productDetailId = Number(item.productDetailId);
     const quantity = item.quantityPurchase ?? 1;
 
     if (!productId || Number.isNaN(productId)) {
@@ -257,9 +282,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
+    // Listings can omit the variant, so default to the product's smallest one.
     if (!productDetailId || Number.isNaN(productDetailId)) {
-      toast.error("Please select a product variant before adding to cart.");
-      return;
+      try {
+        const selection = await resolveDefaultVariantSelection(productId);
+        productDetailId = selection.productDetailId;
+      } catch {
+        toast.error("Please select a product variant before adding to cart.");
+        return;
+      }
     }
 
     try {

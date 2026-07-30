@@ -14,17 +14,23 @@ import { useRouter } from "next/navigation";
 import {
   cancelCustomerOrder,
   clearOrderFlowStorage,
+  clearOrderSaleCampaignId,
+  confirmOrder,
+  extractSaleCampaignId,
   fetchCustomerOrderDetails,
   fetchSelectPayment,
   formatOrderDate,
   getDeliveryOptionLabel,
+  getOrderSaleCampaignId,
   getPaymentPortalUrl,
   getStripePaymentReturnUrl,
+  isCashOnDeliveryGateway,
   OrderDetailData,
   payInvoice,
   PaymentGateway,
   savePendingPaymentOrderId,
   savePendingPaymentTransactionId,
+  saveOrderSaleCampaignId,
   SelectPaymentData,
 } from "@/lib/order";
 import { getProductDetailUrl } from "@/lib/featured-products";
@@ -41,6 +47,11 @@ import {
 } from "@/lib/promo";
 import toast from "react-hot-toast";
 import { useCart } from "@/context/CartContext";
+import {
+  CampaignType,
+  getCampaignDiscountLabel,
+  groupCampaignDiscounts,
+} from "@/lib/discount";
 
 const ORDER_CART_CLEAR_KEY = "clear_cart_after_order";
 
@@ -66,6 +77,7 @@ const OrderDetailsPage = () => {
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [cancellingPromo, setCancellingPromo] = useState(false);
   const [campaignId, setCampaignId] = useState<number | null>(null);
+  const [saleCampaignId, setSaleCampaignId] = useState<number | null>(null);
   const [promoError, setPromoError] = useState("");
   // Kept so the discount stays visible even if the refreshed order omits it.
   const [appliedPromo, setAppliedPromo] = useState<{
@@ -132,6 +144,14 @@ const OrderDetailsPage = () => {
       }
 
       const activeOrder = paymentOptions?.OrderDto ?? orderDetails;
+      const resolvedSaleCampaignId =
+        extractSaleCampaignId(paymentOptions) ??
+        extractSaleCampaignId(orderDetails) ??
+        getOrderSaleCampaignId(orderId);
+      setSaleCampaignId(resolvedSaleCampaignId);
+      if (resolvedSaleCampaignId) {
+        saveOrderSaleCampaignId(orderId, resolvedSaleCampaignId);
+      }
       const savedCode = (activeOrder.PromoCode ?? "").trim();
       const savedNetDiscount = Math.max(0, Number(activeOrder.NetDiscount) || 0);
       const itemDiscount = (
@@ -337,28 +357,90 @@ const OrderDetailsPage = () => {
   const gateways = paymentData?.PaymentGateways ?? [];
   const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
 
-  const netDiscount = Math.max(0, Number(displayOrder?.NetDiscount) || 0);
-  // Product-level discounts (sale/item), separate from promo-code savings.
-  const itemProductDiscount = items.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.DiscountAmount) || 0),
+  const orderAmount = Math.max(0, Number(displayOrder?.OrderAmount) || 0);
+  const deliveryCharges = Math.max(
     0,
+    Number(displayOrder?.DeliveryCharges) || 0,
   );
+  const posCharges = Math.max(0, Number(displayOrder?.POSCharges) || 0);
+  const apiNetDiscount = Math.max(0, Number(displayOrder?.NetDiscount) || 0);
+  const apiNetAmount = Math.max(0, Number(displayOrder?.NetAmount) || 0);
+
   const promoCode =
     (displayOrder?.PromoCode ?? "").trim() || appliedPromo?.code || "";
   const appliedPromoAmount = Math.max(0, Number(appliedPromo?.discount) || 0);
-  // Promo API TotalDiscount (how much this customer saved via the code).
-  const promoDiscount =
-    appliedPromoAmount > 0
-      ? appliedPromoAmount
-      : promoCode
-        ? Math.max(0, netDiscount - itemProductDiscount)
-        : 0;
-  const productDiscount =
-    itemProductDiscount > 0
-      ? itemProductDiscount
-      : Math.max(0, netDiscount - promoDiscount);
   const isPromoApplied =
-    Boolean(promoCode) || promoDiscount > 0 || Boolean(campaignId);
+    Boolean(promoCode) || appliedPromoAmount > 0 || Boolean(campaignId);
+
+  // One source of truth for discounts — never double-count item + promo.
+  // After promo apply, API NetDiscount can lag briefly, so include appliedPromo.
+  const totalDiscount = Math.max(apiNetDiscount, appliedPromoAmount);
+
+  let promoDiscount = 0;
+  let productDiscount = 0;
+
+  if (isPromoApplied) {
+    promoDiscount = Math.min(
+      appliedPromoAmount > 0 ? appliedPromoAmount : totalDiscount,
+      totalDiscount,
+    );
+    productDiscount = Math.max(0, totalDiscount - promoDiscount);
+  } else {
+    productDiscount = totalDiscount;
+  }
+
+  const itemCampaignDiscounts = groupCampaignDiscounts(
+    items.map((item) => ({
+      campaignType: Number(item.CampaignType) || CampaignType.Sale,
+      campaignTypeDisplayName: item.CampaignTypeDisplayName ?? null,
+      amount: Math.max(0, Number(item.DiscountAmount) || 0),
+    })),
+  );
+  const itemCampaignTotal = itemCampaignDiscounts.reduce(
+    (sum, campaign) => sum + campaign.amount,
+    0,
+  );
+  const classifiedProductDiscounts =
+    productDiscount > 0 && itemCampaignTotal > 0
+      ? itemCampaignDiscounts.map((campaign) => ({
+          ...campaign,
+          amount:
+            Math.round(
+              ((campaign.amount / itemCampaignTotal) * productDiscount) * 100,
+            ) / 100,
+        }))
+      : [];
+  const classifiedProductTotal = classifiedProductDiscounts.reduce(
+    (sum, campaign) => sum + campaign.amount,
+    0,
+  );
+  const unclassifiedProductDiscount = Math.max(
+    0,
+    productDiscount - classifiedProductTotal,
+  );
+  const productCampaignDiscounts =
+    unclassifiedProductDiscount > 0.009
+      ? [
+          ...classifiedProductDiscounts,
+          {
+            campaignType: Number(displayOrder?.CampaignType) || CampaignType.Sale,
+            campaignTypeDisplayName:
+              displayOrder?.CampaignTypeDisplayName ?? null,
+            amount: unclassifiedProductDiscount,
+          },
+        ]
+      : classifiedProductDiscounts;
+
+  // Visible rows must always reconcile: Order + Delivery + POS - discounts.
+  const computedNetAmount = Math.max(
+    0,
+    orderAmount + deliveryCharges + posCharges - productDiscount - promoDiscount,
+  );
+  // Prefer API when it already matches; otherwise show the reconciled total.
+  const displayNetAmount =
+    Math.abs(apiNetAmount - computedNetAmount) < 0.02
+      ? apiNetAmount
+      : computedNetAmount;
 
   const handleSelectPayment = (gateway: PaymentGateway) => {
     setSelectedGateway(gateway.PGId);
@@ -377,7 +459,41 @@ const OrderDetailsPage = () => {
       return;
     }
 
+    const activeGateway =
+      (paymentData?.PaymentGateways ?? []).find(
+        (gateway) => gateway.PGId === selectedGateway,
+      ) ?? null;
+
     setPaying(true);
+
+    // COD has no gateway redirect — confirm the order and go straight to success.
+    if (isCashOnDeliveryGateway(activeGateway)) {
+      try {
+        await confirmOrder({
+          OrderId: currentOrder.OrderId,
+          RedeemPoints: 0,
+          // ConfirmOrder expects the sale campaign from CreateOrder response,
+          // not the promo campaign used by Apply/CancelPromo.
+          CampaignId:
+            saleCampaignId ??
+            extractSaleCampaignId(currentOrder) ??
+            getOrderSaleCampaignId(currentOrder.OrderId) ??
+            0,
+        });
+
+        clearOrderFlowStorage();
+        clearOrderSaleCampaignId(currentOrder.OrderId);
+        savePendingPaymentOrderId(currentOrder.OrderId);
+        clearCart();
+        toast.success("Order confirmed. You will pay on delivery.");
+        router.push(`/PaymentResponse/cod?orderId=${currentOrder.OrderId}`);
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, "Failed to confirm your order."));
+        setPaying(false);
+      }
+      return;
+    }
+
     try {
       const paymentResult = await payInvoice({
         OrderId: currentOrder.OrderId,
@@ -417,7 +533,14 @@ const OrderDetailsPage = () => {
       toast.error(getApiErrorMessage(err, "Failed to process payment."));
       setPaying(false);
     }
-  }, [order, paymentData, selectedGateway]);
+  }, [
+    order,
+    paymentData,
+    selectedGateway,
+    saleCampaignId,
+    clearCart,
+    router,
+  ]);
 
   const handlePayNow = () => {
     void processPayment();
@@ -426,6 +549,9 @@ const OrderDetailsPage = () => {
   const isFromCheckout = searchParams.get("pay") === "1";
   const canPay =
     gateways.length > 0 && selectedGateway !== null && !isCancelled;
+  const isCodSelected = isCashOnDeliveryGateway(
+    gateways.find((gateway) => gateway.PGId === selectedGateway) ?? null,
+  );
 
   return (
     <>
@@ -787,32 +913,47 @@ const OrderDetailsPage = () => {
                   <div className="order-totals">
                     <div className="order-total-row">
                       <span className="text-secondary">Order Amount</span>
-                      <span>{formatRsPrice(displayOrder.OrderAmount)}</span>
+                      <span>{formatRsPrice(orderAmount)}</span>
                     </div>
                     <div className="order-total-row">
                       <span className="text-secondary">Delivery Charges</span>
                       <span>
-                        {formatRsPrice(displayOrder.DeliveryCharges ?? 0)}
+                        {deliveryCharges > 0
+                          ? formatRsPrice(deliveryCharges)
+                          : "Free"}
                       </span>
                     </div>
                     <div className="order-total-row">
                       <span className="text-secondary">POS Charges</span>
-                      <span>{formatRsPrice(displayOrder.POSCharges ?? 0)}</span>
+                      <span>{formatRsPrice(posCharges)}</span>
                     </div>
-                    <div className="order-total-row">
-                      <span className="text-secondary">Discount</span>
-                      <span
-                        className={`font-semibold ${productDiscount > 0 ? "order-discount-value" : ""}`}
-                      >
-                        {productDiscount > 0
-                          ? `-${formatRsPrice(productDiscount)}`
-                          : formatRsPrice(0)}
-                      </span>
-                    </div>
+                    {productCampaignDiscounts.length > 0 ? (
+                      productCampaignDiscounts.map((campaign) => (
+                        <div
+                          key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
+                          className="order-total-row"
+                        >
+                          <span className="text-secondary">
+                            {getCampaignDiscountLabel(
+                              campaign.campaignType,
+                              campaign.campaignTypeDisplayName,
+                            )}
+                          </span>
+                          <span className="font-semibold order-discount-value">
+                            -{formatRsPrice(campaign.amount)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="order-total-row">
+                        <span className="text-secondary">Discount</span>
+                        <span className="font-semibold">{formatRsPrice(0)}</span>
+                      </div>
+                    )}
                     {(isPromoApplied || promoDiscount > 0) && (
                       <div className="order-total-row">
                         <span className="text-secondary">
-                          Order Promo
+                          Promo Code Discount
                           {promoCode ? (
                             <span className="order-promo-chip ml-2">
                               {promoCode}
@@ -830,7 +971,7 @@ const OrderDetailsPage = () => {
                     )}
                     <div className="order-total-row is-grand">
                       <span>Net Amount</span>
-                      <span>{formatRsPrice(displayOrder.NetAmount)}</span>
+                      <span>{formatRsPrice(displayNetAmount)}</span>
                     </div>
                   </div>
 
@@ -945,7 +1086,13 @@ const OrderDetailsPage = () => {
                       disabled={paying || !canPay}
                       className="button-main bg-black w-full"
                     >
-                      {paying ? "Processing Payment..." : "Proceed to Payment"}
+                      {paying
+                        ? isCodSelected
+                          ? "Confirming Order..."
+                          : "Processing Payment..."
+                        : isCodSelected
+                          ? "Confirm Order (Cash on Delivery)"
+                          : "Proceed to Payment"}
                     </button>
                   </div>
 

@@ -33,6 +33,8 @@ export interface ProductType {
     isFeatured?: boolean,
     discount?: number,
     discountType?: number,
+    campaignType?: number,
+    campaignTypeDisplayName?: string | null,
     inventoryManagement?: boolean,
     availableStock?: number | null,
     comingSoon?: boolean,

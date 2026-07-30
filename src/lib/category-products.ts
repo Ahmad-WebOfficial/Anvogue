@@ -4,6 +4,7 @@ import {
   fetchFeaturedProducts,
   mapFeaturedProductToProductType,
 } from "@/lib/featured-products";
+import { applyDiscount, CampaignType } from "@/lib/discount";
 
 export interface LandingPageProduct {
   ProductId: number;
@@ -24,6 +25,10 @@ export interface LandingPageProduct {
   IsCampaignApplied?: boolean;
   Discount?: number;
   DiscountValueType?: number;
+  CampaignType?: number;
+  CampaignTypeDisplayName?: string | null;
+  /** Backend has returned this misspelled key in some product responses. */
+  CampaignTpyeDisplayName?: string | null;
   ComingSoon?: boolean;
   Status?: number;
   InventoryManagement?: boolean;
@@ -118,10 +123,7 @@ export function resolveLandingProductPricing(
     originPrice = product.MaxPrice ?? minDiscounted;
   } else if (discountValue > 0 && basePrice > 0) {
     originPrice = basePrice;
-    price =
-      discountValueType === 1
-        ? Math.max(0, basePrice - discountValue)
-        : Math.round(basePrice * (1 - discountValue / 100));
+    price = applyDiscount(basePrice, discountValue, discountValueType);
 
     if (price <= 0 || price >= originPrice) {
       price = basePrice;
@@ -173,6 +175,11 @@ export function mapLandingProductToProductType(
     isFeatured: Boolean(product.IsFeaturedProduct),
     discount: product.Discount ?? 0,
     discountType: product.DiscountValueType ?? 0,
+    campaignType: product.CampaignType ?? 0,
+    campaignTypeDisplayName:
+      product.CampaignTypeDisplayName ??
+      product.CampaignTpyeDisplayName ??
+      null,
     inventoryManagement: Boolean(product.InventoryManagement),
     availableStock: product.AvailableStock ?? null,
     comingSoon,
@@ -239,6 +246,73 @@ function extractProductListFromByCategory(
   );
 }
 
+function getTotalRecordsFromByCategory(
+  data: ByCategoryResponse["Data"] | LandingPageProduct[] | LandingPageProduct | null | undefined,
+): number {
+  if (!data || Array.isArray(data)) return 0;
+  return Number(data.TotalRecords) || 0;
+}
+
+/** Prefer the copy that still has campaign / discount fields. */
+export function mergeLandingProducts(
+  ...lists: LandingPageProduct[][]
+): LandingPageProduct[] {
+  const byId = new Map<number, LandingPageProduct>();
+
+  const score = (product: LandingPageProduct) => {
+    let value = 0;
+    if ((Number(product.CampaignType) || 0) > 0) value += 4;
+    if (product.CampaignTypeDisplayName || product.CampaignTpyeDisplayName)
+      value += 2;
+    if ((Number(product.Discount) || 0) > 0) value += 2;
+    if ((Number(product.MinDiscountedPrice) || 0) > 0) value += 2;
+    if (product.IsCampaignApplied) value += 1;
+    return value;
+  };
+
+  for (const list of lists) {
+    for (const product of list) {
+      if (!product?.ProductId) continue;
+      const existing = byId.get(product.ProductId);
+      if (!existing || score(product) > score(existing)) {
+        byId.set(product.ProductId, product);
+      }
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+export function isSaleDiscountProduct(product: LandingPageProduct): boolean {
+  const campaignType = Number(product.CampaignType) || 0;
+  // Explicit non-sale campaigns never belong on the On Sale tab.
+  if (
+    campaignType === CampaignType.PromoCode ||
+    campaignType === CampaignType.OrderValue ||
+    campaignType === CampaignType.PaymentMethod
+  ) {
+    return false;
+  }
+
+  const campaignName = String(
+    product.CampaignTypeDisplayName ?? product.CampaignTpyeDisplayName ?? "",
+  );
+  const discount = Number(product.Discount) || 0;
+  const minPrice = Number(product.MinPrice) || 0;
+  const minDiscounted = Number(product.MinDiscountedPrice) || 0;
+  const hasDiscountedPrice =
+    minDiscounted > 0 && (minPrice <= 0 || minDiscounted < minPrice);
+  const hasDiscount = discount > 0 || hasDiscountedPrice;
+
+  if (campaignType === CampaignType.Sale && hasDiscount) return true;
+  if (/sale/i.test(campaignName) && hasDiscount) return true;
+  if (Boolean(product.IsCampaignApplied) && hasDiscount) return true;
+  // Mapped pricing still shows a sale badge even when CampaignType is missing.
+  if (!campaignType && hasDiscount) return true;
+
+  return false;
+}
+
 export async function fetchProductsByBrand(
   pageNumber = 1,
   pageSize = 50,
@@ -257,6 +331,55 @@ export async function fetchProductsByBrand(
   );
 }
 
+/** Load every brand product page so home tabs are not limited to page 1. */
+export async function fetchAllBrandProducts(
+  pageSize = 100,
+): Promise<LandingPageProduct[]> {
+  const first = await api.get<ByCategoryResponse>("/api/v1/Product/by-category", {
+    params: {
+      BrandId: getBrandId(),
+      PageNumber: 1,
+      PageSize: pageSize,
+      SortBy: "name",
+    },
+  });
+
+  const firstPage = extractProductListFromByCategory(first.data?.Data).filter(
+    (product) => Boolean(product?.ProductId) && isLandingProductVisible(product),
+  );
+  const totalRecords = getTotalRecordsFromByCategory(first.data?.Data);
+  const totalPages = Math.max(1, Math.ceil((totalRecords || firstPage.length) / pageSize));
+
+  if (totalPages <= 1) return firstPage;
+
+  const pages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchProductsByBrand(index + 2, pageSize).catch(() => [] as LandingPageProduct[]),
+    ),
+  );
+
+  return mergeLandingProducts(firstPage, ...pages);
+}
+
+/** Landing-page feed, used to widen home tabs beyond the brand list. */
+export async function fetchLandingPageProducts(): Promise<LandingPageProduct[]> {
+  const res = await api.get<LandingPageResponse>("/api/v1/Product/landing-page");
+  const products: LandingPageProduct[] = [];
+  const seen = new Set<number>();
+
+  for (const group of res.data?.Data ?? []) {
+    for (const product of group.ProductList ?? []) {
+      if (!product?.ProductId || seen.has(product.ProductId)) continue;
+      if (!isLandingProductVisible(product)) continue;
+
+      seen.add(product.ProductId);
+      products.push(product);
+    }
+  }
+
+  return products;
+}
+
 export function filterProductsForHomeTab(
   products: LandingPageProduct[],
   tab: HomeProductTab,
@@ -268,17 +391,8 @@ export function filterProductsForHomeTab(
       return visible.filter((product) => product.IsFeaturedProduct);
     case "new arrivals":
       return visible.filter((product) => product.IsNewProduct);
-    case "on sale": {
-      const remaining = visible.filter(
-        (product) => !product.IsNewProduct && !product.IsFeaturedProduct,
-      );
-
-      if (remaining.length > 0) {
-        return remaining;
-      }
-
-      return visible.filter((product) => !product.IsFeaturedProduct);
-    }
+    case "on sale":
+      return visible.filter(isSaleDiscountProduct);
     default:
       return visible;
   }
@@ -286,9 +400,13 @@ export function filterProductsForHomeTab(
 
 export async function fetchHomeTabProducts(
   tab: HomeProductTab,
-  pageSize = 50,
+  pageSize = 100,
 ): Promise<ProductType[]> {
-  const products = await fetchProductsByBrand(1, pageSize);
+  const [brandProducts, landingProducts] = await Promise.all([
+    fetchAllBrandProducts(pageSize).catch(() => [] as LandingPageProduct[]),
+    fetchLandingPageProducts().catch(() => [] as LandingPageProduct[]),
+  ]);
+  const products = mergeLandingProducts(landingProducts, brandProducts);
   return filterProductsForHomeTab(products, tab).map((product) =>
     mapLandingProductToProductType(product),
   );

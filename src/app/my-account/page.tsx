@@ -28,6 +28,10 @@ import {
   getDeliveryOptionLabel,
   OrderDetailData,
 } from "@/lib/order";
+import {
+  CampaignType,
+  getCampaignDiscountLabel,
+} from "@/lib/discount";
 
 type ProfileFormData = {
   FullName: string;
@@ -1629,7 +1633,16 @@ const MyAccount = () => {
                     </div>
                     {selectedOrderDetail.NetDiscount > 0 && (
                       <div className="account-order-detail-total-row">
-                        <span>Discount</span>
+                        <span>
+                          {getCampaignDiscountLabel(
+                            selectedOrderDetail.PromoCode
+                              ? CampaignType.PromoCode
+                              : selectedOrderDetail.CampaignType,
+                            selectedOrderDetail.PromoCode
+                              ? "Promo Code"
+                              : selectedOrderDetail.CampaignTypeDisplayName,
+                          )}
+                        </span>
                         <span style={{ color: "#28a745" }}>
                           -{formatRsPrice(selectedOrderDetail.NetDiscount)}
                         </span>

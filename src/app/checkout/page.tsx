@@ -20,8 +20,10 @@ import {
   buildCreateOrderPayload,
   createOrder,
   extractOrderId,
+  extractSaleCampaignId,
   applyGuestAuthFromOrderResponse,
   clearOrderFlowStorage,
+  saveOrderSaleCampaignId,
 } from "@/lib/order";
 import { getApiErrorMessage } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
@@ -36,6 +38,11 @@ import ModalSavedAddresses from "@/components/Modal/ModalSavedAddresses";
 import toast from "react-hot-toast";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import {
+  CampaignType,
+  getCampaignDiscountLabel,
+  getCartCampaignDiscounts,
+} from "@/lib/discount";
 
 type SelectOption = { Value: string; Text: string };
 
@@ -126,8 +133,28 @@ const Checkout = () => {
   });
   const subTotal = displayTotals.subTotal;
   const discount = displayTotals.discount;
+  const campaignDiscounts = getCartCampaignDiscounts(
+    cartState.cartArray,
+    discount,
+  );
   const netTotal = displayTotals.netTotal;
-  const ship = Number(searchParams.get("ship")) || 0;
+  // Cart API owns delivery pricing; the URL value is only a fallback.
+  const hasCartItems = cartState.cartArray.length > 0;
+  const minimumOrderValue = Math.max(
+    0,
+    Number(cartState.minimumOrderValue) || 0,
+  );
+  const apiDeliveryCharges = Math.max(
+    0,
+    Number(cartState.deliveryCharges) || 0,
+  );
+  const qualifiesForFreeShipping =
+    hasCartItems && minimumOrderValue > 0 && netTotal >= minimumOrderValue;
+  const ship = !hasCartItems
+    ? 0
+    : qualifiesForFreeShipping
+      ? 0
+      : apiDeliveryCharges || Number(searchParams.get("ship")) || 0;
   const orderTotal = netTotal + ship;
 
   useEffect(() => {
@@ -398,6 +425,13 @@ const Checkout = () => {
       const response = await createOrder(payload);
       const newOrderId =
         extractOrderId(response.Data) ?? extractOrderId(response);
+      const saleCampaignId =
+        extractSaleCampaignId(response.Data) ??
+        extractSaleCampaignId(response);
+
+      if (newOrderId && saleCampaignId) {
+        saveOrderSaleCampaignId(newOrderId, saleCampaignId);
+      }
 
       let guestLoggedIn = false;
       if (!isAuthenticated()) {
@@ -1124,6 +1158,13 @@ const Checkout = () => {
                       product.images?.[0] ||
                       "/images/product/1000x1000.png";
                     const variantsLabel = getVariantsLabel(product);
+                    // Subtotal is pre-discount, so rows must show pre-discount too.
+                    const unitGross = product.originPrice || product.price || 0;
+                    const grossLineTotal = unitGross * (product.quantity || 1);
+                    const lineDiscount = Math.max(
+                      0,
+                      grossLineTotal - (product.lineTotal || 0),
+                    );
 
                     return (
                       <div
@@ -1158,12 +1199,21 @@ const Checkout = () => {
                               Qty: {product.quantity}
                             </span>
                             <span className="text-button font-semibold">
-                              {formatRsPrice(product.lineTotal)}
+                              {formatRsPrice(grossLineTotal)}
                             </span>
                           </div>
                           {product.quantity > 1 && (
                             <div className="caption2 text-secondary mt-1">
-                              {formatRsPrice(product.price)} each
+                              {formatRsPrice(unitGross)} each
+                            </div>
+                          )}
+                          {lineDiscount > 0 && (
+                            <div
+                              className="caption2 mt-1 font-semibold"
+                              style={{ color: "#16a34a" }}
+                            >
+                              Save {formatRsPrice(lineDiscount)} ·{" "}
+                              {formatRsPrice(product.lineTotal)} after discount
                             </div>
                           )}
                         </div>
@@ -1179,31 +1229,45 @@ const Checkout = () => {
                   <span>{formatRsPrice(subTotal)}</span>
                 </div>
 
-                <div className="checkout-total-row">
-                  <span>Discount</span>
-                  <span
-                    style={{
-                      color: discount > 0 ? "#16a34a" : undefined,
-                    }}
-                    className="font-semibold"
-                  >
-                    {discount > 0
-                      ? `-${formatRsPrice(discount)}`
-                      : formatRsPrice(0)}
-                  </span>
-                </div>
-
-                {pendingPromo && (
+                {campaignDiscounts.length > 0 ? (
+                  campaignDiscounts.map((campaign) => (
+                    <div
+                      key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
+                      className="checkout-total-row"
+                    >
+                      <span>
+                        {getCampaignDiscountLabel(
+                          campaign.campaignType,
+                          campaign.campaignTypeDisplayName,
+                        )}
+                      </span>
+                      <span style={{ color: "#16a34a" }} className="font-semibold">
+                        -{formatRsPrice(campaign.amount)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
                   <div className="checkout-total-row">
-                    <span>Promo Code</span>
-                    <span>{pendingPromo}</span>
+                    <span>Discount</span>
+                    <span>{formatRsPrice(0)}</span>
                   </div>
                 )}
 
-                {/* <div className="checkout-total-row">
+                {pendingPromo &&
+                  !campaignDiscounts.some(
+                    (campaign) =>
+                      campaign.campaignType === CampaignType.PromoCode,
+                  ) && (
+                    <div className="checkout-total-row">
+                      <span>Promo Code Discount ({pendingPromo})</span>
+                      <span>Applied after order creation</span>
+                    </div>
+                  )}
+
+                <div className="checkout-total-row">
                   <span>Delivery Charges</span>
-                  <span>{formatRsPrice(ship)}</span>
-                </div> */}
+                  <span>{ship > 0 ? formatRsPrice(ship) : "Free"}</span>
+                </div>
 
                 <div className="checkout-total-row is-grand">
                   <span>Total</span>
@@ -1233,6 +1297,17 @@ const Checkout = () => {
         onClose={() => setAddressModalOpen(false)}
         onSelect={(address) => {
           void applySavedAddress(address);
+        }}
+        onDeleted={(addressBookId) => {
+          setSavedAddresses((current) =>
+            current.filter(
+              (address) => address.AddressBookId !== addressBookId,
+            ),
+          );
+
+          if (selectedAddressId === addressBookId) {
+            startNewAddress();
+          }
         }}
         onUseNew={startNewAddress}
       />

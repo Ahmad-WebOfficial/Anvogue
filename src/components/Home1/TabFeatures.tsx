@@ -8,11 +8,13 @@ import Product from "../Product/Product";
 import ProductSkeleton from "@/components/Other/ProductSkeleton";
 import { motion } from "framer-motion";
 import {
-  fetchProductsByBrand,
+  fetchAllBrandProducts,
+  fetchLandingPageProducts,
   filterProductsForHomeTab,
   HomeProductTab,
   LandingPageProduct,
   mapLandingProductToProductType,
+  mergeLandingProducts,
 } from "@/lib/category-products";
 
 const TABS: HomeProductTab[] = ["best sellers", "on sale", "new arrivals"];
@@ -31,9 +33,20 @@ const TabFeatures: React.FC = () => {
       setError("");
 
       try {
-        const apiProducts = await fetchProductsByBrand(1, 50);
+        // Prefer richer campaign data when the same product appears in both feeds.
+        const [brandProducts, landingProducts] = await Promise.all([
+          fetchAllBrandProducts(100).catch(() => [] as LandingPageProduct[]),
+          fetchLandingPageProducts().catch(() => [] as LandingPageProduct[]),
+        ]);
         if (cancelled) return;
-        setProducts(apiProducts);
+
+        const merged = mergeLandingProducts(landingProducts, brandProducts);
+
+        if (merged.length === 0) {
+          throw new Error("No products returned.");
+        }
+
+        setProducts(merged);
       } catch {
         if (!cancelled) {
           setProducts([]);
@@ -95,6 +108,7 @@ const TabFeatures: React.FC = () => {
             </p>
           ) : (
             <Swiper
+              key={activeTab}
               spaceBetween={12}
               slidesPerView={2}
               navigation
@@ -117,7 +131,18 @@ const TabFeatures: React.FC = () => {
             >
               {filteredProducts.map((product) => (
                 <SwiperSlide key={product.id}>
-                  <Product data={product} type="grid" style="style-1" />
+                  <Product
+                    data={product}
+                    type="grid"
+                    style="style-1"
+                    badgeMode={
+                      activeTab === "best sellers"
+                        ? "featured"
+                        : activeTab === "new arrivals"
+                          ? "new"
+                          : "sale"
+                    }
+                  />
                 </SwiperSlide>
               ))}
             </Swiper>

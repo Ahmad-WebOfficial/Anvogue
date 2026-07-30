@@ -14,6 +14,8 @@ export interface ApiCartItem {
   CartId?: number | string;
   CartItemId?: number | string;
   CampaignId?: number;
+  CampaignType?: number;
+  CampaignTypeDisplayName?: string | null;
   DiscountValueType?: number;
   Discount?: number;
   IsCampaignApplied?: boolean;
@@ -53,6 +55,8 @@ export interface CartSummary {
   totalDiscount: number;
   netTotal: number;
   totalAmount: number;
+  deliveryCharges: number;
+  minimumOrderValue: number;
   totalItems: number;
   relatedProducts: RelatedProduct[];
   homeDeliveryEnable: boolean;
@@ -183,6 +187,8 @@ function extractCartSummary(data: unknown, items: ApiCartItem[]): CartSummary {
   const apiSubTotal = Number(nested?.TotalPrice);
   const apiDiscount = Number(nested?.TotalDiscount ?? 0);
   const apiNetTotal = Number(nested?.NetTotal);
+  const apiDeliveryCharges = Number(nested?.DeliveryCharges ?? 0);
+  const apiMinimumOrderValue = Number(nested?.MinimumOrderValue ?? 0);
 
   const resolved = resolveCartDisplayTotals({
     linesNet: calculatedNetTotal,
@@ -203,7 +209,17 @@ function extractCartSummary(data: unknown, items: ApiCartItem[]): CartSummary {
     subTotal: resolved.subTotal,
     totalDiscount: resolved.discount,
     netTotal: resolved.netTotal,
-    totalAmount: resolved.netTotal,
+    totalAmount:
+      resolved.netTotal +
+      (Number.isFinite(apiDeliveryCharges) ? apiDeliveryCharges : 0),
+    deliveryCharges:
+      Number.isFinite(apiDeliveryCharges) && apiDeliveryCharges > 0
+        ? apiDeliveryCharges
+        : 0,
+    minimumOrderValue:
+      Number.isFinite(apiMinimumOrderValue) && apiMinimumOrderValue > 0
+        ? apiMinimumOrderValue
+        : 0,
     totalItems: items.reduce((count, item) => count + (item.Quantity ?? 1), 0),
     relatedProducts: collectRelatedProductsFromCart(items),
     homeDeliveryEnable: Boolean(nested?.HomeDeliveryEnable),
@@ -482,5 +498,10 @@ export function mapApiCartItemToProductType(item: ApiCartItem): ProductType {
     description: item.Category?.CategoryDescription || getCartItemVariantsLabel(item),
     action: "add to cart",
     slug: String(item.ProductId),
+    isPromotional: Boolean(item.IsPromotional),
+    discount: item.Discount ?? 0,
+    discountType: item.DiscountValueType ?? 0,
+    campaignType: item.CampaignType ?? 0,
+    campaignTypeDisplayName: item.CampaignTypeDisplayName ?? null,
   };
 }

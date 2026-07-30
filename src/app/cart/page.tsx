@@ -17,9 +17,12 @@ import {
   getProductDetailUrl,
   mapProductDetailToProductType,
 } from "@/lib/featured-products";
+import {
+  getCampaignDiscountLabel,
+  getCartCampaignDiscounts,
+} from "@/lib/discount";
 
 const Cart = () => {
-  const [shipCart, setShipCart] = useState(0);
   const [addingRelatedId, setAddingRelatedId] = useState<number | null>(null);
   const router = useRouter();
 
@@ -37,7 +40,6 @@ const Cart = () => {
     void fetchCart();
   }, [fetchCart]);
 
-  const moneyForFreeship = 150;
   const linesNet = cartState.cartArray.reduce(
     (sum, item) => sum + (item.lineTotal || 0),
     0,
@@ -56,20 +58,27 @@ const Cart = () => {
   const subTotal = displayTotals.subTotal;
   const netTotal = displayTotals.netTotal;
   const totalDiscount = displayTotals.discount;
+  const campaignDiscounts = getCartCampaignDiscounts(
+    cartState.cartArray,
+    totalDiscount,
+  );
   const relatedProducts = cartState.relatedProducts ?? [];
-  const freeShippingRemaining = Math.max(moneyForFreeship - subTotal, 0);
-  const qualifiesForFreeShipping = subTotal >= moneyForFreeship;
-  const orderTotal = netTotal + (qualifiesForFreeShipping ? 0 : shipCart);
-
-  useEffect(() => {
-    if (qualifiesForFreeShipping) {
-      setShipCart(0);
-    } else if (cartState.cartArray.length === 0) {
-      setShipCart(0);
-    } else if (shipCart === 0) {
-      setShipCart(30);
-    }
-  }, [qualifiesForFreeShipping, cartState.cartArray.length, shipCart]);
+  // Delivery pricing comes from the cart API, not hardcoded tiers.
+  const hasCartItems = cartState.cartArray.length > 0;
+  const moneyForFreeship = Math.max(
+    0,
+    Number(cartState.minimumOrderValue) || 0,
+  );
+  const apiDeliveryCharges = Math.max(
+    0,
+    Number(cartState.deliveryCharges) || 0,
+  );
+  const freeShippingRemaining = Math.max(moneyForFreeship - netTotal, 0);
+  const qualifiesForFreeShipping =
+    hasCartItems && moneyForFreeship > 0 && netTotal >= moneyForFreeship;
+  const shipCart =
+    hasCartItems && !qualifiesForFreeShipping ? apiDeliveryCharges : 0;
+  const orderTotal = netTotal + shipCart;
 
   const handleQuantityChange = (cartId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -100,9 +109,7 @@ const Cart = () => {
   };
 
   const redirectToCheckout = () => {
-    router.push(
-      `/checkout?discount=${totalDiscount}&ship=${qualifiesForFreeShipping ? 0 : shipCart}`,
-    );
+    router.push(`/checkout?discount=${totalDiscount}&ship=${shipCart}`);
   };
 
   const getVariantsLabel = (product: (typeof cartState.cartArray)[0]) => {
@@ -116,7 +123,10 @@ const Cart = () => {
     );
   };
 
-  const shippingProgress = Math.min((subTotal / moneyForFreeship) * 100, 100);
+  const shippingProgress =
+    moneyForFreeship > 0
+      ? Math.min((netTotal / moneyForFreeship) * 100, 100)
+      : 0;
 
   return (
     <>
@@ -459,21 +469,34 @@ const Cart = () => {
                     <span>{formatRsPrice(subTotal)}</span>
                   </div>
 
-                  <div className="cart-total-row">
-                    <span className="text-secondary">Discount</span>
-                    <span className={totalDiscount > 0 ? "text-green" : undefined}>
-                      {totalDiscount > 0
-                        ? `-${formatRsPrice(totalDiscount)}`
-                        : formatRsPrice(0)}
-                    </span>
-                  </div>
+                  {campaignDiscounts.length > 0 ? (
+                    campaignDiscounts.map((campaign) => (
+                      <div
+                        key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
+                        className="cart-total-row"
+                      >
+                        <span className="text-secondary">
+                          {getCampaignDiscountLabel(
+                            campaign.campaignType,
+                            campaign.campaignTypeDisplayName,
+                          )}
+                        </span>
+                        <span className="text-green">
+                          -{formatRsPrice(campaign.amount)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="cart-total-row">
+                      <span className="text-secondary">Discount</span>
+                      <span>{formatRsPrice(0)}</span>
+                    </div>
+                  )}
 
                   <div className="cart-total-row">
                     <span className="text-secondary">Delivery Charges</span>
                     <span>
-                      {formatRsPrice(
-                        qualifiesForFreeShipping || shipCart === 0 ? 0 : shipCart,
-                      )}
+                      {shipCart > 0 ? formatRsPrice(shipCart) : "Free"}
                     </span>
                   </div>
 
@@ -483,40 +506,14 @@ const Cart = () => {
                   </div>
                 </div>
 
-                {cartState.cartArray.length > 0 && (
+                {hasCartItems && moneyForFreeship > 0 && (
                   <div className="cart-shipping-options">
-                    <div className="cart-shipping-label">Delivery Method</div>
-                    <label className="cart-shipping-option">
-                      <input
-                        type="radio"
-                        name="ship"
-                        checked={qualifiesForFreeShipping || shipCart === 0}
-                        disabled={!qualifiesForFreeShipping}
-                        onChange={() => setShipCart(0)}
-                      />
-                      <span>
-                        Free Shipping{" "}
-                        {!qualifiesForFreeShipping && "(spend more to unlock)"}
-                      </span>
-                    </label>
-                    <label className="cart-shipping-option">
-                      <input
-                        type="radio"
-                        name="ship"
-                        checked={!qualifiesForFreeShipping && shipCart === 30}
-                        onChange={() => setShipCart(30)}
-                      />
-                      <span>Local — {formatRsPrice(30)}</span>
-                    </label>
-                    <label className="cart-shipping-option">
-                      <input
-                        type="radio"
-                        name="ship"
-                        checked={!qualifiesForFreeShipping && shipCart === 40}
-                        onChange={() => setShipCart(40)}
-                      />
-                      <span>Flat Rate — {formatRsPrice(40)}</span>
-                    </label>
+                    <div className="cart-shipping-label">Delivery</div>
+                    <p className="caption2 text-secondary">
+                      {qualifiesForFreeShipping
+                        ? "Free delivery unlocked on this order."
+                        : `Add ${formatRsPrice(freeShippingRemaining)} more to get free delivery.`}
+                    </p>
                   </div>
                 )}
 

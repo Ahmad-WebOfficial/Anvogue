@@ -184,6 +184,8 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
   const discountLabel = formatDiscountBadge(
     activeDiscount.discount,
     activeDiscount.discountType,
+    activeDiscount.campaignType,
+    activeDiscount.campaignTypeDisplayName,
   );
   const availableStock = getAvailableStockCount(productDetail, selectedVariant);
   const cartGate = canAddProductToCart(productDetail, {

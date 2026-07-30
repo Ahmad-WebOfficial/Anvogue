@@ -294,6 +294,7 @@ const StripePaymentResponseContent = () => {
                 )}
 
               {/* Payment Summary */}
+              {/* Payment Summary */}
               <div className="pt-5 space-y-3">
                 <div className="text-xs font-bold uppercase tracking-wider text-secondary mb-3">
                   Payment Summary
@@ -306,15 +307,104 @@ const StripePaymentResponseContent = () => {
                   </span>
                 </div>
 
-                {order?.DeliveryCharges != null &&
-                  order.DeliveryCharges > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-secondary">Delivery Charges</span>
-                      <span className="font-medium">
-                        {formatRsPrice(order.DeliveryCharges)}
-                      </span>
-                    </div>
-                  )}
+                {(order?.DeliveryCharges ?? orderAny?.DeliveryCharge ?? 0) >
+                  0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-secondary">Delivery Charges</span>
+                    <span className="font-medium">
+                      {formatRsPrice(
+                        order?.DeliveryCharges ?? orderAny?.DeliveryCharge,
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                {(() => {
+                  const posVal =
+                    orderAny?.POSCharges ?? orderAny?.POSCharge ?? 0;
+                  if (posVal > 0) {
+                    return (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-secondary">POS Charges</span>
+                        <span className="font-medium">
+                          {formatRsPrice(posVal)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* 1. Sale Discount */}
+                {(() => {
+                  const saleDisc = orderAny?.SaleDiscount ?? 0;
+                  if (saleDisc > 0) {
+                    return (
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="text-secondary"> Discount</span>
+                        <span className="font-bold text-green">
+                          -{formatRsPrice(saleDisc)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {(() => {
+                  const promoDisc =
+                    orderAny?.PromoCodeValue ?? orderAny?.PromoDiscount ?? 0;
+                  if (promoDisc > 0) {
+                    return (
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="text-secondary">
+                          Promo Code{" "}
+                          {orderAny?.PromoCode ? `(${orderAny.PromoCode})` : ""}
+                        </span>
+                        <span className="font-medium">
+                          -{formatRsPrice(promoDisc)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* 3. Payment Method Discount */}
+                {(() => {
+                  const pmDisc = orderAny?.PaymentMethodDiscount ?? 0;
+                  if (pmDisc > 0) {
+                    return (
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="text-secondary">
+                          Payment Method Discount
+                        </span>
+                        <span className="font-medium">
+                          -{formatRsPrice(pmDisc)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* 4. Order Value Discount */}
+                {(() => {
+                  const ovDisc = orderAny?.OrderValueDiscount ?? 0;
+                  if (ovDisc > 0) {
+                    return (
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="text-secondary">
+                          Order Value Discount
+                        </span>
+                        <span className="font-medium">
+                          -{formatRsPrice(ovDisc)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 <div className="flex justify-between items-center pt-4 border-t border-line text-base font-bold">
                   <span>Net Amount</span>

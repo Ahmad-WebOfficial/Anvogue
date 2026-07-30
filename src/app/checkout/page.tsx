@@ -107,6 +107,7 @@ const Checkout = () => {
     billingFullName: "",
     billingEmail: "",
     billingPhone: "",
+    billingSameAsShipping: true,
     isAddNewAddress: true,
     addressBookId: 0,
     longitude: "",
@@ -426,8 +427,7 @@ const Checkout = () => {
       const newOrderId =
         extractOrderId(response.Data) ?? extractOrderId(response);
       const saleCampaignId =
-        extractSaleCampaignId(response.Data) ??
-        extractSaleCampaignId(response);
+        extractSaleCampaignId(response.Data) ?? extractSaleCampaignId(response);
 
       if (newOrderId && saleCampaignId) {
         saveOrderSaleCampaignId(newOrderId, saleCampaignId);
@@ -892,13 +892,11 @@ const Checkout = () => {
                           setForm((prev) => ({
                             ...prev,
                             billingSameAsShipping: false,
-                            billingFullName:
-                              prev.billingFullName || prev.fullName,
-                            billingEmail: prev.billingEmail || prev.email,
-                            billingPhone: prev.billingPhone || prev.phone,
-                            billingPhoneCode:
-                              prev.billingPhoneCode || prev.phoneCode,
-                            billingIsoCode: prev.billingIsoCode || prev.isoCode,
+                            billingFullName: "",
+                            billingEmail: "",
+                            billingPhone: "",
+                            billingPhoneCode: "",
+                            billingIsoCode: "",
                           }));
                         }}
                       />
@@ -1212,8 +1210,7 @@ const Checkout = () => {
                               className="caption2 mt-1 font-semibold"
                               style={{ color: "#16a34a" }}
                             >
-                              Save {formatRsPrice(lineDiscount)} ·{" "}
-                              {formatRsPrice(product.lineTotal)} after discount
+                              Save {formatRsPrice(lineDiscount)} after discount
                             </div>
                           )}
                         </div>
@@ -1241,7 +1238,10 @@ const Checkout = () => {
                           campaign.campaignTypeDisplayName,
                         )}
                       </span>
-                      <span style={{ color: "#16a34a" }} className="font-semibold">
+                      <span
+                        style={{ color: "#16a34a" }}
+                        className="font-semibold"
+                      >
                         -{formatRsPrice(campaign.amount)}
                       </span>
                     </div>

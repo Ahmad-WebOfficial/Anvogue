@@ -494,14 +494,14 @@ const ModalCart = ({
                   <Icon.Truck size={18} />
                   Shipping
                 </button>
-                <button
+                {/* <button
                   type="button"
                   className="modal-cart-tool-btn"
                   onClick={() => setActiveTab("coupon")}
                 >
                   <Icon.Tag size={18} />
                   Coupon
-                </button>
+                </button> */}
               </div>
 
               <div className="modal-cart-summary">

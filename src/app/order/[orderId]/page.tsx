@@ -66,6 +66,12 @@ const OrderDetailsPage = () => {
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [cancellingPromo, setCancellingPromo] = useState(false);
   const [campaignId, setCampaignId] = useState<number | null>(null);
+  const [promoError, setPromoError] = useState("");
+  // Kept so the discount stays visible even if the refreshed order omits it.
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discount: number;
+  } | null>(null);
   const router = useRouter();
 
   const resolveCampaignId = (
@@ -80,15 +86,19 @@ const OrderDetailsPage = () => {
     );
   };
 
-  const loadOrder = async () => {
+  const loadOrder = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+
     if (!orderId || Number.isNaN(orderId)) {
       setError("Invalid order ID.");
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const orderDetails = await fetchCustomerOrderDetails(orderId);
@@ -98,7 +108,13 @@ const OrderDetailsPage = () => {
       try {
         paymentOptions = await fetchSelectPayment(orderId);
         setPaymentData(paymentOptions);
-        setSelectedGateway(null);
+        const availableGateways = paymentOptions?.PaymentGateways ?? [];
+        setSelectedGateway((previous) =>
+          previous &&
+          availableGateways.some((gateway) => gateway.PGId === previous)
+            ? previous
+            : null,
+        );
       } catch (paymentErr) {
         console.error("Failed to load payment options:", paymentErr);
         toast.error(
@@ -115,13 +131,49 @@ const OrderDetailsPage = () => {
         saveOrderCampaignId(orderId, resolvedCampaign);
       }
 
-      if (orderDetails.PromoCode) {
-        setPromoInput(orderDetails.PromoCode);
+      const activeOrder = paymentOptions?.OrderDto ?? orderDetails;
+      const savedCode = (activeOrder.PromoCode ?? "").trim();
+      const savedNetDiscount = Math.max(0, Number(activeOrder.NetDiscount) || 0);
+      const itemDiscount = (
+        activeOrder.OrderDetails?.OrderItemList ?? []
+      ).reduce(
+        (sum, item) => sum + Math.max(0, Number(item.DiscountAmount) || 0),
+        0,
+      );
+
+      if (savedCode) {
+        setPromoInput(savedCode);
+      }
+      if (savedCode || savedNetDiscount > 0) {
+        setAppliedPromo((previous) => {
+          const previousPromo = Math.max(0, Number(previous?.discount) || 0);
+          // Prefer the promo API TotalDiscount; otherwise split net vs item discounts.
+          const inferredPromo =
+            previousPromo > 0
+              ? previousPromo
+              : savedCode
+                ? Math.max(0, savedNetDiscount - itemDiscount)
+                : 0;
+
+          return {
+            code: savedCode || previous?.code || "",
+            discount: inferredPromo,
+          };
+        });
+      } else {
+        setAppliedPromo(null);
       }
     } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to load order details."));
+      const message = getApiErrorMessage(err, "Failed to load order details.");
+      if (silent) {
+        toast.error(message);
+      } else {
+        setError(message);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -139,8 +191,11 @@ const OrderDetailsPage = () => {
   const handleApplyPromo = useCallback(
     async (codeOverride?: string) => {
       const code = (codeOverride ?? promoInput).trim();
+      setPromoError("");
+
       if (!code) {
-        toast.error("Please enter a valid promo code.");
+        setPromoError("Please enter a promo code.");
+        toast.error("Please enter a promo code.");
         return;
       }
       if (!orderId || Number.isNaN(orderId)) {
@@ -151,29 +206,35 @@ const OrderDetailsPage = () => {
       setApplyingPromo(true);
       try {
         const result = await applyPromoCodeToOrder(code, orderId);
+        const invalidCodeMessage =
+          "This promo code is invalid or cannot be applied to your order.";
+
         if (!result.success) {
-          toast.error(
-            result.message ||
-              "This promo code is invalid or cannot be applied to your order.",
-          );
+          setPromoError(result.message || invalidCodeMessage);
+          toast.error(result.message || invalidCodeMessage);
           return;
         }
 
         clearPendingPromoCode();
-        setPromoInput(code);
+        const appliedCode = result.code || code;
+        setPromoInput(appliedCode);
+        setAppliedPromo({
+          code: appliedCode,
+          discount: result.totalDiscount ?? 0,
+        });
         if (result.campaignId) {
           setCampaignId(result.campaignId);
         }
         toast.success(result.message);
-        await loadOrder();
+        await loadOrder({ silent: true });
       } catch (err) {
         clearPendingPromoCode();
-        toast.error(
-          getPromoErrorMessage(
-            err,
-            "This promo code is invalid or cannot be applied to your order.",
-          ),
+        const message = getPromoErrorMessage(
+          err,
+          "This promo code is invalid or cannot be applied to your order.",
         );
+        setPromoError(message);
+        toast.error(message);
       } finally {
         setApplyingPromo(false);
       }
@@ -182,6 +243,8 @@ const OrderDetailsPage = () => {
   );
 
   const handleCancelPromo = useCallback(async () => {
+    setPromoError("");
+
     if (!orderId || Number.isNaN(orderId)) {
       toast.error("Invalid order ID.");
       return;
@@ -193,9 +256,10 @@ const OrderDetailsPage = () => {
       getOrderCampaignId(orderId);
 
     if (!resolved) {
-      toast.error(
-        "Unable to remove promo. Campaign details were not found. Please refresh and try again.",
-      );
+      const message =
+        "Unable to remove promo. Campaign details were not found. Please refresh and try again.";
+      setPromoError(message);
+      toast.error(message);
       return;
     }
 
@@ -204,15 +268,16 @@ const OrderDetailsPage = () => {
       const result = await cancelPromoCodeFromOrder(orderId, resolved);
       setCampaignId(null);
       setPromoInput("");
+      setAppliedPromo(null);
       toast.success(result.message);
-      await loadOrder();
+      await loadOrder({ silent: true });
     } catch (err) {
-      toast.error(
-        getPromoErrorMessage(
-          err,
-          "We couldn't remove this promo code. Please try again.",
-        ),
+      const message = getPromoErrorMessage(
+        err,
+        "We couldn't remove this promo code. Please try again.",
       );
+      setPromoError(message);
+      toast.error(message);
     } finally {
       setCancellingPromo(false);
     }
@@ -271,6 +336,29 @@ const OrderDetailsPage = () => {
   const displayOrder = paymentData?.OrderDto ?? order;
   const gateways = paymentData?.PaymentGateways ?? [];
   const items = displayOrder?.OrderDetails?.OrderItemList ?? [];
+
+  const netDiscount = Math.max(0, Number(displayOrder?.NetDiscount) || 0);
+  // Product-level discounts (sale/item), separate from promo-code savings.
+  const itemProductDiscount = items.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.DiscountAmount) || 0),
+    0,
+  );
+  const promoCode =
+    (displayOrder?.PromoCode ?? "").trim() || appliedPromo?.code || "";
+  const appliedPromoAmount = Math.max(0, Number(appliedPromo?.discount) || 0);
+  // Promo API TotalDiscount (how much this customer saved via the code).
+  const promoDiscount =
+    appliedPromoAmount > 0
+      ? appliedPromoAmount
+      : promoCode
+        ? Math.max(0, netDiscount - itemProductDiscount)
+        : 0;
+  const productDiscount =
+    itemProductDiscount > 0
+      ? itemProductDiscount
+      : Math.max(0, netDiscount - promoDiscount);
+  const isPromoApplied =
+    Boolean(promoCode) || promoDiscount > 0 || Boolean(campaignId);
 
   const handleSelectPayment = (gateway: PaymentGateway) => {
     setSelectedGateway(gateway.PGId);
@@ -714,23 +802,30 @@ const OrderDetailsPage = () => {
                     <div className="order-total-row">
                       <span className="text-secondary">Discount</span>
                       <span
-                        style={{
-                          color:
-                            displayOrder.NetDiscount > 0
-                              ? "#16a34a"
-                              : undefined,
-                        }}
-                        className="font-semibold"
+                        className={`font-semibold ${productDiscount > 0 ? "order-discount-value" : ""}`}
                       >
-                        {displayOrder.NetDiscount > 0
-                          ? `-${formatRsPrice(displayOrder.NetDiscount)}`
+                        {productDiscount > 0
+                          ? `-${formatRsPrice(productDiscount)}`
                           : formatRsPrice(0)}
                       </span>
                     </div>
-                    {displayOrder.PromoCode && (
+                    {(isPromoApplied || promoDiscount > 0) && (
                       <div className="order-total-row">
-                        <span className="text-secondary">Promo Code</span>
-                        <span>{displayOrder.PromoCode}</span>
+                        <span className="text-secondary">
+                          Order Promo
+                          {promoCode ? (
+                            <span className="order-promo-chip ml-2">
+                              {promoCode}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span
+                          className={`font-semibold ${promoDiscount > 0 ? "order-discount-value" : ""}`}
+                        >
+                          {promoDiscount > 0
+                            ? `-${formatRsPrice(promoDiscount)}`
+                            : formatRsPrice(0)}
+                        </span>
                       </div>
                     )}
                     <div className="order-total-row is-grand">
@@ -739,57 +834,95 @@ const OrderDetailsPage = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4">
+                  <div className="order-promo">
                     <label
                       htmlFor="order-promo-code"
                       className="caption1 text-secondary"
                     >
                       Promo Code
                     </label>
-                    <div className="flex gap-2 mt-2">
-                      <input
-                        id="order-promo-code"
-                        type="text"
-                        className="border-line px-4 py-2 w-full rounded-lg border"
-                        placeholder="Enter promo code"
-                        value={promoInput}
-                        onChange={(e) => setPromoInput(e.target.value)}
-                        disabled={
-                          applyingPromo ||
-                          cancellingPromo ||
-                          Boolean(
-                            displayOrder.PromoCode ||
-                            displayOrder.NetDiscount > 0,
-                          )
-                        }
-                      />
-                      {displayOrder.PromoCode ||
-                      displayOrder.NetDiscount > 0 ||
-                      campaignId ? (
-                        <button
-                          type="button"
-                          className="button-main bg-red px-4 whitespace-nowrap"
-                          onClick={() => void handleCancelPromo()}
-                          disabled={applyingPromo || cancellingPromo}
-                        >
-                          {cancellingPromo ? "Removing..." : "Remove"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="button-main bg-black px-4 whitespace-nowrap"
-                          onClick={() => void handleApplyPromo()}
-                          disabled={applyingPromo || cancellingPromo}
-                        >
-                          {applyingPromo ? "Applying..." : "Apply"}
-                        </button>
-                      )}
-                    </div>
-                    <p className="caption2 text-secondary mt-2">
-                      {displayOrder.PromoCode || displayOrder.NetDiscount > 0
-                        ? "Promo applied. Remove it to try a different code."
-                        : "Enter a valid promo code. Invalid codes will be rejected."}
-                    </p>
+
+                    {isPromoApplied ? (
+                      <>
+                        <div className="order-promo-applied">
+                          <div className="min-w-0">
+                            <span className="order-promo-applied-code">
+                              <Icon.CheckCircle size={16} weight="fill" />
+                              {promoCode || "Promo code"}
+                            </span>
+                            <p className="caption2 text-secondary mt-1">
+                              {promoDiscount > 0
+                                ? `You saved ${formatRsPrice(promoDiscount)} on this order.`
+                                : "Promo code applied to this order."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="order-promo-btn is-remove"
+                            onClick={() => void handleCancelPromo()}
+                            disabled={applyingPromo || cancellingPromo}
+                          >
+                            {cancellingPromo ? "Removing..." : "Remove"}
+                          </button>
+                        </div>
+                        {promoError ? (
+                          <p className="order-promo-error">
+                            <Icon.WarningCircle size={14} weight="fill" />
+                            {promoError}
+                          </p>
+                        ) : (
+                          <p className="caption2 text-secondary mt-2">
+                            Remove this code to try a different one.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="order-promo-row">
+                          <input
+                            id="order-promo-code"
+                            type="text"
+                            className={`order-promo-input ${promoError ? "has-error" : ""}`}
+                            placeholder="Enter promo code"
+                            autoComplete="off"
+                            value={promoInput}
+                            onChange={(e) => {
+                              setPromoInput(e.target.value);
+                              if (promoError) setPromoError("");
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return;
+                              e.preventDefault();
+                              void handleApplyPromo();
+                            }}
+                            disabled={applyingPromo || cancellingPromo}
+                          />
+                          <button
+                            type="button"
+                            className="button-main bg-black order-promo-btn"
+                            onClick={() => void handleApplyPromo()}
+                            disabled={
+                              applyingPromo ||
+                              cancellingPromo ||
+                              !promoInput.trim()
+                            }
+                          >
+                            {applyingPromo ? "Applying..." : "Apply"}
+                          </button>
+                        </div>
+                        {promoError ? (
+                          <p className="order-promo-error">
+                            <Icon.WarningCircle size={14} weight="fill" />
+                            {promoError}
+                          </p>
+                        ) : (
+                          <p className="caption2 text-secondary mt-2">
+                            Enter a valid promo code. Invalid codes will be
+                            rejected.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <p className="caption2 text-secondary text-center mt-3">
@@ -816,7 +949,7 @@ const OrderDetailsPage = () => {
                     </button>
                   </div>
 
-                  <div className="order-actions mt-4">
+                  <div className="order-actions order-actions-full mt-4">
                     <button
                       type="button"
                       onClick={openCancelModal}

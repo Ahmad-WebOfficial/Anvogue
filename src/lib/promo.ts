@@ -58,6 +58,19 @@ export function extractPromoDiscount(data: unknown): number | null {
   return null;
 }
 
+/** Promo code echoed back by the API (Data.Code). */
+export function extractPromoCode(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+
+  const record = data as Record<string, unknown>;
+  for (const key of ["Code", "code", "PromoCode", "promoCode"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return "";
+}
+
 export function extractCampaignId(data: unknown): number | null {
   if (data == null) return null;
   if (typeof data === "number") return parsePositiveId(data);
@@ -294,9 +307,35 @@ export function getPromoErrorMessage(
   return apiMessage.endsWith(".") ? apiMessage : `${apiMessage}.`;
 }
 
+function getResponseStatus(error: unknown): number {
+  if (!error || typeof error !== "object") return 0;
+  const response = (error as { response?: { status?: number } }).response;
+  return Number(response?.status ?? 0);
+}
+
+/**
+ * Swagger declares this endpoint as multipart/form-data with a `files` field,
+ * so retry as form-data when the JSON request is rejected as unsupported media.
+ */
+async function postPromoCode(code: string, orderId: number): Promise<unknown> {
+  const params = { Code: code, OrderId: orderId };
+
+  try {
+    return await api.post("/api/v1/Payment/PromoCode", null, { params });
+  } catch (error) {
+    if (getResponseStatus(error) !== 415) throw error;
+
+    return api.post("/api/v1/Payment/PromoCode", new FormData(), {
+      params,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  }
+}
+
 /**
  * Apply promo after order exists.
  * API: POST /api/v1/Payment/PromoCode?Code=&OrderId=
+ * Success payload: { Data: { CampaignId, TotalDiscount, Code }, Message, Type }
  */
 export async function applyPromoCodeToOrder(
   code: string,
@@ -311,12 +350,7 @@ export async function applyPromoCodeToOrder(
   }
 
   try {
-    const response = await api.post("/api/v1/Payment/PromoCode", null, {
-      params: {
-        Code: trimmed,
-        OrderId: orderId,
-      },
-    });
+    const response = await postPromoCode(trimmed, orderId);
 
     // Runtime axios returns AxiosResponse; typed ApiResponse may already be unwrapped.
     const raw = response as { data?: unknown };
@@ -340,7 +374,7 @@ export async function applyPromoCodeToOrder(
     const baseMessage = getEnvelopeMessage(body) || "Promo code applied.";
     const message =
       discount != null && discount > 0
-        ? `${baseMessage} You saved ${discount.toLocaleString("en-PK")} PKR.`
+        ? `${baseMessage} You saved Rs. ${discount.toLocaleString("en-PK")}.`
         : baseMessage;
 
     return {
@@ -348,7 +382,7 @@ export async function applyPromoCodeToOrder(
       message,
       totalDiscount: discount,
       campaignId,
-      code: trimmed,
+      code: extractPromoCode(body.Data) || trimmed,
       rawData: body.Data ?? null,
     };
   } catch (error) {

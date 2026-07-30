@@ -28,10 +28,6 @@ import {
   getDeliveryOptionLabel,
   OrderDetailData,
 } from "@/lib/order";
-import {
-  CampaignType,
-  getCampaignDiscountLabel,
-} from "@/lib/discount";
 
 type ProfileFormData = {
   FullName: string;
@@ -1421,10 +1417,10 @@ const MyAccount = () => {
                         Payment
                       </h3>
                       <p className="text-button font-semibold">
-                        {selectedOrderDetail.PaymentMethodName}
+                        {selectedOrderDetail.PaymentMethodName ||
+                          "Online Payment"}
                       </p>
 
-                      {/* Payment Status Tag & Verify Button Logic */}
                       {(() => {
                         const payStatus = String(
                           selectedOrderDetail.PaymentStatusDisplayName ||
@@ -1433,15 +1429,32 @@ const MyAccount = () => {
                             "",
                         ).toLowerCase();
 
+                        const paymentMethod = String(
+                          selectedOrderDetail.PaymentMethodName || "",
+                        ).toLowerCase();
+
                         const isCancelled =
                           formatOrderStatusLabel(
                             selectedOrderDetail.OrderStatusDisplayName,
                           ) === "Cancelled";
 
+                        const isCashOnDelivery =
+                          paymentMethod.includes("cash") ||
+                          paymentMethod.includes("cod") ||
+                          paymentMethod.includes("cash on delivery");
+
                         if (isCancelled || payStatus.includes("cancel")) {
                           return (
                             <span className="account-status-tag mt-3 is-canceled">
                               Cancelled
+                            </span>
+                          );
+                        }
+
+                        if (isCashOnDelivery) {
+                          return (
+                            <span className="account-status-tag mt-3 is-completed">
+                              Payment Completed
                             </span>
                           );
                         }
@@ -1458,7 +1471,6 @@ const MyAccount = () => {
                           );
                         }
 
-                        // Unverified / Incomplete State with Direct Payment URL or Order ID Redirect
                         const paymentUrl =
                           selectedOrderDetail.PaymentUrl ||
                           selectedOrderDetail.CheckoutUrl ||
@@ -1633,16 +1645,7 @@ const MyAccount = () => {
                     </div>
                     {selectedOrderDetail.NetDiscount > 0 && (
                       <div className="account-order-detail-total-row">
-                        <span>
-                          {getCampaignDiscountLabel(
-                            selectedOrderDetail.PromoCode
-                              ? CampaignType.PromoCode
-                              : selectedOrderDetail.CampaignType,
-                            selectedOrderDetail.PromoCode
-                              ? "Promo Code"
-                              : selectedOrderDetail.CampaignTypeDisplayName,
-                          )}
-                        </span>
+                        <span>Discount</span>
                         <span style={{ color: "#28a745" }}>
                           -{formatRsPrice(selectedOrderDetail.NetDiscount)}
                         </span>

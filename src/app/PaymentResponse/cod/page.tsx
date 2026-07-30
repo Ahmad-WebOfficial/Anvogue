@@ -40,7 +40,6 @@ const CodPaymentResponseContent = () => {
         const details = await fetchCustomerOrderDetails(orderId);
         if (!cancelled) setOrder(details);
       } catch {
-        // Order lookup can lag right after confirmation — still show success.
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -59,8 +58,9 @@ const CodPaymentResponseContent = () => {
   const resolvedOrderId = order?.OrderId ?? (orderIdParam || null);
 
   return (
-    <div className="md:py-16 py-10">
-      <div className="container max-w-3xl">
+    <div className="md:py-16 py-10 px-4 sm:px-6">
+      {/* Yahan container ki width ko max-w-2xl ya max-w-3xl kar diya hai taake bari screen par zyadah spread na ho */}
+      <div className="w-full max-w-2xl mx-auto">
         {loading ? (
           <div className="text-center py-20">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface mb-4 animate-pulse">
@@ -72,7 +72,7 @@ const CodPaymentResponseContent = () => {
             </p>
           </div>
         ) : (
-          <div className="rounded-3xl border border-line bg-white overflow-hidden">
+          <div className="rounded-3xl border border-line bg-white overflow-hidden shadow-sm">
             <div className="px-6 md:px-8 py-10 text-center bg-green-50">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-5 bg-green text-white">
                 <Icon.CheckCircle size={42} weight="fill" />
@@ -119,7 +119,9 @@ const CodPaymentResponseContent = () => {
 
               {order?.NetAmount != null && (
                 <div className="flex justify-between items-center py-3">
-                  <span className="caption1 text-secondary">Amount Payable</span>
+                  <span className="caption1 text-secondary">
+                    Amount Payable
+                  </span>
                   <span className="heading6">
                     {formatRsPrice(order.NetAmount)}
                   </span>
@@ -130,7 +132,7 @@ const CodPaymentResponseContent = () => {
             <div className="px-6 md:px-8 pb-8 flex flex-col sm:flex-row gap-3">
               {resolvedOrderId && (
                 <Link
-                  href={`/order/${resolvedOrderId}`}
+                  href="/my-account"
                   className="button-main text-center flex-1"
                 >
                   View Order Details

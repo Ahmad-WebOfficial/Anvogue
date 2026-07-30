@@ -30,19 +30,18 @@ function buildSuccessResult(
   return {
     message:
       confirmResult?.message ??
-      "Your payment was successful and your order is confirmed.",
+      orderDetails?.PaymentStatusDisplayName ??
+      "Your payment status has been fetched.",
     orderId: orderId ?? orderDetails?.OrderId ?? null,
     orderNumber:
       confirmResult?.orderNumber ?? orderDetails?.OrderNumber ?? null,
     paymentStatus:
       confirmResult?.paymentStatus ??
       orderDetails?.PaymentStatusDisplayName ??
-      "Paid",
+      "Waiting For Payment",
     transactionId:
-      confirmResult?.transactionId ||
-      savedTransactionId ||
-      sessionId,
-    isSuccess: true,
+      confirmResult?.transactionId || savedTransactionId || sessionId,
+    isSuccess: confirmResult?.isSuccess ?? orderDetails?.PaymentStatus === 1,
   };
 }
 
@@ -71,15 +70,14 @@ const StripePaymentResponseContent = () => {
       try {
         const pendingOrderId = getPendingPaymentOrderId();
         const confirmResult = await confirmStripePayment(sessionId);
-        const orderId =
-          confirmResult?.orderId ?? pendingOrderId ?? null;
+        const orderId = confirmResult?.orderId ?? pendingOrderId ?? null;
 
         let orderDetails: OrderDetailData | null = null;
         if (orderId) {
           try {
             orderDetails = await fetchCustomerOrderDetails(orderId);
           } catch {
-            // Order fetch can fail briefly after payment — still show success.
+            // ignore
           }
         }
 
@@ -105,20 +103,13 @@ const StripePaymentResponseContent = () => {
 
             setOrder(orderDetails);
             setResult(
-              buildSuccessResult(
-                sessionId,
-                pendingOrderId,
-                orderDetails,
-                null,
-              ),
+              buildSuccessResult(sessionId, pendingOrderId, orderDetails, null),
             );
             clearPendingPaymentOrderId();
             return;
           }
 
-          setError(
-            getApiErrorMessage(err, "Failed to confirm your payment."),
-          );
+          setError(getApiErrorMessage(err, "Failed to confirm your payment."));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -133,129 +124,231 @@ const StripePaymentResponseContent = () => {
   }, [sessionId]);
 
   const resolvedOrderId = result?.orderId ?? order?.OrderId ?? null;
-  const isSuccess = Boolean(result?.isSuccess);
+  const orderNumber = result?.orderNumber || order?.OrderNumber;
+
+  const orderAny = order as any;
+  const subtotalVal =
+    order?.SubTotal ?? orderAny?.Subtotal ?? order?.NetAmount ?? 0;
+  const taxVal = order?.TaxAmount ?? orderAny?.Tax ?? 0;
+  const netAmountVal = order?.NetAmount ?? orderAny?.TotalAmount ?? 0;
+
+  // Real status API se uthana hai
+  const currentPaymentStatus =
+    order?.PaymentStatusDisplayName ||
+    result?.paymentStatus ||
+    "Waiting For Payment";
+  const isPaid =
+    currentPaymentStatus.toLowerCase().includes("paid") ||
+    currentPaymentStatus.toLowerCase().includes("completed");
 
   return (
-    <div className="md:py-16 py-10">
-      <div className="container max-w-3xl">
+    <div className="md:py-16 py-8 px-4 sm:px-6 bg-[#FAF9F5] pt-20 sm:pt-24">
+      <div className="w-full max-w-4xl mx-auto">
         {loading ? (
-          <div className="text-center py-20">
+          <div className="text-center py-24 bg-white rounded-3xl border border-line shadow-sm">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface mb-4 animate-pulse">
-              <Icon.CircleNotch size={28} className="animate-spin" />
+              <Icon.CircleNotch size={28} className="animate-spin text-black" />
             </div>
-            <div className="heading5">Confirming your payment...</div>
+            <div className="heading5 text-black">
+              Checking payment status...
+            </div>
             <p className="body2 text-secondary mt-2">
-              Please wait while we load your order confirmation.
+              Please wait while we verify your transaction details.
             </p>
           </div>
         ) : error ? (
-          <div className="text-center py-16 px-6 rounded-3xl border border-line bg-surface">
+          <div className="text-center py-16 px-6 rounded-3xl border border-line bg-white shadow-sm">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 text-red mb-4">
               <Icon.WarningCircle size={32} />
             </div>
-            <div className="heading4">Payment Confirmation Failed</div>
+            <div className="heading4">Payment Verification Failed</div>
             <p className="body1 text-secondary mt-3">{error}</p>
-            {resolvedOrderId && (
-              <Link
-                href={`/order/${resolvedOrderId}`}
-                className="button-main inline-block mt-6"
-              >
-                View Order
-              </Link>
-            )}
-            <Link
-              href="/"
-              className="block mt-4 text-button hover:underline"
-            >
+            <Link href="/my-account" className="button-main inline-block mt-6">
+              Go to My Account
+            </Link>
+            <Link href="/" className="block mt-4 text-button hover:underline">
               Continue Shopping
             </Link>
           </div>
         ) : (
-          <div className="rounded-3xl border border-line bg-white overflow-hidden">
-            <div
-              className={`px-6 md:px-8 py-10 text-center ${isSuccess ? "bg-green-50" : "bg-surface"}`}
-            >
+          <div>
+            {/* Top Header based on real status */}
+            <div className="text-center mt-5 px-2">
               <div
-                className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-5 ${isSuccess ? "bg-green text-white" : "bg-black text-white"}`}
+                className={`inline-flex items-center justify-center w-14 h-14 rounded-full mb-2 shadow-md ${isPaid ? "bg-[#1C1C1C] text-[#C2FF00]" : "bg-yellow-100 text-yellow-800"}`}
               >
-                {isSuccess ? (
-                  <Icon.CheckCircle size={42} weight="fill" />
+                {isPaid ? (
+                  <Icon.Check size={25} weight="bold" />
                 ) : (
-                  <Icon.CreditCard size={36} />
+                  <Icon.Clock size={25} weight="bold" />
                 )}
               </div>
-              <h1 className="heading3">
-                {isSuccess ? "Payment Successful!" : "Payment Received"}
+              <h1 className="heading3 text-2xl font-bold">
+                {isPaid
+                  ? "Payment Paid & Confirmed"
+                  : "Payment Status: " + currentPaymentStatus}
               </h1>
-              <p className="body1 text-secondary mt-3 max-w-xl mx-auto">
-                {result?.message ||
-                  "Your payment has been processed and your order is being confirmed."}
+              <p className="body2 text-secondary mt-2 text-sm sm:text-base max-w-sm mx-auto">
+                {isPaid
+                  ? "Thanks for shopping with TopSaver. Your payment is successfully completed."
+                  : "Your order is placed, but payment is currently pending or waiting for confirmation."}
               </p>
             </div>
 
-            <div className="px-6 md:px-8 py-8 space-y-4">
-              {(result?.orderNumber || order?.OrderNumber) && (
-                <div className="flex justify-between items-center py-3 border-b border-line">
-                  <span className="caption1 text-secondary">Order Number</span>
-                  <span className="text-button font-semibold">
-                    {result?.orderNumber || order?.OrderNumber}
-                  </span>
-                </div>
-              )}
+            {/* Main Receipt Card */}
+            <div className="rounded-3xl border border-line mt-4 bg-white overflow-hidden p-6 sm:p-10 shadow-sm">
+              {/* Amount Section */}
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 pb-5 border-b border-line">
+                <span className="text-secondary font-medium text-sm sm:text-base">
+                  Total Amount
+                </span>
+                <span className="text-xl sm:text-2xl font-bold text-black">
+                  {formatRsPrice(netAmountVal)}
+                </span>
+              </div>
 
-              {resolvedOrderId && (
-                <div className="flex justify-between items-center py-3 border-b border-line">
-                  <span className="caption1 text-secondary">Order ID</span>
-                  <span className="text-button font-semibold">
-                    {resolvedOrderId}
-                  </span>
+              {/* Order Details */}
+              <div className="py-5 border-b border-line space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-secondary mb-3">
+                  Order Details
                 </div>
-              )}
 
-              {(result?.paymentStatus || order?.PaymentStatusDisplayName) && (
-                <div className="flex justify-between items-center py-3 border-b border-line">
-                  <span className="caption1 text-secondary">Payment Status</span>
-                  <span className="caption2 bg-green-50 text-green-700 px-3 py-1 rounded-full">
-                    {result?.paymentStatus || order?.PaymentStatusDisplayName}
-                  </span>
-                </div>
-              )}
+                {orderNumber && (
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-sm">
+                    <span className="text-secondary">Order number</span>
+                    <span className="font-semibold text-black break-all">
+                      {orderNumber}
+                    </span>
+                  </div>
+                )}
 
-              {order?.NetAmount != null && (
-                <div className="flex justify-between items-center py-3 border-b border-line">
-                  <span className="caption1 text-secondary">Amount Paid</span>
-                  <span className="heading6">
-                    {formatRsPrice(order.NetAmount)}
-                  </span>
-                </div>
-              )}
+                {resolvedOrderId && (
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-sm">
+                    <span className="text-secondary">Order ID</span>
+                    <span className="font-semibold text-black">
+                      {resolvedOrderId}
+                    </span>
+                  </div>
+                )}
 
-              {sessionId && (
-                <div className="py-3">
-                  <span className="caption1 text-secondary block mb-1">
-                    Transaction Reference
-                  </span>
-                  <span className="caption2 break-all text-secondary">
-                    {result?.transactionId || sessionId}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-secondary">Payment status</span>
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full font-medium flex items-center gap-1.5 ${isPaid ? "bg-[#E7F6D5] text-[#2C6B00]" : "bg-yellow-50 text-yellow-800"}`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${isPaid ? "bg-[#2C6B00]" : "bg-yellow-600"}`}
+                    ></span>
+                    {currentPaymentStatus}
                   </span>
                 </div>
-              )}
+              </div>
+
+              {/* Items Ordered Section */}
+              {order?.OrderDetails?.OrderItemList &&
+                order.OrderDetails.OrderItemList.length > 0 && (
+                  <div className="py-5 border-b border-line space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-secondary mb-3">
+                      Items Ordered
+                    </div>
+                    {order.OrderDetails.OrderItemList.map(
+                      (item: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 py-1"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 flex-shrink-0 rounded-xl bg-surface flex items-center justify-center overflow-hidden border border-line">
+                              {item.ProductImageURL ? (
+                                <img
+                                  src={item.ProductImageURL}
+                                  alt={item.ProductName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Icon.ShoppingBag
+                                  size={20}
+                                  className="text-secondary"
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-semibold">
+                                {item.ProductName}
+                              </div>
+                              <div className="text-xs text-secondary">
+                                {item.VariantName || ""} {item.Quantity} ×{" "}
+                                {formatRsPrice(item.Amount)}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-sm font-semibold sm:text-right">
+                            {formatRsPrice(
+                              item.TotalAmount || item.Quantity * item.Amount,
+                            )}
+                          </span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+
+              {/* Payment Summary */}
+              <div className="pt-5 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-secondary mb-3">
+                  Payment Summary
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-secondary">Subtotal</span>
+                  <span className="font-medium">
+                    {formatRsPrice(order?.OrderAmount || subtotalVal)}
+                  </span>
+                </div>
+
+                {order?.DeliveryCharges != null &&
+                  order.DeliveryCharges > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-secondary">Delivery Charges</span>
+                      <span className="font-medium">
+                        {formatRsPrice(order.DeliveryCharges)}
+                      </span>
+                    </div>
+                  )}
+
+                <div className="flex justify-between items-center pt-4 border-t border-line text-base font-bold">
+                  <span>Net Amount</span>
+                  <span className="text-black">
+                    {formatRsPrice(netAmountVal)}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="px-6 md:px-8 pb-8 flex flex-col sm:flex-row gap-3">
-              {resolvedOrderId && (
-                <Link
-                  href={`/order/${resolvedOrderId}`}
-                  className="button-main text-center flex-1"
-                >
-                  View Order Details
-                </Link>
-              )}
+            {/* Action Buttons Section */}
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full">
+              <Link
+                href="/my-account"
+                className="block w-full flex-1 text-center py-3.5 bg-[#1C1C1C] text-white rounded-3xl font-medium hover:bg-black transition-colors shadow-sm"
+              >
+                View order details
+              </Link>
               <Link
                 href="/"
-                className="px-6 py-3 rounded-full border border-line text-center hover:border-black transition-colors flex-1"
+                className="block w-full flex-1 text-center py-3.5 bg-white text-black rounded-3xl border border-line hover:border-black transition-colors font-medium shadow-sm"
               >
-                Continue Shopping
+                Continue shopping
+              </Link>
+            </div>
+
+            {/* Support Footer */}
+            <div className="text-center mt-6 text-xs text-secondary">
+              Questions about your order?{" "}
+              <Link
+                href="/contact"
+                className="underline font-medium text-black"
+              >
+                Contact support
               </Link>
             </div>
           </div>

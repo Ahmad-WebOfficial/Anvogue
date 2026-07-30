@@ -92,7 +92,7 @@ const CategoryDetailCard: React.FC<CategoryDetailCardProps> = ({
             </p>
           )}
 
-          <button
+          {/* <button
             type="button"
             className="button-main mt-6"
             onClick={() => {
@@ -110,7 +110,7 @@ const CategoryDetailCard: React.FC<CategoryDetailCardProps> = ({
             {hasChildren
               ? `Explore ${category.Name}`
               : `View Products`}
-          </button>
+          </button> */}
         </div>
       </div>
     );

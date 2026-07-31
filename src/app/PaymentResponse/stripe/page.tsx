@@ -2,17 +2,20 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TopNavOne from "@/components/Header/TopNav/TopNavOne";
 import MenuOne from "@/components/Header/Menu/MenuOne";
 import Footer from "@/components/Footer/Footer";
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import {
+  buildPaymentErrorUrl,
   clearPendingPaymentOrderId,
   confirmStripePayment,
   fetchCustomerOrderDetails,
   getPendingPaymentOrderId,
   getPendingPaymentTransactionId,
+  getStripeFailureReason,
+  isFailedPaymentStatus,
   OrderDetailData,
   StripePaymentConfirmResult,
 } from "@/lib/order";
@@ -47,6 +50,7 @@ function buildSuccessResult(
 
 const StripePaymentResponseContent = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sessionId = searchParams.get("sessionId")?.trim() ?? "";
 
   const [loading, setLoading] = useState(true);
@@ -57,10 +61,37 @@ const StripePaymentResponseContent = () => {
   useEffect(() => {
     let cancelled = false;
 
+    const goToErrorPage = (
+      message: string,
+      orderId: number | null,
+      orderNumber?: string | null,
+    ) => {
+      router.replace(
+        buildPaymentErrorUrl({
+          orderId,
+          orderNumber,
+          message,
+          transactionId: sessionId || getPendingPaymentTransactionId(),
+        }),
+      );
+    };
+
     const confirmPayment = async () => {
+      const pendingOrderId = getPendingPaymentOrderId();
+      const failureReason = getStripeFailureReason(
+        new URLSearchParams(searchParams.toString()),
+      );
+
+      if (failureReason) {
+        goToErrorPage(failureReason, pendingOrderId);
+        return;
+      }
+
       if (!sessionId) {
-        setError("Payment session ID is missing.");
-        setLoading(false);
+        goToErrorPage(
+          "Payment session ID is missing, so we could not verify your payment.",
+          pendingOrderId,
+        );
         return;
       }
 
@@ -68,9 +99,20 @@ const StripePaymentResponseContent = () => {
       setError("");
 
       try {
-        const pendingOrderId = getPendingPaymentOrderId();
         const confirmResult = await confirmStripePayment(sessionId);
         const orderId = confirmResult?.orderId ?? pendingOrderId ?? null;
+
+        if (confirmResult && !confirmResult.isSuccess) {
+          if (!cancelled) {
+            goToErrorPage(
+              confirmResult.message ||
+                "Your payment could not be verified. Please try again.",
+              orderId,
+              confirmResult.orderNumber,
+            );
+          }
+          return;
+        }
 
         let orderDetails: OrderDetailData | null = null;
         if (orderId) {
@@ -83,6 +125,20 @@ const StripePaymentResponseContent = () => {
 
         if (cancelled) return;
 
+        const statusText =
+          orderDetails?.PaymentStatusDisplayName ??
+          confirmResult?.paymentStatus ??
+          "";
+        if (isFailedPaymentStatus(statusText)) {
+          goToErrorPage(
+            confirmResult?.message ||
+              `Your payment was not successful (status: ${statusText}).`,
+            orderId,
+            orderDetails?.OrderNumber ?? confirmResult?.orderNumber,
+          );
+          return;
+        }
+
         setOrder(orderDetails);
         setResult(
           buildSuccessResult(sessionId, orderId, orderDetails, confirmResult),
@@ -90,7 +146,7 @@ const StripePaymentResponseContent = () => {
         clearPendingPaymentOrderId();
       } catch (err) {
         if (!cancelled) {
-          const pendingOrderId = getPendingPaymentOrderId();
+          // Stripe redirects back here only after a completed checkout session.
           if (pendingOrderId || sessionId.startsWith("cs_")) {
             let orderDetails: OrderDetailData | null = null;
             if (pendingOrderId) {
@@ -101,6 +157,15 @@ const StripePaymentResponseContent = () => {
               }
             }
 
+            if (isFailedPaymentStatus(orderDetails?.PaymentStatusDisplayName)) {
+              goToErrorPage(
+                `Your payment was not successful (status: ${orderDetails?.PaymentStatusDisplayName}).`,
+                pendingOrderId,
+                orderDetails?.OrderNumber,
+              );
+              return;
+            }
+
             setOrder(orderDetails);
             setResult(
               buildSuccessResult(sessionId, pendingOrderId, orderDetails, null),
@@ -109,7 +174,10 @@ const StripePaymentResponseContent = () => {
             return;
           }
 
-          setError(getApiErrorMessage(err, "Failed to confirm your payment."));
+          goToErrorPage(
+            getApiErrorMessage(err, "Failed to confirm your payment."),
+            pendingOrderId,
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -121,7 +189,7 @@ const StripePaymentResponseContent = () => {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, searchParams, router]);
 
   const resolvedOrderId = result?.orderId ?? order?.OrderId ?? null;
   const orderNumber = result?.orderNumber || order?.OrderNumber;
@@ -418,10 +486,16 @@ const StripePaymentResponseContent = () => {
             {/* Action Buttons Section */}
             <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full">
               <Link
-                href="/my-account"
+                href={
+                  !isPaid && resolvedOrderId
+                    ? `/order/${resolvedOrderId}?pay=1`
+                    : "/my-account"
+                }
                 className="block w-full flex-1 text-center py-3.5 bg-[#1C1C1C] text-white rounded-3xl font-medium hover:bg-black transition-colors shadow-sm"
               >
-                View order details
+                {!isPaid && resolvedOrderId
+                  ? "Back to order & pay again"
+                  : "View order details"}
               </Link>
               <Link
                 href="/"

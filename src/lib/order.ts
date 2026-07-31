@@ -689,6 +689,86 @@ export async function confirmStripePayment(
   return null;
 }
 
+export type PaymentErrorInfo = {
+  orderId?: number | null;
+  orderNumber?: string | null;
+  message?: string | null;
+  code?: string | null;
+  transactionId?: string | null;
+};
+
+/** Shared failure screen for gateway returns and declined payments. */
+export function buildPaymentErrorUrl(info: PaymentErrorInfo): string {
+  const params = new URLSearchParams();
+  if (info.orderId) params.set("orderId", String(info.orderId));
+  if (info.orderNumber) params.set("orderNumber", info.orderNumber);
+  if (info.message) params.set("message", info.message);
+  if (info.code) params.set("code", info.code);
+  if (info.transactionId) params.set("transactionId", info.transactionId);
+
+  const query = params.toString();
+  return query ? `/payment/error?${query}` : "/payment/error";
+}
+
+const FAILED_PAYMENT_KEYWORDS = [
+  "fail",
+  "declin",
+  "reject",
+  "cancel",
+  "error",
+  "expire",
+  "void",
+  "unsuccessful",
+];
+
+export function isFailedPaymentStatus(status?: string | null): boolean {
+  const value = (status ?? "").trim().toLowerCase();
+  if (!value) return false;
+  return FAILED_PAYMENT_KEYWORDS.some((keyword) => value.includes(keyword));
+}
+
+/** Stripe appends these when a checkout is cancelled or fails. */
+export function getStripeFailureReason(
+  params: URLSearchParams,
+): string | null {
+  const status = (
+    params.get("redirect_status") ??
+    params.get("status") ??
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (status && !["succeeded", "success", "complete", "paid"].includes(status)) {
+    return status === "canceled" || status === "cancelled"
+      ? "Your payment was cancelled before it completed."
+      : `Your payment could not be completed (status: ${status}).`;
+  }
+
+  const explicitError =
+    params.get("error_description") ??
+    params.get("error") ??
+    params.get("message");
+
+  if (explicitError && explicitError.trim()) {
+    return explicitError.trim();
+  }
+
+  const success = (params.get("success") ?? "").trim().toLowerCase();
+  if (success === "false" || success === "0") {
+    return "Your payment was not completed.";
+  }
+
+  const cancelled = (params.get("cancelled") ?? params.get("canceled") ?? "")
+    .trim()
+    .toLowerCase();
+  if (cancelled === "true" || cancelled === "1") {
+    return "Your payment was cancelled before it completed.";
+  }
+
+  return null;
+}
+
 export function savePendingPaymentOrderId(orderId: number): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(PENDING_PAYMENT_ORDER_KEY, String(orderId));

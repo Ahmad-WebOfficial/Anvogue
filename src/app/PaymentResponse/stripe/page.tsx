@@ -200,6 +200,43 @@ const StripePaymentResponseContent = () => {
   const taxVal = order?.TaxAmount ?? orderAny?.Tax ?? 0;
   const netAmountVal = order?.NetAmount ?? orderAny?.TotalAmount ?? 0;
 
+  // Summary reads top to bottom: items total - discount + charges = payable.
+  const itemsTotalVal = Number(order?.OrderAmount ?? subtotalVal) || 0;
+  const deliveryVal =
+    Number(order?.DeliveryCharges ?? orderAny?.DeliveryCharge ?? 0) || 0;
+  const posVal = Number(orderAny?.POSCharges ?? orderAny?.POSCharge ?? 0) || 0;
+
+  const discountRows = [
+    { label: "Sale Discount", amount: Number(orderAny?.SaleDiscount) || 0 },
+    {
+      label: orderAny?.PromoCode
+        ? `Promo Code Discount (${orderAny.PromoCode})`
+        : "Promo Code Discount",
+      amount:
+        Number(orderAny?.PromoCodeValue ?? orderAny?.PromoDiscount) || 0,
+    },
+    {
+      label: "Payment Method Discount",
+      amount: Number(orderAny?.PaymentMethodDiscount) || 0,
+    },
+    {
+      label: "Order Value Discount",
+      amount: Number(orderAny?.OrderValueDiscount) || 0,
+    },
+  ].filter((row) => row.amount > 0);
+
+  const listedDiscountTotal = discountRows.reduce(
+    (sum, row) => sum + row.amount,
+    0,
+  );
+  const netDiscountVal = Number(order?.NetDiscount) || 0;
+  const totalDiscountVal = Math.max(listedDiscountTotal, netDiscountVal);
+
+  // API reported a discount but no breakdown — still show it as one row.
+  if (discountRows.length === 0 && netDiscountVal > 0) {
+    discountRows.push({ label: "Discount", amount: netDiscountVal });
+  }
+
   // Real status API se uthana hai
   const currentPaymentStatus =
     order?.PaymentStatusDisplayName ||
@@ -368,118 +405,84 @@ const StripePaymentResponseContent = () => {
                   Payment Summary
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary">Subtotal</span>
+                <div className="summary-row">
+                  <span className="text-secondary">
+                    Items total
+                    <small className="summary-hint">
+                      {order?.TotalItems ||
+                        order?.OrderDetails?.OrderItemList?.length ||
+                        0}{" "}
+                      item(s), before discount
+                    </small>
+                  </span>
                   <span className="font-medium">
-                    {formatRsPrice(order?.OrderAmount || subtotalVal)}
+                    {formatRsPrice(itemsTotalVal)}
                   </span>
                 </div>
 
-                {(order?.DeliveryCharges ?? orderAny?.DeliveryCharge ?? 0) >
-                  0 && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-secondary">Delivery Charges</span>
+                {discountRows.length > 0 ? (
+                  discountRows.map((row) => (
+                    <div key={row.label} className="summary-row is-discount">
+                      <span>{row.label}</span>
+                      <span>-{formatRsPrice(row.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="summary-row">
+                    <span className="text-secondary">Discount</span>
+                    <span className="font-medium">{formatRsPrice(0)}</span>
+                  </div>
+                )}
+
+                {discountRows.length > 1 && (
+                  <div className="summary-row is-discount">
+                    <span>Total discount</span>
+                    <span>-{formatRsPrice(totalDiscountVal)}</span>
+                  </div>
+                )}
+
+                <div className="summary-row is-step">
+                  <span>Amount after discount</span>
+                  <span>
+                    {formatRsPrice(
+                      Math.max(0, itemsTotalVal - totalDiscountVal),
+                    )}
+                  </span>
+                </div>
+
+                <div className="summary-row">
+                  <span className="text-secondary">Delivery charges</span>
+                  <span className="font-medium">
+                    {deliveryVal > 0 ? `+ ${formatRsPrice(deliveryVal)}` : "Free"}
+                  </span>
+                </div>
+
+                {posVal > 0 && (
+                  <div className="summary-row">
+                    <span className="text-secondary">POS charges</span>
                     <span className="font-medium">
-                      {formatRsPrice(
-                        order?.DeliveryCharges ?? orderAny?.DeliveryCharge,
-                      )}
+                      + {formatRsPrice(posVal)}
                     </span>
                   </div>
                 )}
 
-                {(() => {
-                  const posVal =
-                    orderAny?.POSCharges ?? orderAny?.POSCharge ?? 0;
-                  if (posVal > 0) {
-                    return (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-secondary">POS Charges</span>
-                        <span className="font-medium">
-                          {formatRsPrice(posVal)}
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* 1. Sale Discount */}
-                {(() => {
-                  const saleDisc = orderAny?.SaleDiscount ?? 0;
-                  if (saleDisc > 0) {
-                    return (
-                      <div className="flex justify-between items-center text-sm text-green-600">
-                        <span className="text-secondary"> Discount</span>
-                        <span className="font-bold text-green">
-                          -{formatRsPrice(saleDisc)}
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {(() => {
-                  const promoDisc =
-                    orderAny?.PromoCodeValue ?? orderAny?.PromoDiscount ?? 0;
-                  if (promoDisc > 0) {
-                    return (
-                      <div className="flex justify-between items-center text-sm text-green-600">
-                        <span className="text-secondary">
-                          Promo Code{" "}
-                          {orderAny?.PromoCode ? `(${orderAny.PromoCode})` : ""}
-                        </span>
-                        <span className="font-medium">
-                          -{formatRsPrice(promoDisc)}
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* 3. Payment Method Discount */}
-                {(() => {
-                  const pmDisc = orderAny?.PaymentMethodDiscount ?? 0;
-                  if (pmDisc > 0) {
-                    return (
-                      <div className="flex justify-between items-center text-sm text-green-600">
-                        <span className="text-secondary">
-                          Payment Method Discount
-                        </span>
-                        <span className="font-medium">
-                          -{formatRsPrice(pmDisc)}
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* 4. Order Value Discount */}
-                {(() => {
-                  const ovDisc = orderAny?.OrderValueDiscount ?? 0;
-                  if (ovDisc > 0) {
-                    return (
-                      <div className="flex justify-between items-center text-sm text-green-600">
-                        <span className="text-secondary">
-                          Order Value Discount
-                        </span>
-                        <span className="font-medium">
-                          -{formatRsPrice(ovDisc)}
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <div className="flex justify-between items-center pt-4 border-t border-line text-base font-bold">
-                  <span>Net Amount</span>
+                <div className="summary-row is-grand">
+                  <span>Total payable</span>
                   <span className="text-black">
                     {formatRsPrice(netAmountVal)}
                   </span>
                 </div>
+
+                {totalDiscountVal > 0 && (
+                  <div className="summary-savings">
+                    You saved {formatRsPrice(totalDiscountVal)} on this order
+                  </div>
+                )}
+
+                <p className="summary-formula-note">
+                  Items total − discount + delivery
+                  {posVal > 0 ? " + POS" : ""} = total payable
+                </p>
               </div>
             </div>
 

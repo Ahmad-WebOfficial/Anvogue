@@ -465,7 +465,13 @@ const Cart = () => {
 
                 <div className="cart-totals">
                   <div className="cart-total-row">
-                    <span className="text-secondary">Subtotal</span>
+                    <span className="text-secondary">
+                      Items total
+                      <small className="summary-hint">
+                        {cartState.totalItems || cartState.cartArray.length}{" "}
+                        item(s), before discount
+                      </small>
+                    </span>
                     <span>{formatRsPrice(subTotal)}</span>
                   </div>
 
@@ -473,17 +479,15 @@ const Cart = () => {
                     campaignDiscounts.map((campaign) => (
                       <div
                         key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
-                        className="cart-total-row"
+                        className="cart-total-row is-discount"
                       >
-                        <span className="text-secondary">
+                        <span>
                           {getCampaignDiscountLabel(
                             campaign.campaignType,
                             campaign.campaignTypeDisplayName,
                           )}
                         </span>
-                        <span className="text-green">
-                          -{formatRsPrice(campaign.amount)}
-                        </span>
+                        <span>-{formatRsPrice(campaign.amount)}</span>
                       </div>
                     ))
                   ) : (
@@ -493,18 +497,56 @@ const Cart = () => {
                     </div>
                   )}
 
+                  {campaignDiscounts.length > 1 && totalDiscount > 0 && (
+                    <div className="cart-total-row is-discount">
+                      <span>Total discount</span>
+                      <span>-{formatRsPrice(totalDiscount)}</span>
+                    </div>
+                  )}
+
+                  <div className="cart-total-row is-step">
+                    <span>Amount after discount</span>
+                    <span>{formatRsPrice(netTotal)}</span>
+                  </div>
+
                   <div className="cart-total-row">
-                    <span className="text-secondary">Delivery Charges</span>
+                    <span className="text-secondary">
+                      Delivery charges
+                      {qualifiesForFreeShipping && moneyForFreeship > 0 && (
+                        <small className="summary-hint">
+                          Free on orders above{" "}
+                          {formatRsPrice(moneyForFreeship)}
+                        </small>
+                      )}
+                      {!qualifiesForFreeShipping &&
+                        moneyForFreeship > 0 &&
+                        shipCart > 0 && (
+                          <small className="summary-hint">
+                            Add {formatRsPrice(freeShippingRemaining)} more for
+                            free delivery
+                          </small>
+                        )}
+                    </span>
                     <span>
-                      {shipCart > 0 ? formatRsPrice(shipCart) : "Free"}
+                      {shipCart > 0 ? `+ ${formatRsPrice(shipCart)}` : "Free"}
                     </span>
                   </div>
 
                   <div className="cart-total-row is-grand">
-                    <span>Total</span>
+                    <span>Total payable</span>
                     <span>{formatRsPrice(orderTotal)}</span>
                   </div>
+
+                  {totalDiscount > 0 && (
+                    <div className="summary-savings">
+                      You save {formatRsPrice(totalDiscount)} on this order
+                    </div>
+                  )}
                 </div>
+
+                <p className="summary-formula-note">
+                  Items total − discount + delivery = total payable
+                </p>
 
                 {hasCartItems && moneyForFreeship > 0 && (
                   <div className="cart-shipping-options">

@@ -32,6 +32,7 @@ import {
   savePendingPaymentTransactionId,
   saveOrderSaleCampaignId,
   SelectPaymentData,
+  verifyOrderPayment,
 } from "@/lib/order";
 import { getProductDetailUrl } from "@/lib/featured-products";
 import { getApiErrorMessage } from "@/lib/api";
@@ -79,6 +80,11 @@ const OrderDetailsPage = () => {
   const [campaignId, setCampaignId] = useState<number | null>(null);
   const [saleCampaignId, setSaleCampaignId] = useState<number | null>(null);
   const [promoError, setPromoError] = useState("");
+  const [alreadyPaidDetails, setAlreadyPaidDetails] = useState<{
+    gatewayResponse: string;
+    processedBy: string;
+  } | null>(null);
+  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
   // Kept so the discount stays visible even if the refreshed order omits it.
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
@@ -375,23 +381,6 @@ const OrderDetailsPage = () => {
   const isPromoApplied =
     Boolean(promoCode) || appliedPromoAmount > 0 || Boolean(campaignId);
 
-  // One source of truth for discounts — never double-count item + promo.
-  // After promo apply, API NetDiscount can lag briefly, so include appliedPromo.
-  const totalDiscount = Math.max(apiNetDiscount, appliedPromoAmount);
-
-  let promoDiscount = 0;
-  let productDiscount = 0;
-
-  if (isPromoApplied) {
-    promoDiscount = Math.min(
-      appliedPromoAmount > 0 ? appliedPromoAmount : totalDiscount,
-      totalDiscount,
-    );
-    productDiscount = Math.max(0, totalDiscount - promoDiscount);
-  } else {
-    productDiscount = totalDiscount;
-  }
-
   const itemCampaignDiscounts = groupCampaignDiscounts(
     items.map((item) => ({
       campaignType: Number(item.CampaignType) || CampaignType.Sale,
@@ -403,6 +392,34 @@ const OrderDetailsPage = () => {
     (sum, campaign) => sum + campaign.amount,
     0,
   );
+
+  // One source of truth for discounts — never double-count item + promo.
+  // Item discounts do not change when a promo is applied or removed, so they
+  // anchor the product row; otherwise it jumps while the refreshed order is
+  // still in flight (API NetDiscount lags the local promo state by a moment).
+  const canAnchorOnItems =
+    itemCampaignTotal > 0 && apiNetDiscount + 0.02 >= itemCampaignTotal;
+
+  let promoDiscount = 0;
+  let productDiscount = 0;
+
+  if (canAnchorOnItems) {
+    productDiscount = itemCampaignTotal;
+    promoDiscount = isPromoApplied
+      ? Math.max(appliedPromoAmount, apiNetDiscount - itemCampaignTotal)
+      : 0;
+  } else if (isPromoApplied) {
+    const fallbackTotal = Math.max(apiNetDiscount, appliedPromoAmount);
+    promoDiscount = Math.min(
+      appliedPromoAmount > 0 ? appliedPromoAmount : fallbackTotal,
+      fallbackTotal,
+    );
+    productDiscount = Math.max(0, fallbackTotal - promoDiscount);
+  } else {
+    productDiscount = apiNetDiscount;
+  }
+
+  const totalDiscount = productDiscount + promoDiscount;
   const classifiedProductDiscounts =
     productDiscount > 0 && itemCampaignTotal > 0
       ? itemCampaignDiscounts.map((campaign) => ({
@@ -434,6 +451,9 @@ const OrderDetailsPage = () => {
           },
         ]
       : classifiedProductDiscounts;
+
+  const discountRowCount =
+    productCampaignDiscounts.length + (promoDiscount > 0 ? 1 : 0);
 
   // Visible rows must always reconcile: Order + Delivery + POS - discounts.
   const computedNetAmount = Math.max(
@@ -473,6 +493,31 @@ const OrderDetailsPage = () => {
       ) ?? null;
 
     setPaying(true);
+
+    // Block a second payment attempt on an order that is already paid.
+    setCheckingPaymentStatus(true);
+    try {
+      const verification = await verifyOrderPayment(currentOrder.OrderId);
+
+      if (verification.isPaymentVerified) {
+        setAlreadyPaidDetails({
+          gatewayResponse: verification.gatewayResponse,
+          processedBy: verification.processedBy,
+        });
+        setPaying(false);
+        return;
+      }
+
+      setAlreadyPaidDetails(null);
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, "Failed to verify the order payment status."),
+      );
+      setPaying(false);
+      return;
+    } finally {
+      setCheckingPaymentStatus(false);
+    }
 
     // COD has no gateway redirect — confirm the order and go straight to success.
     if (isCashOnDeliveryGateway(activeGateway)) {
@@ -738,16 +783,36 @@ const OrderDetailsPage = () => {
                               )}
                               <div className="order-item-foot">
                                 <span className="caption1 text-secondary">
-                                  Qty: {item.Quantity}
+                                  {item.Quantity} × {formatRsPrice(item.Amount)}
                                 </span>
                                 <span className="text-button font-semibold">
                                   {formatRsPrice(item.TotalAmount)}
                                 </span>
                               </div>
-                              {item.Quantity > 1 && (
-                                <div className="caption2 text-secondary mt-1">
-                                  {formatRsPrice(item.Amount)} each
-                                </div>
+                              {Number(item.DiscountAmount) > 0 && (
+                                <>
+                                  <div className="summary-item-line is-discount">
+                                    <span>Item discount</span>
+                                    <span>
+                                      -
+                                      {formatRsPrice(
+                                        Number(item.DiscountAmount) || 0,
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="summary-item-line is-payable">
+                                    <span>You pay</span>
+                                    <span>
+                                      {formatRsPrice(
+                                        Math.max(
+                                          0,
+                                          (Number(item.TotalAmount) || 0) -
+                                            (Number(item.DiscountAmount) || 0),
+                                        ),
+                                      )}
+                                    </span>
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
@@ -913,36 +978,29 @@ const OrderDetailsPage = () => {
 
                   <div className="order-totals">
                     <div className="order-total-row">
-                      <span className="text-secondary">Order Amount</span>
+                      <span className="text-secondary">
+                        Items total
+                        <small className="summary-hint">
+                          {displayOrder.TotalItems || items.length} item(s),
+                          before discount
+                        </small>
+                      </span>
                       <span>{formatRsPrice(orderAmount)}</span>
                     </div>
-                    <div className="order-total-row">
-                      <span className="text-secondary">Delivery Charges</span>
-                      <span>
-                        {deliveryCharges > 0
-                          ? formatRsPrice(deliveryCharges)
-                          : "Free"}
-                      </span>
-                    </div>
-                    <div className="order-total-row">
-                      <span className="text-secondary">POS Charges</span>
-                      <span>{formatRsPrice(posCharges)}</span>
-                    </div>
+
                     {productCampaignDiscounts.length > 0 ? (
                       productCampaignDiscounts.map((campaign) => (
                         <div
                           key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
-                          className="order-total-row"
+                          className="order-total-row is-discount"
                         >
-                          <span className="text-secondary">
+                          <span>
                             {getCampaignDiscountLabel(
                               campaign.campaignType,
                               campaign.campaignTypeDisplayName,
                             )}
                           </span>
-                          <span className="font-semibold order-discount-value">
-                            -{formatRsPrice(campaign.amount)}
-                          </span>
+                          <span>-{formatRsPrice(campaign.amount)}</span>
                         </div>
                       ))
                     ) : (
@@ -953,9 +1011,12 @@ const OrderDetailsPage = () => {
                         </span>
                       </div>
                     )}
+
                     {(isPromoApplied || promoDiscount > 0) && (
-                      <div className="order-total-row">
-                        <span className="text-secondary">
+                      <div
+                        className={`order-total-row ${promoDiscount > 0 ? "is-discount" : ""}`}
+                      >
+                        <span>
                           Promo Code Discount
                           {promoCode ? (
                             <span className="order-promo-chip ml-2">
@@ -963,20 +1024,66 @@ const OrderDetailsPage = () => {
                             </span>
                           ) : null}
                         </span>
-                        <span
-                          className={`font-semibold ${promoDiscount > 0 ? "order-discount-value" : ""}`}
-                        >
+                        <span className="font-semibold">
                           {promoDiscount > 0
                             ? `-${formatRsPrice(promoDiscount)}`
                             : formatRsPrice(0)}
                         </span>
                       </div>
                     )}
+
+                    {totalDiscount > 0 && discountRowCount > 1 && (
+                      <div className="order-total-row is-discount">
+                        <span>Total discount</span>
+                        <span>-{formatRsPrice(totalDiscount)}</span>
+                      </div>
+                    )}
+
+                    <div className="order-total-row is-step">
+                      <span>Amount after discount</span>
+                      <span>
+                        {formatRsPrice(
+                          Math.max(
+                            0,
+                            orderAmount - productDiscount - promoDiscount,
+                          ),
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="order-total-row">
+                      <span className="text-secondary">Delivery charges</span>
+                      <span>
+                        {deliveryCharges > 0
+                          ? `+ ${formatRsPrice(deliveryCharges)}`
+                          : "Free"}
+                      </span>
+                    </div>
+
+                    <div className="order-total-row">
+                      <span className="text-secondary">POS charges</span>
+                      <span>
+                        {posCharges > 0
+                          ? `+ ${formatRsPrice(posCharges)}`
+                          : formatRsPrice(0)}
+                      </span>
+                    </div>
+
                     <div className="order-total-row is-grand">
-                      <span>Net Amount</span>
+                      <span>Total payable</span>
                       <span>{formatRsPrice(displayNetAmount)}</span>
                     </div>
+
+                    {totalDiscount > 0 && (
+                      <div className="summary-savings">
+                        You save {formatRsPrice(totalDiscount)} on this order
+                      </div>
+                    )}
                   </div>
+
+                  <p className="summary-formula-note">
+                    Items total − discount + delivery + POS = total payable
+                  </p>
 
                   <div className="order-promo">
                     <label
@@ -1086,16 +1193,20 @@ const OrderDetailsPage = () => {
                     <button
                       type="button"
                       onClick={handlePayNow}
-                      disabled={paying || !canPay}
+                      disabled={paying || !canPay || Boolean(alreadyPaidDetails)}
                       className="button-main bg-black w-full"
                     >
                       {paying
-                        ? isCodSelected
-                          ? "Confirming Order..."
-                          : "Processing Payment..."
-                        : isCodSelected
-                          ? "Confirm Order (Cash on Delivery)"
-                          : "Proceed to Payment"}
+                        ? checkingPaymentStatus
+                          ? "Verifying payment..."
+                          : isCodSelected
+                            ? "Confirming Order..."
+                            : "Processing Payment..."
+                        : alreadyPaidDetails
+                          ? "Payment Already Completed"
+                          : isCodSelected
+                            ? "Confirm Order (Cash on Delivery)"
+                            : "Proceed to Payment"}
                     </button>
                   </div>
 
@@ -1119,6 +1230,65 @@ const OrderDetailsPage = () => {
           ) : null}
         </div>
       </div>
+
+      {alreadyPaidDetails && (
+        <div
+          className="order-cancel-modal open"
+          onClick={() => setAlreadyPaidDetails(null)}
+          role="presentation"
+        >
+          <div
+            className="order-cancel-modal-main open"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-already-paid-title"
+          >
+            <button
+              type="button"
+              className="order-cancel-modal-close"
+              onClick={() => setAlreadyPaidDetails(null)}
+              aria-label="Close"
+            >
+              <Icon.X size={18} />
+            </button>
+
+            <div className="order-cancel-modal-icon is-success">
+              <Icon.CheckCircle size={28} weight="fill" />
+            </div>
+
+            <h2 id="order-already-paid-title" className="heading5 text-center">
+              Payment already completed
+            </h2>
+            <p className="caption1 text-secondary text-center mt-3">
+              This order has already been paid, so you cannot pay for it again.
+            </p>
+            {displayOrder?.OrderNumber && (
+              <p className="caption1 text-secondary text-center mt-2">
+                Order <strong>{displayOrder.OrderNumber}</strong>
+              </p>
+            )}
+            {alreadyPaidDetails.gatewayResponse && (
+              <p className="caption2 text-secondary text-center mt-2">
+                Gateway status: {alreadyPaidDetails.gatewayResponse}
+              </p>
+            )}
+
+            <div className="order-cancel-modal-actions">
+              <button
+                type="button"
+                className="order-action-btn is-ghost"
+                onClick={() => setAlreadyPaidDetails(null)}
+              >
+                Close
+              </button>
+              <Link href="/my-account" className="order-action-btn">
+                View My Orders
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCancelModal && (
         <div

@@ -647,6 +647,11 @@
     border-radius: 16px;
     background: rgba(220, 38, 38, 0.1);
     color: #dc2626;
+
+    &.is-success {
+        background: rgba(22, 163, 74, 0.12);
+        color: #16a34a;
+    }
 }
 
 .order-cancel-modal-actions {
@@ -691,6 +696,18 @@
                 background: #b91c1c;
                 border-color: #b91c1c;
                 color: var(--white);
+            }
+        }
+
+        &.is-ghost {
+            border-color: var(--line);
+            background: var(--white);
+            color: var(--black);
+
+            &:hover:not(:disabled) {
+                border-color: var(--black);
+                background: var(--surface);
+                color: var(--black);
             }
         }
 

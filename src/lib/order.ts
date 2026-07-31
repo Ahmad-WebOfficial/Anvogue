@@ -504,6 +504,63 @@ export async function confirmOrder(
   return message || "Order confirmed successfully.";
 }
 
+export interface VerifyPaymentResult {
+  /** True when this invoice was already paid, so payment must be blocked. */
+  isPaymentVerified: boolean;
+  orderId: number | null;
+  gatewayResponse: string;
+  processedBy: string;
+  message: string;
+}
+
+interface VerifyPaymentData {
+  OrderId?: number | null;
+  IsPaymentVerify?: boolean | null;
+  GatewayResponse?: string | null;
+  ProcessedBy?: string | null;
+}
+
+interface VerifyPaymentResponse {
+  Message?: string;
+  StatusCode?: number;
+  HttpStatusCode?: number;
+  Type?: string;
+  Data?: VerifyPaymentData | null;
+}
+
+/**
+ * Guards against paying an order twice: called right before every payment.
+ * API: POST /api/v1/Payment/VerifyPayment with { InvoiceId }
+ */
+export async function verifyOrderPayment(
+  invoiceId: number,
+): Promise<VerifyPaymentResult> {
+  const response = await api.post<VerifyPaymentResponse>(
+    "/api/v1/Payment/VerifyPayment",
+    { InvoiceId: invoiceId },
+  );
+
+  const body = response.data;
+  const data = body?.Data ?? null;
+  const type = String(body?.Type ?? "").toLowerCase();
+  const statusCode = Number(body?.StatusCode ?? body?.HttpStatusCode ?? 200);
+  const message = String(body?.Message ?? "").trim();
+
+  if (type === "error" || type === "exception" || statusCode >= 400) {
+    throw new Error(message || "Failed to verify the payment status.");
+  }
+
+  const orderId = Number(data?.OrderId);
+
+  return {
+    isPaymentVerified: data?.IsPaymentVerify === true,
+    orderId: Number.isFinite(orderId) && orderId > 0 ? orderId : null,
+    gatewayResponse: String(data?.GatewayResponse ?? "").trim(),
+    processedBy: String(data?.ProcessedBy ?? "").trim(),
+    message,
+  };
+}
+
 export interface PayInvoicePayload {
   OrderId: number;
   OrderAmount: number;

@@ -349,7 +349,7 @@
 
 .checkout-total-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
     font-size: 14px;
@@ -367,6 +367,7 @@
         font-weight: 600;
     }
 }
+
 
 .checkout-summary-note {
     margin-top: 12px;

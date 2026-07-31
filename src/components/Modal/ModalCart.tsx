@@ -508,46 +508,37 @@ const ModalCart = ({
 
           {hasItems && (
             <div className="footer-modal bg-white">
-              <div className="modal-cart-tools">
-                {/* <button
-                  type="button"
-                  className="modal-cart-tool-btn"
-                  onClick={() => setActiveTab("shipping")}
-                >
-                  <Icon.Truck size={18} />
-                  Shipping
-                </button>
-                <button
-                  type="button"
-                  className="modal-cart-tool-btn"
-                  onClick={() => setActiveTab("coupon")}
-                >
-                  <Icon.Tag size={18} />
-                  Coupon
-                </button> */}
-              </div>
-
               <div className="modal-cart-summary">
                 <div className="modal-cart-summary-row">
-                  <span className="text-secondary">Subtotal</span>
+                  <span className="text-secondary">
+                    Items total
+                    <small className="summary-hint">
+                      {cartState.totalItems || cartState.cartArray.length}{" "}
+                      item(s), before discount
+                    </small>
+                  </span>
                   <span>{formatRsPrice(displayTotals.subTotal)}</span>
                 </div>
                 {campaignDiscounts.map((campaign) => (
                   <div
                     key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
-                    className="modal-cart-summary-row"
+                    className="modal-cart-summary-row is-discount"
                   >
-                    <span className="text-secondary">
+                    <span>
                       {getCampaignDiscountLabel(
                         campaign.campaignType,
                         campaign.campaignTypeDisplayName,
                       )}
                     </span>
-                    <span style={{ color: "#16a34a" }} className="font-semibold">
-                      -{formatRsPrice(campaign.amount)}
-                    </span>
+                    <span>-{formatRsPrice(campaign.amount)}</span>
                   </div>
                 ))}
+                {campaignDiscounts.length > 1 && displayTotals.discount > 0 && (
+                  <div className="modal-cart-summary-row is-discount">
+                    <span>Total discount</span>
+                    <span>-{formatRsPrice(displayTotals.discount)}</span>
+                  </div>
+                )}
                 {savedPromoCode &&
                   !campaignDiscounts.some(
                     (campaign) =>
@@ -555,23 +546,51 @@ const ModalCart = ({
                   ) && (
                     <div className="modal-cart-summary-row">
                       <span className="text-secondary">
-                        Promo Code Discount ({savedPromoCode})
+                        Promo code ({savedPromoCode})
+                        <small className="summary-hint">
+                          Discount applies at checkout
+                        </small>
                       </span>
-                      <span className="font-semibold">At checkout</span>
+                      <span className="text-secondary">Pending</span>
                     </div>
                   )}
+                <div className="modal-cart-summary-row is-step">
+                  <span>Amount after discount</span>
+                  <span>{formatRsPrice(displayTotals.netTotal)}</span>
+                </div>
                 <div className="modal-cart-summary-row">
-                  <span className="text-secondary">Delivery Charges</span>
+                  <span className="text-secondary">
+                    Delivery charges
+                    {qualifiesForFreeShipping && moneyForFreeship > 0 && (
+                      <small className="summary-hint">
+                        Free on orders above {formatRsPrice(moneyForFreeship)}
+                      </small>
+                    )}
+                    {!qualifiesForFreeShipping &&
+                      moneyForFreeship > 0 &&
+                      deliveryCharges > 0 && (
+                        <small className="summary-hint">
+                          Add {formatRsPrice(amountToFreeShipping)} more for
+                          free delivery
+                        </small>
+                      )}
+                  </span>
                   <span>
                     {deliveryCharges > 0
-                      ? formatRsPrice(deliveryCharges)
+                      ? `+ ${formatRsPrice(deliveryCharges)}`
                       : "Free"}
                   </span>
                 </div>
                 <div className="modal-cart-summary-row is-total">
-                  <span>Total</span>
+                  <span>Total payable</span>
                   <span>{formatRsPrice(displayTotal)}</span>
                 </div>
+                {displayTotals.discount > 0 && (
+                  <div className="summary-savings">
+                    You save {formatRsPrice(displayTotals.discount)} on this
+                    order
+                  </div>
+                )}
               </div>
 
               <div className="modal-cart-footer-cta">

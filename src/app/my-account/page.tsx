@@ -1503,7 +1503,8 @@ const MyAccount = () => {
                                 }
                               }}
                             >
-                              Verify Your Payment
+                              {/* Verify Your Payment */}
+                              Pay Now
                             </button>
                           </div>
                         );
@@ -1608,12 +1609,39 @@ const MyAccount = () => {
                                 )}
                                 <div className="flex items-center justify-between gap-3 mt-2">
                                   <span className="caption1 text-secondary">
-                                    Qty: {item.Quantity}
+                                    {item.Quantity} ×{" "}
+                                    {formatRsPrice(item.Amount)}
                                   </span>
                                   <span className="text-button font-semibold">
                                     {formatRsPrice(item.TotalAmount)}
                                   </span>
                                 </div>
+                                {Number(item.DiscountAmount) > 0 && (
+                                  <>
+                                    <div className="summary-item-line is-discount">
+                                      <span>Item discount</span>
+                                      <span>
+                                        -
+                                        {formatRsPrice(
+                                          Number(item.DiscountAmount) || 0,
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="summary-item-line is-payable">
+                                      <span>You pay</span>
+                                      <span>
+                                        {formatRsPrice(
+                                          Math.max(
+                                            0,
+                                            (Number(item.TotalAmount) || 0) -
+                                              (Number(item.DiscountAmount) ||
+                                                0),
+                                          ),
+                                        )}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -1624,40 +1652,80 @@ const MyAccount = () => {
 
                   <div className="account-order-detail-totals">
                     <div className="account-order-detail-total-row">
-                      <span>Order Amount</span>
+                      <span>
+                        Items total
+                        <small className="summary-hint">
+                          {selectedOrderDetail.TotalItems ||
+                            selectedOrderDetail.OrderDetails?.OrderItemList
+                              ?.length ||
+                            0}{" "}
+                          item(s), before discount
+                        </small>
+                      </span>
                       <span>
                         {formatRsPrice(selectedOrderDetail.OrderAmount)}
                       </span>
                     </div>
+
+                    <div className="account-order-detail-total-row is-discount">
+                      <span>Discount</span>
+                      <span>
+                        {selectedOrderDetail.NetDiscount > 0
+                          ? `-${formatRsPrice(selectedOrderDetail.NetDiscount)}`
+                          : formatRsPrice(0)}
+                      </span>
+                    </div>
+
+                    <div className="account-order-detail-total-row is-step">
+                      <span>Amount after discount</span>
+                      <span>
+                        {formatRsPrice(
+                          Math.max(
+                            0,
+                            (selectedOrderDetail.OrderAmount || 0) -
+                              (selectedOrderDetail.NetDiscount || 0),
+                          ),
+                        )}
+                      </span>
+                    </div>
+
                     <div className="account-order-detail-total-row">
-                      <span>Delivery</span>
+                      <span>Delivery charges</span>
                       <span>
                         {selectedOrderDetail.DeliveryCharges > 0
-                          ? formatRsPrice(selectedOrderDetail.DeliveryCharges)
+                          ? `+ ${formatRsPrice(selectedOrderDetail.DeliveryCharges)}`
                           : "Free"}
                       </span>
                     </div>
+
                     <div className="account-order-detail-total-row">
-                      <span>POS Charges</span>
+                      <span>POS charges</span>
                       <span>
-                        {formatRsPrice(selectedOrderDetail.POSCharges ?? 0)}
+                        {(selectedOrderDetail.POSCharges ?? 0) > 0
+                          ? `+ ${formatRsPrice(selectedOrderDetail.POSCharges ?? 0)}`
+                          : formatRsPrice(0)}
                       </span>
                     </div>
-                    {selectedOrderDetail.NetDiscount > 0 && (
-                      <div className="account-order-detail-total-row">
-                        <span>Discount</span>
-                        <span style={{ color: "#28a745" }}>
-                          -{formatRsPrice(selectedOrderDetail.NetDiscount)}
-                        </span>
-                      </div>
-                    )}
+
                     <div className="account-order-detail-total-row is-grand">
-                      <span>Net Total</span>
+                      <span>Total payable</span>
                       <span>
                         {formatRsPrice(selectedOrderDetail.NetAmount)}
                       </span>
                     </div>
+
+                    {selectedOrderDetail.NetDiscount > 0 && (
+                      <div className="summary-savings">
+                        You save{" "}
+                        {formatRsPrice(selectedOrderDetail.NetDiscount)} on this
+                        order
+                      </div>
+                    )}
                   </div>
+
+                  <p className="summary-formula-note">
+                    Items total − discount + delivery + POS = total payable
+                  </p>
                 </>
               ) : (
                 <p className="text-center text-secondary py-10">

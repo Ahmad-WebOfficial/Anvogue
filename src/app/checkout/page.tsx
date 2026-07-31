@@ -1194,24 +1194,25 @@ const Checkout = () => {
                           )}
                           <div className="checkout-item-foot">
                             <span className="caption1 text-secondary">
-                              Qty: {product.quantity}
+                              {product.quantity} × {formatRsPrice(unitGross)}
                             </span>
                             <span className="text-button font-semibold">
                               {formatRsPrice(grossLineTotal)}
                             </span>
                           </div>
-                          {product.quantity > 1 && (
-                            <div className="caption2 text-secondary mt-1">
-                              {formatRsPrice(unitGross)} each
-                            </div>
-                          )}
                           {lineDiscount > 0 && (
-                            <div
-                              className="caption2 mt-1 font-semibold"
-                              style={{ color: "#16a34a" }}
-                            >
-                              Save {formatRsPrice(lineDiscount)} after discount
-                            </div>
+                            <>
+                              <div className="summary-item-line is-discount">
+                                <span>Item discount</span>
+                                <span>-{formatRsPrice(lineDiscount)}</span>
+                              </div>
+                              <div className="summary-item-line is-payable">
+                                <span>You pay</span>
+                                <span>
+                                  {formatRsPrice(product.lineTotal || 0)}
+                                </span>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1222,7 +1223,13 @@ const Checkout = () => {
 
               <div className="checkout-totals">
                 <div className="checkout-total-row">
-                  <span>Subtotal</span>
+                  <span>
+                    Items total
+                    <small className="summary-hint">
+                      {cartState.totalItems || cartState.cartArray.length}{" "}
+                      item(s), before discount
+                    </small>
+                  </span>
                   <span>{formatRsPrice(subTotal)}</span>
                 </div>
 
@@ -1230,7 +1237,7 @@ const Checkout = () => {
                   campaignDiscounts.map((campaign) => (
                     <div
                       key={`${campaign.campaignType}-${campaign.campaignTypeDisplayName}`}
-                      className="checkout-total-row"
+                      className="checkout-total-row is-discount"
                     >
                       <span>
                         {getCampaignDiscountLabel(
@@ -1238,12 +1245,7 @@ const Checkout = () => {
                           campaign.campaignTypeDisplayName,
                         )}
                       </span>
-                      <span
-                        style={{ color: "#16a34a" }}
-                        className="font-semibold"
-                      >
-                        -{formatRsPrice(campaign.amount)}
-                      </span>
+                      <span>-{formatRsPrice(campaign.amount)}</span>
                     </div>
                   ))
                 ) : (
@@ -1253,30 +1255,73 @@ const Checkout = () => {
                   </div>
                 )}
 
+                {campaignDiscounts.length > 1 && discount > 0 && (
+                  <div className="checkout-total-row is-discount">
+                    <span>Total discount</span>
+                    <span>-{formatRsPrice(discount)}</span>
+                  </div>
+                )}
+
                 {pendingPromo &&
                   !campaignDiscounts.some(
                     (campaign) =>
                       campaign.campaignType === CampaignType.PromoCode,
                   ) && (
                     <div className="checkout-total-row">
-                      <span>Promo Code Discount ({pendingPromo})</span>
-                      <span>Applied after order creation</span>
+                      <span>
+                        Promo code ({pendingPromo})
+                        <small className="summary-hint">
+                          Discount applies after your order is created
+                        </small>
+                      </span>
+                      <span className="text-secondary">Pending</span>
                     </div>
                   )}
 
+                <div className="checkout-total-row is-step">
+                  <span>Amount after discount</span>
+                  <span>{formatRsPrice(netTotal)}</span>
+                </div>
+
                 <div className="checkout-total-row">
-                  <span>Delivery Charges</span>
-                  <span>{ship > 0 ? formatRsPrice(ship) : "Free"}</span>
+                  <span>
+                    Delivery charges
+                    {qualifiesForFreeShipping && minimumOrderValue > 0 && (
+                      <small className="summary-hint">
+                        Free on orders above{" "}
+                        {formatRsPrice(minimumOrderValue)}
+                      </small>
+                    )}
+                    {!qualifiesForFreeShipping &&
+                      minimumOrderValue > 0 &&
+                      ship > 0 && (
+                        <small className="summary-hint">
+                          Add{" "}
+                          {formatRsPrice(
+                            Math.max(0, minimumOrderValue - netTotal),
+                          )}{" "}
+                          more for free delivery
+                        </small>
+                      )}
+                  </span>
+                  <span>{ship > 0 ? `+ ${formatRsPrice(ship)}` : "Free"}</span>
                 </div>
 
                 <div className="checkout-total-row is-grand">
-                  <span>Total</span>
+                  <span>Total payable</span>
                   <span>{formatRsPrice(orderTotal)}</span>
                 </div>
+
+                {discount > 0 && (
+                  <div className="summary-savings">
+                    You save {formatRsPrice(discount)} on this order
+                  </div>
+                )}
               </div>
 
               <p className="checkout-summary-note">
-                {cartState.cartArray.length} item(s) · All prices in PKR (Rs.)
+                Items total − discount + delivery = total payable · All prices
+                in PKR (Rs.)
               </p>
 
               <Link href="/cart" className="checkout-back-cart">

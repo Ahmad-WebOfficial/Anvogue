@@ -84,6 +84,10 @@ const Checkout = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(
     null,
   );
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressSavedPopup, setAddressSavedPopup] = useState<string | null>(
+    null,
+  );
 
   const [form, setForm] = useState({
     fullName: "",
@@ -311,6 +315,7 @@ const Checkout = () => {
       countryId,
       stateId,
       cityId,
+      phoneCode: normalizeDialCode(address.PhoneCode) || prev.phoneCode,
       cityName: address.CityName || prev.cityName,
       areaId,
       addressBookId: address.AddressBookId || 0,
@@ -344,6 +349,101 @@ const Checkout = () => {
       longitude: "",
       latitude: "",
     }));
+  };
+
+  // Ticking the box has to detach the form from the saved address, otherwise
+  // addressBookId stays set and the create-address call is skipped on submit.
+  const handleSaveAddressToggle = (checked: boolean) => {
+    if (!checked) {
+      setForm((prev) => ({ ...prev, isAddNewAddress: false }));
+      return;
+    }
+
+    setSelectedAddressId(null);
+    setForm((prev) => ({
+      ...prev,
+      addressBookId: 0,
+      isAddNewAddress: true,
+    }));
+  };
+
+  const handleSaveAddressNow = async () => {
+    if (savingAddress) return;
+
+    if (!isAuthenticated()) {
+      toast.error("Please sign in to save an address to your address book.");
+      return;
+    }
+
+    const missing = [
+      !form.fullName.trim() && "full name",
+      !form.phone.trim() && "phone number",
+      !form.address.trim() && "address",
+      !form.countryId && "country",
+      !form.stateId && "state",
+      !form.cityId && "city",
+    ].filter(Boolean);
+
+    if (missing.length > 0) {
+      toast.error(`Please fill your ${missing.join(", ")} first.`);
+      return;
+    }
+
+    setSavingAddress(true);
+    try {
+      const nameParts = form.fullName.trim().split(/\s+/).filter(Boolean);
+
+      const saved = await saveCustomerAddress(
+        buildSaveAddressPayloadFromCheckout({
+          addressBookId: 0,
+          fullName: form.fullName,
+          firstName: nameParts[0] || form.fullName,
+          lastName: nameParts.slice(1).join(" "),
+          phone: form.phone,
+          phoneCode: form.phoneCode,
+          address: form.address,
+          postalCode: form.postalCode,
+          cityId: form.cityId,
+          countryId: form.countryId,
+          stateId: form.stateId,
+          areaId: form.areaId,
+          longitude: form.longitude,
+          latitude: form.latitude,
+          isDefault: savedAddresses.length === 0,
+        }),
+      );
+
+      const refreshed = await fetchCustomerAddresses({
+        pageSize: 50,
+        pageNumber: 1,
+      }).catch(() => [] as CustomerAddress[]);
+
+      if (refreshed.length > 0) {
+        setSavedAddresses(refreshed);
+      } else if (saved) {
+        setSavedAddresses((current) => [...current, saved]);
+      }
+
+      const savedId = Number(saved?.AddressBookId) || 0;
+      if (savedId > 0) {
+        setSelectedAddressId(savedId);
+      }
+
+      // Already stored, so order submit must not create a duplicate entry.
+      setForm((prev) => ({
+        ...prev,
+        addressBookId: savedId,
+        isAddNewAddress: false,
+      }));
+
+      setAddressSavedPopup(
+        form.address.trim() || "Your address has been added to your address book.",
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not save this address."));
+    } finally {
+      setSavingAddress(false);
+    }
   };
 
   useEffect(() => {
@@ -457,6 +557,7 @@ const Checkout = () => {
               firstName: nameParts[0] || form.fullName,
               lastName: nameParts.slice(1).join(" "),
               phone: form.phone,
+              phoneCode: form.phoneCode,
               address: form.address,
               postalCode: form.postalCode,
               cityId: form.cityId,
@@ -468,6 +569,7 @@ const Checkout = () => {
               isDefault: savedAddresses.length === 0,
             }),
           );
+          toast.success("Address saved to your address book.");
         } catch (addressError) {
           console.error("Failed to save customer address:", addressError);
           toast.error(
@@ -853,21 +955,34 @@ const Checkout = () => {
                       />
                     </div>
 
-                    <label className="checkout-checkbox-row full-width">
-                      <input
-                        type="checkbox"
-                        checked={form.isAddNewAddress}
-                        disabled={form.addressBookId > 0}
-                        onChange={(e) =>
-                          updateForm("isAddNewAddress", e.target.checked)
-                        }
-                      />
-                      <span>
-                        {form.addressBookId > 0
-                          ? "Using a saved address"
-                          : "Save this address for future orders"}
-                      </span>
-                    </label>
+                    <div className="checkout-save-address-row full-width">
+                      <label className="checkout-checkbox-row">
+                       
+                        <span>
+                          Save this address for future orders
+                          <small className="checkout-checkbox-hint">
+                            {form.addressBookId > 0
+                              ? "A saved address is applied. Tick this to store the edited details as a new one."
+                              : "Save it right now, or leave it ticked to save when the order is placed."}
+                          </small>
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        className="checkout-save-address-btn"
+                        onClick={() => void handleSaveAddressNow()}
+                        disabled={savingAddress}
+                      >
+                        {savingAddress ? (
+                          "Saving..."
+                        ) : (
+                          <>
+                            <Icon.BookmarkSimple size={15} weight="bold" />
+                            Save Address
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1226,8 +1341,7 @@ const Checkout = () => {
                   <span>
                     Items total
                     <small className="summary-hint">
-                      {cartState.totalItems || cartState.cartArray.length}{" "}
-                      item(s), before discount
+                      {cartState.cartArray.length} item(s), before discount
                     </small>
                   </span>
                   <span>{formatRsPrice(subTotal)}</span>
@@ -1356,6 +1470,50 @@ const Checkout = () => {
         }}
         onUseNew={startNewAddress}
       />
+
+      {addressSavedPopup !== null && (
+        <div
+          className="checkout-address-modal-overlay"
+          onClick={() => setAddressSavedPopup(null)}
+          role="presentation"
+        >
+          <div
+            className="checkout-address-modal is-compact"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkout-address-saved-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="checkout-address-saved">
+              <span className="checkout-address-saved-icon">
+                <Icon.CheckCircle size={30} weight="fill" />
+              </span>
+              <h3
+                id="checkout-address-saved-title"
+                className="heading5 text-center"
+              >
+                Address saved
+              </h3>
+              <p className="caption1 text-secondary text-center mt-2">
+                This address is now in your address book, so you can pick it
+                from &quot;Choose Address&quot; on your next order.
+              </p>
+              {addressSavedPopup && (
+                <p className="checkout-address-saved-line">
+                  {addressSavedPopup}
+                </p>
+              )}
+              <button
+                type="button"
+                className="button-main checkout-address-modal-new"
+                onClick={() => setAddressSavedPopup(null)}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

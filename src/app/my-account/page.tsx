@@ -28,6 +28,7 @@ import {
   getDeliveryOptionLabel,
   OrderDetailData,
 } from "@/lib/order";
+import OrderTrackingTimeline from "@/components/Order/OrderTrackingTimeline";
 
 type ProfileFormData = {
   FullName: string;
@@ -1370,6 +1371,30 @@ const MyAccount = () => {
                 </div>
               ) : selectedOrderDetail ? (
                 <>
+                  {formatOrderStatusLabel(
+                    selectedOrderDetail.OrderStatusDisplayName,
+                  ) === "Cancelled" ? (
+                    <div className="order-tracking-cancelled">
+                      <span className="order-tracking-cancelled-icon">
+                        <Icon.XCircle size={20} weight="fill" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="order-tracking-cancelled-title">
+                          Order cancelled
+                        </div>
+                        <p className="order-tracking-cancelled-text">
+                          This order was cancelled, so there is no delivery
+                          tracking for it.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <OrderTrackingTimeline
+                      orderId={selectedOrderDetail.OrderId}
+                      orderNumber={selectedOrderDetail.OrderNumber}
+                    />
+                  )}
+
                   <div className="account-order-detail-grid">
                     <div className="account-order-detail-card">
                       <h3 className="account-order-detail-section-title">
@@ -1555,7 +1580,10 @@ const MyAccount = () => {
                   <div className="account-order-detail-items">
                     <h3 className="account-order-detail-section-title mb-3">
                       <Icon.ShoppingBag size={16} weight="bold" />
-                      Items ({selectedOrderDetail.TotalItems})
+                      Items (
+                      {selectedOrderDetail.OrderDetails?.OrderItemList
+                        ?.length ?? 0}
+                      )
                     </h3>
 
                     {(selectedOrderDetail.OrderDetails?.OrderItemList || [])
@@ -1569,6 +1597,20 @@ const MyAccount = () => {
                             !item.ProductImageURL.includes("noImage")
                               ? item.ProductImageURL
                               : "/images/product/1000x1000.png";
+
+                          // TotalAmount already has the item discount taken
+                          // off, so rebuild the row total from the unit price.
+                          const itemDiscount = Math.max(
+                            0,
+                            Number(item.DiscountAmount) || 0,
+                          );
+                          const grossLineTotal =
+                            (Number(item.Amount) || 0) *
+                            (Number(item.Quantity) || 0);
+                          const payableLineTotal = Math.max(
+                            0,
+                            grossLineTotal - itemDiscount,
+                          );
 
                           return (
                             <div
@@ -1613,31 +1655,21 @@ const MyAccount = () => {
                                     {formatRsPrice(item.Amount)}
                                   </span>
                                   <span className="text-button font-semibold">
-                                    {formatRsPrice(item.TotalAmount)}
+                                    {formatRsPrice(grossLineTotal)}
                                   </span>
                                 </div>
-                                {Number(item.DiscountAmount) > 0 && (
+                                {itemDiscount > 0 && (
                                   <>
                                     <div className="summary-item-line is-discount">
                                       <span>Item discount</span>
                                       <span>
-                                        -
-                                        {formatRsPrice(
-                                          Number(item.DiscountAmount) || 0,
-                                        )}
+                                        -{formatRsPrice(itemDiscount)}
                                       </span>
                                     </div>
                                     <div className="summary-item-line is-payable">
                                       <span>You pay</span>
                                       <span>
-                                        {formatRsPrice(
-                                          Math.max(
-                                            0,
-                                            (Number(item.TotalAmount) || 0) -
-                                              (Number(item.DiscountAmount) ||
-                                                0),
-                                          ),
-                                        )}
+                                        {formatRsPrice(payableLineTotal)}
                                       </span>
                                     </div>
                                   </>
@@ -1655,10 +1687,8 @@ const MyAccount = () => {
                       <span>
                         Items total
                         <small className="summary-hint">
-                          {selectedOrderDetail.TotalItems ||
-                            selectedOrderDetail.OrderDetails?.OrderItemList
-                              ?.length ||
-                            0}{" "}
+                          {selectedOrderDetail.OrderDetails?.OrderItemList
+                            ?.length ?? 0}{" "}
                           item(s), before discount
                         </small>
                       </span>

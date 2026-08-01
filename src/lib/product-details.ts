@@ -53,6 +53,10 @@ export interface RelatedProduct {
   IsFeaturedProduct: boolean;
   IsNewProduct: boolean;
   ThumbnailImagePath: string;
+  ComingSoon?: boolean;
+  IsComingSoon?: boolean;
+  Status?: number;
+  IsProductInStock?: boolean;
   Category: {
     CategoryId: number;
     CategoryName: string;

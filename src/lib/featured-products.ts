@@ -34,6 +34,8 @@ export interface FeaturedProduct {
   IsPromotionalProduct: boolean;
   ProductDetailId?: number;
   ComingSoon?: boolean;
+  /** Some list endpoints return the coming-soon flag under this name. */
+  IsComingSoon?: boolean;
   InventoryManagement?: boolean;
   AvailableStock?: number | null;
   Status?: number;
@@ -190,9 +192,9 @@ export function mapRelatedProductToProductType(
     isFeatured: Boolean(product.IsFeaturedProduct),
     discount: 0,
     discountType: 0,
-    comingSoon: false,
-    status: 1,
-    inStock: true,
+    comingSoon: Boolean(product.ComingSoon ?? product.IsComingSoon),
+    status: product.Status ?? 1,
+    inStock: product.IsProductInStock !== false,
   };
 }
 
@@ -241,7 +243,7 @@ export function mapFeaturedProductToProductType(
       product.InventoryManagement && product.AvailableStock != null
         ? Number(product.AvailableStock)
         : null,
-    comingSoon: Boolean(product.ComingSoon),
+    comingSoon: Boolean(product.ComingSoon ?? product.IsComingSoon),
     status: product.Status ?? 1,
     inStock,
   };

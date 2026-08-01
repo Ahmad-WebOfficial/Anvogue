@@ -79,7 +79,7 @@ interface CartContextProps {
     selectedSize: string,
     selectedColor: string,
   ) => Promise<void>;
-  fetchCart: () => Promise<void>;
+  fetchCart: (options?: { silent?: boolean }) => Promise<void>;
   clearCart: () => void;
 }
 
@@ -243,10 +243,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const [cartLoading, setCartLoading] = useState(false);
   const [updatingCartId, setUpdatingCartId] = useState<string | null>(null);
   const fetchGenerationRef = useRef(0);
+  const updatingCartRef = useRef(false);
+  // Quantity deltas must be based on the latest cart, never a stale closure.
+  const cartStateRef = useRef(cartState);
+  cartStateRef.current = cartState;
 
-  const fetchCart = useCallback(async () => {
+  // `silent` keeps the list on screen while re-syncing after a write.
+  const fetchCart = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     const generation = ++fetchGenerationRef.current;
-    setCartLoading(true);
+    if (!silent) setCartLoading(true);
     try {
       const summary = await fetchCurrentCart();
       if (generation !== fetchGenerationRef.current) return;
@@ -254,7 +260,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (error) {
       console.error("Fetch cart error:", error);
     } finally {
-      if (generation === fetchGenerationRef.current) {
+      if (!silent && generation === fetchGenerationRef.current) {
         setCartLoading(false);
       }
     }
@@ -325,9 +331,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     selectedColor: string,
   ) => {
     if (quantity < 1) return;
-    if (updatingCartId) return;
+    // A ref lock blocks overlapping writes even before the disabled state
+    // has had a chance to re-render.
+    if (updatingCartRef.current) return;
 
-    const item = cartState.cartArray.find(
+    const item = cartStateRef.current.cartArray.find(
       (line) => line.cartId === itemId || line.id === itemId,
     );
     if (!item) return;
@@ -335,6 +343,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     const previousQuantity = item.quantity;
     if (previousQuantity === quantity) return;
 
+    updatingCartRef.current = true;
     setUpdatingCartId(item.cartId);
 
     // Optimistic UI so summary/line totals update immediately
@@ -355,8 +364,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error(
         getApiErrorMessage(error, "Failed to update cart quantity."),
       );
-      await fetchCart();
     } finally {
+      // AddToCart is additive and a decrease recreates the line under a new
+      // CartId, so the optimistic copy must always be replaced by the server
+      // state. Skipping this let small drifts compound on every click.
+      await fetchCart({ silent: true });
+      updatingCartRef.current = false;
       setUpdatingCartId(null);
     }
   };

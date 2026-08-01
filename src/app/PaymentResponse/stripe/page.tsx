@@ -389,7 +389,8 @@ const StripePaymentResponseContent = () => {
                           </div>
                           <span className="text-sm font-semibold sm:text-right">
                             {formatRsPrice(
-                              item.TotalAmount || item.Quantity * item.Amount,
+                              (Number(item.Amount) || 0) *
+                                (Number(item.Quantity) || 0),
                             )}
                           </span>
                         </div>
@@ -409,10 +410,8 @@ const StripePaymentResponseContent = () => {
                   <span className="text-secondary">
                     Items total
                     <small className="summary-hint">
-                      {order?.TotalItems ||
-                        order?.OrderDetails?.OrderItemList?.length ||
-                        0}{" "}
-                      item(s), before discount
+                      {order?.OrderDetails?.OrderItemList?.length ?? 0} item(s),
+                      before discount
                     </small>
                   </span>
                   <span className="font-medium">

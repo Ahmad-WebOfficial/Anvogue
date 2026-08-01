@@ -144,11 +144,11 @@ const Cart = () => {
           <div className="cart-page-head">
             <span className="cart-page-badge">Your Cart</span>
             <h1 className="heading3 cart-page-title">Shopping Cart</h1>
-            <p className="text-secondary cart-page-subtitle">
+            {/* <p className="text-secondary cart-page-subtitle">
               {cartState.totalItems > 0
                 ? `${cartState.totalItems} item${cartState.totalItems > 1 ? "s" : ""} ready for checkout.`
                 : "Review items before proceeding to checkout."}
-            </p>
+            </p> */}
           </div>
 
           {cartLoading ? (
@@ -468,8 +468,7 @@ const Cart = () => {
                     <span className="text-secondary">
                       Items total
                       <small className="summary-hint">
-                        {cartState.totalItems || cartState.cartArray.length}{" "}
-                        item(s), before discount
+                        {cartState.cartArray.length} item(s), before discount
                       </small>
                     </span>
                     <span>{formatRsPrice(subTotal)}</span>

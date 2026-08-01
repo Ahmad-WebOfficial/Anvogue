@@ -52,6 +52,19 @@
         }
     }
 
+    .add-cart-btn.is-disabled {
+        color: var(--secondary);
+        border: 1px solid var(--line);
+        opacity: 0.7;
+        cursor: not-allowed;
+        pointer-events: none;
+
+        &:hover {
+            background-color: var(--white);
+            color: var(--secondary);
+        }
+    }
+
     &.style-2,
     &.style-5 {
         .list-action-icon {

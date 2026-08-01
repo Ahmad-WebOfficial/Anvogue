@@ -208,18 +208,24 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
 
   const handleGroupSelection = (groupName: string, option: string) => {
     const nextSelections = { ...groupSelections, [groupName]: option };
-    setGroupSelections(nextSelections);
 
-    const matchedVariant = findVariantByGroupSelection(
-      productDetail,
-      nextSelections,
-    );
+    // Falling back to the new choice alone stops a stale group (e.g. colour)
+    // from blocking the match; the matched variant then refills every group.
+    const matchedVariant =
+      findVariantByGroupSelection(productDetail, nextSelections) ??
+      findVariantByGroupSelection(productDetail, { [groupName]: option });
+
+    if (!matchedVariant) {
+      setGroupSelections(nextSelections);
+      setSelectedVariant(null);
+      return;
+    }
+
     setSelectedVariant(matchedVariant);
-    if (matchedVariant) {
-      setActiveImageIndex(0);
-      if (mainSwiper && !mainSwiper.destroyed) {
-        mainSwiper.slideTo(0, 0);
-      }
+    syncGroupSelections(productDetail, matchedVariant);
+    setActiveImageIndex(0);
+    if (mainSwiper && !mainSwiper.destroyed) {
+      mainSwiper.slideTo(0, 0);
     }
   };
 
@@ -486,9 +492,7 @@ const ProductDetailApi: React.FC<Props> = ({ productId, productDetailId }) => {
                       <span className="text-secondary2 line-through">
                         {formatRsPrice(compareUnitPrice)}
                       </span>
-                      <span className="caption2 font-semibold bg-green text-white px-3 py-0.5 rounded-full">
-                        -{percentSale}%
-                      </span>
+                  
                     </>
                   )}
                 </div>

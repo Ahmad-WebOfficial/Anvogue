@@ -165,10 +165,8 @@ const CodPaymentResponseContent = () => {
                   <span className="text-secondary">
                     Items total
                     <small className="summary-hint">
-                      {order?.TotalItems ||
-                        order?.OrderDetails?.OrderItemList?.length ||
-                        0}{" "}
-                      item(s), before discount
+                      {order?.OrderDetails?.OrderItemList?.length ?? 0} item(s),
+                      before discount
                     </small>
                   </span>
                   <span className="font-medium">

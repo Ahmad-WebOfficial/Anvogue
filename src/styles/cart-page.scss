@@ -233,9 +233,14 @@
 }
 
 .cart-item-qty-col {
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
+
+    // Below md the stepper lives in .cart-item-actions-row instead.
+    @media (min-width: 768px) {
+        display: flex;
+    }
 }
 
 .cart-qty {

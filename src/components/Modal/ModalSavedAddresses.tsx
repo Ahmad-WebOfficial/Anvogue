@@ -20,6 +20,18 @@ type ModalSavedAddressesProps = {
   onDeleted: (addressBookId: number) => void;
 };
 
+/** Saved numbers are stored without the dial code, so it is prefixed here. */
+function formatAddressPhone(address: CustomerAddress): string {
+  const number = String(address.PhoneNumber ?? "").trim();
+  if (!number) return "";
+  if (number.startsWith("+")) return number;
+
+  const code = String(address.PhoneCode ?? "").replace(/\D/g, "");
+  if (!code) return number;
+
+  return `+${code} ${number.replace(new RegExp(`^${code}`), "").trim() || number}`;
+}
+
 const ModalSavedAddresses = ({
   open,
   addresses,
@@ -144,7 +156,8 @@ const ModalSavedAddresses = ({
                       )}
                       {address.PhoneNumber && (
                         <div className="checkout-address-card-line">
-                          {address.PhoneNumber}
+                          <Icon.Phone size={13} weight="fill" />
+                          {formatAddressPhone(address)}
                         </div>
                       )}
                     </button>

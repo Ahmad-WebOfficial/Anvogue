@@ -30,6 +30,8 @@ export interface LandingPageProduct {
   /** Backend has returned this misspelled key in some product responses. */
   CampaignTpyeDisplayName?: string | null;
   ComingSoon?: boolean;
+  /** Some list endpoints return the coming-soon flag under this name. */
+  IsComingSoon?: boolean;
   Status?: number;
   InventoryManagement?: boolean;
   AvailableStock?: number | null;
@@ -39,15 +41,19 @@ export interface LandingPageProduct {
   };
 }
 
+export function isComingSoonProduct(product: LandingPageProduct): boolean {
+  return Boolean(product.ComingSoon ?? product.IsComingSoon);
+}
+
 /** Hide out-of-stock products from listings (coming soon still visible). */
 export function isLandingProductVisible(product: LandingPageProduct): boolean {
-  if (product.ComingSoon) return true;
+  if (isComingSoonProduct(product)) return true;
   if (product.IsProductInStock === false) return false;
   return true;
 }
 
 export function canPurchaseLandingProduct(product: LandingPageProduct): boolean {
-  if (product.ComingSoon) return false;
+  if (isComingSoonProduct(product)) return false;
   if (product.Status === 0) return false;
   if (product.IsProductInStock === false) return false;
   return true;
@@ -146,7 +152,7 @@ export function mapLandingProductToProductType(
   const image = getProductImage(product);
   const pricing = resolveLandingProductPricing(product);
   const inStock = product.IsProductInStock !== false;
-  const comingSoon = Boolean(product.ComingSoon);
+  const comingSoon = isComingSoonProduct(product);
 
   return {
     id: String(product.ProductId),
@@ -270,13 +276,35 @@ export function mergeLandingProducts(
     return value;
   };
 
+  // Availability flags are missing from some feeds, so they are merged field by
+  // field instead of being dropped when the richer campaign record wins.
+  const combine = (
+    a: LandingPageProduct,
+    b: LandingPageProduct,
+  ): LandingPageProduct => {
+    const [rich, plain] = score(b) > score(a) ? [b, a] : [a, b];
+
+    return {
+      ...plain,
+      ...rich,
+      ComingSoon: isComingSoonProduct(rich) || isComingSoonProduct(plain),
+      Status: rich.Status ?? plain.Status,
+      InventoryManagement: Boolean(
+        rich.InventoryManagement ?? plain.InventoryManagement,
+      ),
+      AvailableStock: rich.AvailableStock ?? plain.AvailableStock,
+      IsProductInStock: rich.IsProductInStock ?? plain.IsProductInStock,
+    };
+  };
+
   for (const list of lists) {
     for (const product of list) {
       if (!product?.ProductId) continue;
       const existing = byId.get(product.ProductId);
-      if (!existing || score(product) > score(existing)) {
-        byId.set(product.ProductId, product);
-      }
+      byId.set(
+        product.ProductId,
+        existing ? combine(existing, product) : product,
+      );
     }
   }
 

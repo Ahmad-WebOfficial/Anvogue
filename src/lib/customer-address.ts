@@ -4,6 +4,7 @@ export type CustomerAddress = {
   AddressBookId: number;
   FullName: string;
   PhoneNumber: string;
+  PhoneCode: string;
   IsDefault: boolean;
   Address: string;
   CityId: number;
@@ -22,6 +23,7 @@ export type SaveCustomerAddressPayload = {
   AddressBookId: number;
   FullName: string;
   PhoneNumber: string;
+  PhoneCode: string;
   IsDefault: boolean;
   Address: string;
   CityId: number;
@@ -40,6 +42,13 @@ function toNumber(value: unknown, fallback = 0): number {
 function toStringValue(value: unknown, fallback = ""): string {
   if (value == null) return fallback;
   return String(value).trim();
+}
+
+/** Keeps dial codes as bare digits, e.g. "+92" and "0092" both become "92". */
+export function normalizeDialCode(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\D/g, "")
+    .replace(/^0+/, "");
 }
 
 function looksLikeAddress(item: Record<string, unknown>): boolean {
@@ -83,6 +92,14 @@ export function mapAddress(raw: unknown): CustomerAddress | null {
         item.Phone ??
         item.phone ??
         item.MobileNumber,
+    ),
+    PhoneCode: normalizeDialCode(
+      item.PhoneCode ??
+        item.phoneCode ??
+        item.DialCode ??
+        item.dialCode ??
+        item.CountryCode ??
+        item.countryCode,
     ),
     IsDefault: Boolean(item.IsDefault ?? item.isDefault ?? item.Default),
     Address: address || "Saved address",
@@ -255,6 +272,7 @@ export async function saveCustomerAddress(
     AddressBookId: payload.AddressBookId || 0,
     FullName: String(payload.FullName ?? "").trim(),
     PhoneNumber: String(payload.PhoneNumber ?? "").trim(),
+    PhoneCode: normalizeDialCode(payload.PhoneCode) || "92",
     IsDefault: Boolean(payload.IsDefault),
     Address: String(payload.Address ?? "").trim(),
     CityId: Number(payload.CityId) || 0,
@@ -289,6 +307,7 @@ export function buildSaveAddressPayloadFromCheckout(input: {
   firstName?: string;
   lastName?: string;
   phone: string;
+  phoneCode?: string;
   address: string;
   postalCode?: string;
   cityId: string | number;
@@ -315,6 +334,7 @@ export function buildSaveAddressPayloadFromCheckout(input: {
     AddressBookId: Number(input.addressBookId) || 0,
     FullName: fullName,
     PhoneNumber: String(input.phone ?? "").trim(),
+    PhoneCode: normalizeDialCode(input.phoneCode) || "92",
     IsDefault: Boolean(input.isDefault),
     Address: addressLine || "N/A",
     CityId: Number(input.cityId) || 0,

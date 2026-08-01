@@ -749,6 +749,20 @@ const OrderDetailsPage = () => {
                             ? item.ProductImageURL
                             : "/images/product/1000x1000.png";
 
+                        // TotalAmount already has the item discount taken off,
+                        // so the row total must be rebuilt from the unit price.
+                        const itemDiscount = Math.max(
+                          0,
+                          Number(item.DiscountAmount) || 0,
+                        );
+                        const grossLineTotal =
+                          (Number(item.Amount) || 0) *
+                          (Number(item.Quantity) || 0);
+                        const payableLineTotal = Math.max(
+                          0,
+                          grossLineTotal - itemDiscount,
+                        );
+
                         return (
                           <div key={item.OrderDetailId} className="order-item">
                             <Link
@@ -786,30 +800,19 @@ const OrderDetailsPage = () => {
                                   {item.Quantity} × {formatRsPrice(item.Amount)}
                                 </span>
                                 <span className="text-button font-semibold">
-                                  {formatRsPrice(item.TotalAmount)}
+                                  {formatRsPrice(grossLineTotal)}
                                 </span>
                               </div>
-                              {Number(item.DiscountAmount) > 0 && (
+                              {itemDiscount > 0 && (
                                 <>
                                   <div className="summary-item-line is-discount">
                                     <span>Item discount</span>
-                                    <span>
-                                      -
-                                      {formatRsPrice(
-                                        Number(item.DiscountAmount) || 0,
-                                      )}
-                                    </span>
+                                    <span>-{formatRsPrice(itemDiscount)}</span>
                                   </div>
                                   <div className="summary-item-line is-payable">
                                     <span>You pay</span>
                                     <span>
-                                      {formatRsPrice(
-                                        Math.max(
-                                          0,
-                                          (Number(item.TotalAmount) || 0) -
-                                            (Number(item.DiscountAmount) || 0),
-                                        ),
-                                      )}
+                                      {formatRsPrice(payableLineTotal)}
                                     </span>
                                   </div>
                                 </>
@@ -981,8 +984,7 @@ const OrderDetailsPage = () => {
                       <span className="text-secondary">
                         Items total
                         <small className="summary-hint">
-                          {displayOrder.TotalItems || items.length} item(s),
-                          before discount
+                          {items.length} item(s), before discount
                         </small>
                       </span>
                       <span>{formatRsPrice(orderAmount)}</span>

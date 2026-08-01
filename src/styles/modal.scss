@@ -810,6 +810,58 @@
     z-index: 103;
 }
 
+.quickview-status-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    align-self: flex-start;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.is-available {
+        color: #15803d;
+        background-color: #ecfdf5;
+        border-color: #bbf7d0;
+    }
+
+    &.is-unavailable {
+        color: #b91c1c;
+        background-color: #fef2f2;
+        border-color: #fecaca;
+    }
+}
+
+.quickview-price-block {
+    .product-price {
+        color: var(--black);
+    }
+
+    .product-origin-price {
+        font-size: 15px;
+        line-height: 24px;
+
+        del {
+            text-decoration-thickness: 1px;
+        }
+    }
+
+    .quickview-savings {
+        display: inline-flex;
+        align-items: center;
+        font-size: 13px;
+        line-height: 20px;
+        font-weight: 600;
+        color: #15803d;
+    }
+}
+
 .modal-wishlist-block {
     z-index: 104;
 }

@@ -75,10 +75,14 @@ const Product: React.FC<ProductProps> = ({
     status: data.status,
     inStock: data.inStock,
   });
+  // Availability badges must survive every badgeMode: hiding "Coming Soon" or
+  // "Out of Stock" would let a shopper try to buy something they cannot get.
+  const alwaysVisibleBadgeKeys = ["coming", "unavailable", "stock"];
   const productBadges =
     badgeMode === "all"
       ? allProductBadges
       : allProductBadges.filter((badge) => {
+          if (alwaysVisibleBadgeKeys.includes(badge.key)) return true;
           if (badgeMode === "featured") return badge.key === "featured";
           if (badgeMode === "new") return badge.key === "new";
           return badge.key === "discount";
@@ -361,7 +365,15 @@ const Product: React.FC<ProductProps> = ({
                       Quick View
                     </div>
                   )}
-                  {data.action === "add to cart" ? (
+                  {!canPurchase ? (
+                    <div className="add-cart-btn is-disabled w-full text-button-uppercase py-2 text-center rounded-full bg-white">
+                      {data.comingSoon
+                        ? "Coming Soon"
+                        : data.status === 0
+                          ? "Unavailable"
+                          : "Out of Stock"}
+                    </div>
+                  ) : data.action === "add to cart" ? (
                     <div
                       className="add-cart-btn w-full text-button-uppercase py-2 text-center rounded-full duration-500 bg-white hover:bg-black hover:text-white"
                       onClick={(e) => {
@@ -420,7 +432,7 @@ const Product: React.FC<ProductProps> = ({
                   <div
                     className={`list-action flex items-center justify-center gap-3 px-5 absolute w-full ${style === "style-2" ? "bottom-12" : "bottom-5"} max-lg:hidden`}
                   >
-                    {style === "style-2" && (
+                    {style === "style-2" && canPurchase && (
                       <div
                         className={`add-cart-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative ${compareState.compareArray.some((item) => item.id === data.id) ? "active" : ""}`}
                         onClick={(e) => {
@@ -529,15 +541,17 @@ const Product: React.FC<ProductProps> = ({
                 >
                   <Icon.Eye className="text-lg" />
                 </div>
-                <div
-                  className="add-cart-btn w-9 h-9 flex items-center justify-center rounded-lg duration-300 bg-white hover:bg-black hover:text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddToCart();
-                  }}
-                >
-                  <Icon.ShoppingBagOpen className="text-lg" />
-                </div>
+                {canPurchase && (
+                  <div
+                    className="add-cart-btn w-9 h-9 flex items-center justify-center rounded-lg duration-300 bg-white hover:bg-black hover:text-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddToCart();
+                    }}
+                  >
+                    <Icon.ShoppingBagOpen className="text-lg" />
+                  </div>
+                )}
               </div>
             </div>
             <div className="product-infor mt-4 lg:mb-7">

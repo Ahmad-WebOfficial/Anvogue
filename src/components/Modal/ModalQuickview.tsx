@@ -20,6 +20,7 @@ import {
   getVariantDisplayImage,
   getVariantPrice,
   getComparePrice,
+  getDetailSalePrice,
   formatRsPrice,
   formatDiscountBadge,
   getActiveDiscount,
@@ -36,6 +37,7 @@ import {
   mapProductDetailToProductType,
   mapRelatedProductToProductType,
 } from "@/lib/featured-products";
+import { applyDiscount } from "@/lib/discount";
 import { getApiErrorMessage } from "@/lib/api";
 import { ProductType } from "@/type/ProductType";
 import ProductBadges, {
@@ -77,7 +79,9 @@ const ModalQuickview = () => {
   const activePrice =
     selectedVariant != null
       ? getVariantPrice(selectedVariant)
-      : (productDetail?.MinPrice ?? 0);
+      : productDetail
+        ? getDetailSalePrice(productDetail)
+        : 0;
   const comparePrice = productDetail
     ? getComparePrice(productDetail, selectedVariant)
     : 0;
@@ -103,6 +107,22 @@ const ModalQuickview = () => {
     activeDiscount.campaignType,
     activeDiscount.campaignTypeDisplayName,
   );
+  const rangeMinPrice = productDetail ? getDetailSalePrice(productDetail) : 0;
+  const rangeMaxPrice = productDetail
+    ? applyDiscount(
+        productDetail.MaxPrice,
+        activeDiscount.discount,
+        activeDiscount.discountType,
+      )
+    : 0;
+  const hasRangeDiscount = Boolean(
+    showPriceRange && productDetail && rangeMinPrice < productDetail.MinPrice,
+  );
+  const savedAmount = showPriceRange
+    ? hasRangeDiscount && productDetail
+      ? Math.max(0, productDetail.MinPrice - rangeMinPrice)
+      : 0
+    : Math.max(0, comparePrice - activePrice);
   const availableStock = productDetail
     ? getAvailableStockCount(productDetail, selectedVariant)
     : null;
@@ -196,13 +216,22 @@ const ModalQuickview = () => {
     if (!productDetail) return;
 
     const nextSelections = { ...groupSelections, [groupName]: option };
-    setGroupSelections(nextSelections);
 
-    const matchedVariant = findVariantByGroupSelection(
-      productDetail,
-      nextSelections,
-    );
+    // Falling back to the new choice alone stops a stale group (e.g. colour)
+    // from blocking the match; the matched variant then refills every group.
+    const matchedVariant =
+      findVariantByGroupSelection(productDetail, nextSelections) ??
+      findVariantByGroupSelection(productDetail, { [groupName]: option });
+
+    if (!matchedVariant) {
+      setGroupSelections(nextSelections);
+      setSelectedVariant(null);
+      return;
+    }
+
     setSelectedVariant(matchedVariant);
+    syncGroupSelections(productDetail, matchedVariant);
+    setActiveImageIndex(0);
   };
 
   const handleVariantSelect = (variant: ProductVariantCombination) => {
@@ -385,12 +414,17 @@ const ModalQuickview = () => {
                       </h2>
                     </div>
                     <span
-                      className={`text-sm font-medium ${
+                      className={`quickview-status-tag ${
                         productDetail.Status === 0
-                          ? "text-gray-400"
-                          : "text-gray-900"
+                          ? "is-unavailable"
+                          : "is-available"
                       }`}
                     >
+                      {productDetail.Status === 0 ? (
+                        <Icon.XCircle size={14} weight="fill" />
+                      ) : (
+                        <Icon.CheckCircle size={14} weight="fill" />
+                      )}
                       {productDetail.Status === 0 ? "Unavailable" : "Available"}
                     </span>
                   </div>
@@ -407,46 +441,47 @@ const ModalQuickview = () => {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 flex-wrap mt-4 pb-5 border-b border-line">
-                    {showPriceRange ? (
-                      <div className="product-price heading5">
-                        {formatRsPrice(productDetail.MinPrice)} –{" "}
-                        {formatRsPrice(productDetail.MaxPrice)}
-                      </div>
-                    ) : (
-                      <div className="product-price heading5">
-                        {formatRsPrice(activePrice)}
-                        {productQty > 1 && (
-                          <span className="caption1 text-secondary ml-2">
-                            (Total: {formatRsPrice(totalPrice)})
-                          </span>
-                        )}
+                  <div className="quickview-price-block mt-4 pb-5 border-b border-line">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {showPriceRange ? (
+                        <div className="product-price heading5">
+                          {formatRsPrice(rangeMinPrice)} –{" "}
+                          {formatRsPrice(rangeMaxPrice)}
+                        </div>
+                      ) : (
+                        <div className="product-price heading5">
+                          {formatRsPrice(activePrice)}
+                        </div>
+                      )}
+
+                      {showPriceRange
+                        ? hasRangeDiscount && (
+                            <div className="product-origin-price text-secondary2">
+                              <del>
+                                {formatRsPrice(productDetail.MinPrice)} –{" "}
+                                {formatRsPrice(productDetail.MaxPrice)}
+                              </del>
+                            </div>
+                          )
+                        : comparePrice > activePrice && (
+                            <div className="product-origin-price text-secondary2">
+                              <del>{formatRsPrice(comparePrice)}</del>
+                            </div>
+                          )}
+
+                     
+                    </div>
+
+                    {savedAmount > 0 && (
+                      <div className="quickview-savings mt-2">
+                        You save {formatRsPrice(savedAmount)}
                       </div>
                     )}
-                    {discountLabel ? (
-                      <>
-                        <div className="w-px h-4 bg-line" />
-                        {comparePrice > activePrice && (
-                          <div className="product-origin-price text-secondary2">
-                            <del>{formatRsPrice(comparePrice)}</del>
-                          </div>
-                        )}
-                        <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 rounded-full">
-                          {discountLabel}
-                        </div>
-                      </>
-                    ) : (
-                      comparePrice > activePrice && (
-                        <>
-                          <div className="w-px h-4 bg-line" />
-                          <div className="product-origin-price text-secondary2">
-                            <del>{formatRsPrice(comparePrice)}</del>
-                          </div>
-                          <div className="product-sale caption2 font-semibold bg-green px-3 py-0.5 rounded-full">
-                            -{percentSale}%
-                          </div>
-                        </>
-                      )
+
+                    {!showPriceRange && productQty > 1 && (
+                      <div className="caption1 text-secondary mt-1">
+                        Total ({productQty} items): {formatRsPrice(totalPrice)}
+                      </div>
                     )}
                   </div>
 
@@ -593,7 +628,7 @@ const ModalQuickview = () => {
                     View Full Details
                   </Link>
 
-                  <button
+                  {/* <button
                     type="button"
                     className="compare flex items-center gap-3 mt-4 bg-transparent border-0 cursor-pointer"
                     onClick={handleAddToCompare}
@@ -602,7 +637,7 @@ const ModalQuickview = () => {
                       <Icon.ArrowsCounterClockwise size={20} />
                     </div>
                     <span>Compare</span>
-                  </button>
+                  </button> */}
 
                   {/* Meta info */}
                   <div className="more-infor mt-6 pt-5 border-t border-line space-y-2">

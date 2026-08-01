@@ -513,8 +513,7 @@ const ModalCart = ({
                   <span className="text-secondary">
                     Items total
                     <small className="summary-hint">
-                      {cartState.totalItems || cartState.cartArray.length}{" "}
-                      item(s), before discount
+                      {cartState.cartArray.length} item(s), before discount
                     </small>
                   </span>
                   <span>{formatRsPrice(displayTotals.subTotal)}</span>
@@ -611,13 +610,22 @@ const ModalCart = ({
                   </Link>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={closeModalCart}
-                  className="modal-cart-continue"
-                >
-                  Or continue shopping
-                </button>
+                {/* <div className="modal-cart-footer-links">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("coupon")}
+                    className="modal-cart-continue"
+                  >
+                    Have a promo code?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModalCart}
+                    className="modal-cart-continue"
+                  >
+                    Or continue shopping
+                  </button>
+                </div> */}
               </div>
 
               <div
